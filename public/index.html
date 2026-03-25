@@ -1,134 +1,43 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>vanilla-hn — A lightweight Hacker News reader (vanilla JS)</title>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>vanilla-hn</title>
+        <link rel="stylesheet" href="/src/styles.css" />
+    </head>
+    <body>
+        <a id="skip-to-content" class="visually-hidden" href="#app"
+            >Skip to content</a
+        >
 
-  <!-- Prefer to place a CSS file in public/ so the dev server can</title> serve it directly.
-       If you prefer to keep styles in src/, update your dev server configuration
-       to serve project root instead of just public/. -->
-  <link rel="stylesheet" href="/styles.css" />
+        <header role="banner" class="site-header">
+            <div class="container">
+                <h1 class="site-title"><a href="#/">vanilla-hn</a></h1>
+                <nav
+                    role="navigation"
+                    aria-label="Primary navigation"
+                    class="main-nav"
+                >
+                    <ul>
+                        <li><a href="#/">news</a></li>
+                        <li><a href="#/newest">new</a></li>
+                        <li><a href="#/ask">ask</a></li>
+                        <li><a href="#/show">show</a></li>
+                        <li><a href="#/jobs">jobs</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </header>
 
-  <meta name="description" content="A lightweight, accessible Hacker News reader rebuilt in vanilla JavaScript. See RECREATION_PROMPT.md for implementation notes." />
-</head>
-<body>
-  <a id="skip-to-content" class</body>="visually-hidden" href="#app">Skip to content</a>
+        <main id="app" role="main" class="app-container" tabindex="-1"></main>
 
-  <header role="banner" class="site-header" aria-label="Site header">
-    <div class="container">
-      <h1 class="site-title"><a href="#/">vanilla-hn</a></h1>
-      <nav role="navigation" aria-label="Primary navigation" class="main-nav">
-        <ul></ul>
-          <li><a href="#/">news</a></li>
-          <li><a href="#/newest">new</a></li>
-          <li><a href="#/ask">ask</a></li>
-          <li><a href="#/show">show</a></li>
-          <li><a href="#/jobs">jobs</a></li>
-        </ul>
-      </nav>
-    </div>
-  </header>
+        <footer role="contentinfo" class="site-footer">
+            <div class="container">
+                <small>vanilla-hn — no production Firebase keys included</small>
+            </div>
+        </footer>
 
-  <main id="app" role="main" class="app-container" tabindex="-1" aria-live="polite">
-    <!-- The application will mount here. -->
-    <section class="welcome">
-      <h2>Welcome to vanilla-hn</h2>
-      <</h2>p>
-        This is a lightweight Hacker News reader scaffolded in vanilla JavaScript.
-        The application will boot from a module entry point at <code>/src/main.js</code>.
-      </p>
-
-      <p>If you see this message it means the module could not be loaded automatically. Possible actions:</p>
-      <ul>
-        <li>Ensure a compatible dev server is serving your project root (or copy built assets into this <</ul>code>public/</li></code> folder).</li>
-        <li>Run the dev server from project root (so <code>/src</li>/main.js</code> is reachable), or move the entry module into <code>public/</code</code>>.</li>
-      </ul>
-
-      <p>
-        The full recreation</p> prompt is included in the repository as
-        <a href="../RECREATION_PROMPT.md" target="_blank" rel="noopener noreferrer">RECREATION_PROMPT.md</a>.
-      </p>
-
-      <p>
-        If you prefer to skip the JS app, you can view Hacker News directly:</p>
-        <a href="https://news.ycombinator.com/" target="_blank" rel="noopener noreferrer">news.ycombinator.com</a>
-      </p>
-    </section>
-  </main>
-
-  <footer role="contentinfo" class="site-footer">
-    <div class="container">
-      <small>vanilla-hn — recreation scaffold • no production Firebase keys are included</small>.</small>
-    </div>
-  </footer>
-
-  <script type="module">
-    // Try to load the application entry module from /src/main.js.
-    // Many setups use a dev server that serves the project root; if your dev server is
-    // configured to only serve the public/ folder, this import will fail and the
-    // fallback content above will remain visible.
-    async function bootApp() {
-      try {
-        // Prefer absolute path so it works regardless of current hash.
-        await import('/src/main.js');
-      } catch (err) {
-        // Show a more helpful inline message if import failed.
-        console.warn('Failed to import /src/main.js — ensure your dev server serves the project root or place the bundle in public/', err);
-
-        const app = document.getElementById('app');
-        if (!app) return;
-
-        const message = document.createElement('div');
-        message.className = 'module-fallback';
-        message.innerHTML = `
-          <h3>App bootstrap failed</h3>
-          <p>The browser couldn't load <code>/src/main.js</code>.</p>
-          <p>To fix this, either:</p>
-          <ol>
-            <li>Run a dev server that serves the repository root (so <code>/src/main.js</code> is reachable), or</li>
-            <li>Copy your build output / entry module into this <code>public/</code> folder and update the <code>&lt;script&gt;</code> import target.</li>
-          </ol>
-          <p>For quick testing you can also open the browser console to see the error details.</p>
-        `;
-        // Clear previous content and show message
-        app.innerHTML = '';
-        app.appendChild(message);
-      }
-    }
-
-    // Start boot sequence once DOM is parsed.
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', bootApp);
-    } else {
-      bootApp();
-    }
-  </script>
-
-  <style>
-    /* Minimal inline styles so index.html is usable</style> even without an external stylesheet. */
-    :root {
-      --bg: #fff;
-      --text: #222;
-      --muted: #666;
-      --accent: #ff6600;
-      --container-width: 980px;
-    }
-    html,body { height:100%; margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:var(--text); background:var(--bg); }
-    .container { max-width:var(--container-width); margin:0 auto; padding:12px; }
-    .site-header { border-bottom:1px solid #eee; background:linear-gradient(#fff,#fff); }
-    .site-title { margin:0; font-size:1.25rem; display:inline-block; padding:10px 0; }
-    .site-title a { color:var(--text); text-decoration:none; }
-    .main-nav ul { list-style:none; margin:0; padding:0; display:flex; gap:12px; align-items:center; }
-    .main-nav a { color:var(--accent); text-decoration:none; font-weight:600; }
-    .app-container { padding:18px 12px; min-height:60vh; }
-    .welcome { border:1px solid #f0f0f0; padding:16px; background:#fafafa; border-radius:6px; }
-    .module-fallback { background:#fff6e6; border:1px solid #ffe9c9; padding:12px; border-radius:4px; color:var(--muted); }
-    .visually-hidden { position:absolute !important; left:-10000px !important; top:auto !important; width:1px !important; height:1px !important; overflow:hidden; }
-    footer.site-footer { border-top:1px solid #eee; padding:12px 0; font-size:0.85rem; color:var(--muted); }
-    @media (prefers-reduced-motion: reduce) {
-      * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-    }
-  </style>
-</body>
+        <script type="module" src="/src/main.js"></script>
+    </body>
 </html>

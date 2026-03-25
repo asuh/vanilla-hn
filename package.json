@@ -1,13 +1,13 @@
 {
   "name": "vanilla-hn",
   "version": "0.1.0",
-  "description": "A lightweight, vanilla JavaScript recreation of a Hacker News reader (recreation scaffold).",
+  "description": "A lightweight, vanilla JavaScript recreation of a Hacker News reader.",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "npx http-server ./public -p ${PORT:-5001} -c-1",
-    "start": "npx http-server ./public -p ${PORT:-5001} -c-1",
-    "preview": "npx http-server ./public -p ${PORT:-5001} -c-1",
+    "dev": "node serve.js",
+    "start": "node serve.js",
+    "preview": "node serve.js",
     "lint": "echo \"no linter configured\"",
     "test": "echo \"no tests configured\""
   },
@@ -15,17 +15,11 @@
     "hacker-news",
     "hn",
     "vanilla",
-    "javascript",
-    "recreation"
+    "javascript"
   ],
   "author": "",
   "license": "MIT",
-  "files": [
-    "public/",
-    "src/",
-    "RECREATION_PROMPT.md"
-  ],
   "engines": {
-    "node": ">=24"
+    "node": ">=14"
   }
 }
