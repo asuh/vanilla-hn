@@ -4,6 +4,23 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>vanilla-hn</title>
+
+        <!-- Content Security Policy: allow scripts from self and Firebase CDN -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self' https://www.gstatic.com 'unsafe-inline'; connect-src 'self' https://hacker-news.firebaseio.com wss://hacker-news.firebaseio.com https://www.gstatic.com; style-src 'self' 'unsafe-inline';"
+        />
+
+        <!-- Import map: lets dynamic import('firebase/app') resolve to CDN URLs -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
+                    "firebase/database": "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
+                }
+            }
+        </script>
+
         <link rel="stylesheet" href="/src/styles.css" />
     </head>
     <body>
@@ -34,7 +51,7 @@
 
         <footer role="contentinfo" class="site-footer">
             <div class="container">
-                <small>vanilla-hn — no production Firebase keys included</small>
+                <small>vanilla-hn</small>
             </div>
         </footer>
 

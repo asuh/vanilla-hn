@@ -20,7 +20,6 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-const FIREBASE_CDN = "https://www.gstatic.com/firebasejs/10.12.2";
 const HN_DB_URL = "https://hacker-news.firebaseio.com";
 const API_ROOT = "/v0";
 
@@ -275,10 +274,7 @@ class FirebaseBackend {
 
   async _init() {
     const [{ initializeApp }, { getDatabase, ref, child, onValue, get }] =
-      await Promise.all([
-        import(`${FIREBASE_CDN}/firebase-app.js`),
-        import(`${FIREBASE_CDN}/firebase-database.js`),
-      ]);
+      await Promise.all([import("firebase/app"), import("firebase/database")]);
 
     if (this._destroyed) return;
 
@@ -389,7 +385,7 @@ class FirebaseBackend {
     if (this._destroyed) return;
     this._destroyed = true;
     if (this._app) {
-      import(`${FIREBASE_CDN}/firebase-app.js`)
+      import("firebase/app")
         .then(({ deleteApp }) => deleteApp(this._app).catch(noop))
         .catch(noop);
       this._app = null;
