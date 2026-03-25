@@ -1,4 +1,3 @@
-/vanilla-hn/src/components/CommentElement.js
 /**
  * CommentElement.js
  *

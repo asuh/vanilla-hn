@@ -1,4 +1,3 @@
-/vanilla-hn/src/stores/SettingsStore.js
 /**
  * SettingsStore.js
  *

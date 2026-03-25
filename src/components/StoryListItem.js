@@ -1,4 +1,3 @@
-/vanilla-hn/src/components/StoryListItem.js
 /**
  * StoryListItem.js
  *
