@@ -1,0 +1,31 @@
+{
+  "name": "vanilla-hn",
+  "version": "0.1.0",
+  "description": "A lightweight, vanilla JavaScript recreation of a Hacker News reader (recreation scaffold).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "npx http-server ./public -p 5000 -c-1",
+    "start": "npx http-server ./public -p 5000 -c-1",
+    "preview": "npx http-server ./public -p 5000 -c-1",
+    "lint": "echo \"no linter configured\"",
+    "test": "echo \"no tests configured\""
+  },
+  "keywords": [
+    "hacker-news",
+    "hn",
+    "vanilla",
+    "javascript",
+    "recreation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "files": [
+    "public/",
+    "src/",
+    "RECREATION_PROMPT.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  }
+}

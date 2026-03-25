@@ -1,0 +1,422 @@
+/* Core styles for vanilla-hn
+ *
+ * Design goals:
+ * - Lightweight, readable, accessible defaults
+ * - CSS variables for theming and user preferences
+ * - Minimal layout to closely resemble Hacker News palette
+ * - Support for comment threading, collapsed state, and "new" highlighting
+ */
+
+/* Theme variables (preserve classic HN palette) */
+:root{
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --muted: #6a6a6a;
+  --text: #222222;
+  --link: #ff6600;
+  --border: #e6e6e6;
+  --accent-bg: #fff6eb;
+  --radius: 6px;
+
+  /* sizing */
+  --gap: 12px;
+  --container-width: 980px;
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-base: 16px;
+  --font-size-title: 18px;
+  --font-size-meta: 13px;
+
+  /* Comment styles */
+  --comment-bg: #fff;
+  --comment-border: #f0f0f0;
+  --comment-muted: #666;
+  --new-badge-bg: #ffedd5;
+  --new-badge-color: #7a2e00;
+}
+
+/* Dark theme override (applies when body.dark is present) */
+body.dark {
+  --bg: #0f1720;
+  --panel: #0b1116;
+  --muted: #9aa4ad;
+  --text: #dbeafe;
+  --link: #ff9b4a;
+  --border: #1f2933;
+  --accent-bg: #1f2a35;
+  --comment-bg: #0b1116;
+  --comment-border: #16202a;
+  --new-badge-bg: #2b1b0d;
+  --new-badge-color: #ffd8a8;
+}
+
+/* Global reset / base */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html,body{
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  line-height: 1.4;
+}
+
+.container {
+  max-width: var(--container-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding: calc(var(--gap) * 0.75);
+}
+
+/* Header */
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+}
+
+.site-header .container {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.site-title {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: 600;
+}
+
+.site-title a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-nav {
+  margin-left: auto;
+}
+
+.site-nav a {
+  color: var(--link);
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 12px;
+}
+
+/* Main app container */
+.app-container {
+  min-height: 60vh;
+  padding-top: calc(var(--gap) * 1.25);
+  padding-bottom: calc(var(--gap) * 1.25);
+}
+
+/* List of stories */
+.story-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+.story-list .item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+  background: transparent;
+}
+
+.story-list .item .title {
+  font-size: 1rem;
+  margin: 0 0 6px 0;
+  line-height: 1.2;
+}
+
+.story-list .item .title a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.story-list .item .meta {
+  font-size: var(--font-size-meta);
+  color: var(--muted);
+}
+
+.story-list .item .meta a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  margin-left: 8px;
+}
+
+/* New count badge (more visible) */
+.badge--new {
+  background: var(--new-badge-bg);
+  color: var(--new-badge-color);
+  border-color: rgba(0,0,0,0.04);
+  font-weight: 600;
+}
+
+/* Item external link host */
+.item-host {
+  color: var(--muted);
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+/* Item controls (mark read, hide, etc.) */
+.item-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Item link colors on hover/focus */
+.story-list .item .title a:hover,
+.story-list .item .title a:focus {
+  color: var(--link);
+  text-decoration: underline;
+  outline: none;
+}
+
+/* Comment tree */
+.comment-thread {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Generic comment element */
+.comment {
+  display: block;
+  border: 1px solid var(--comment-border);
+  background: var(--comment-bg);
+  padding: 8px 10px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.comment--child {
+  margin-left: 18px;
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+}
+
+.comment--collapsed {
+  opacity: 0.7;
+  background: linear-gradient(180deg, rgba(0,0,0,0.01), transparent);
+}
+
+/* Meta row inside comment */
+.comment-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--comment-muted);
+  margin-bottom: 6px;
+}
+
+.comment-meta .by {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.comment-meta button.toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Toggle button focus styles */
+.comment-meta button.toggle:focus {
+  outline: 2px solid color-mix(in srgb, var(--link) 24%, transparent);
+  outline-offset: 2px;
+}
+
+/* The comment text body */
+.comment-text {
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+
+/* Collapsed placeholder summary style */
+.comment-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Children container */
+.comment-kids {
+  margin-top: 8px;
+  padding-left: 8px;
+}
+
+/* New comment indicator dot (small) */
+.comment--new > .comment-meta > .new-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  background: var(--link);
+  border-radius: 50%;
+  margin-left: 6px;
+  box-shadow: 0 0 0 3px rgba(255,102,0,0.08);
+}
+
+/* Highlight for comments that contain new children */
+.comment--has-new {
+  border-color: color-mix(in srgb, var(--link) 22%, transparent);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02) inset;
+}
+
+/* Read / unread story row */
+.item--read {
+  opacity: 0.65;
+}
+
+/* Small utility classes */
+.hidden { display: none !important; }
+.visually-hidden {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 720px) {
+  .container { padding-left: 10px; padding-right: 10px; }
+  .site-title { font-size: 1rem; }
+  .site-nav a { margin-left: 8px; font-size: 14px; }
+  .comment--child { margin-left: 12px; }
+}
+
+/* Focus states for accessibility */
+a:focus, button:focus, [role="button"]:focus {
+  outline: 3px solid color-mix(in srgb, var(--link) 25%, transparent);
+  outline-offset: 2px;
+}
+
+/* Reduced motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+
+/* Small utilities for layout in ListView/ItemView */
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Footer */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+  background: transparent;
+}
+
+/* Settings panel (simple) */
+.settings {
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+/* Comment slider (time-based) */
+.comment-slider {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.comment-slider button {
+  background: none;
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.comment-slider button.active {
+  background: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--link) 22%, transparent);
+}
+
+/* Tiny utility for code / inline pre */
+.kv {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+  background: color-mix(in srgb, var(--muted) 6%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Ensure images, if any, are constrained */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Make sure lists in comments look good */
+.comment-text ul, .comment-text ol {
+  margin: 8px 0 8px 1rem;
+}
+
+/* Ensure long URLs wrap */
+a, .comment-text { word-break: break-word; }
+
+/* Tiny helper for skeleton / loading spinners */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--link);
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* End of styles */
