@@ -5,9 +5,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "npx http-server . -p ${PORT:-5001} -c-1",
-    "start": "npx http-server . -p ${PORT:-5001} -c-1",
-    "preview": "npx http-server . -p ${PORT:-5001} -c-1",
+    "dev": "npx http-server ./public -p ${PORT:-5001} -c-1",
+    "start": "npx http-server ./public -p ${PORT:-5001} -c-1",
+    "preview": "npx http-server ./public -p ${PORT:-5001} -c-1",
     "lint": "echo \"no linter configured\"",
     "test": "echo \"no tests configured\""
   },
