@@ -1,196 +1,253 @@
 /**
- * HNService - a small abstraction around a Hacker News data source.
+ * hn-service.js
  *
- * This file provides a minimal, framework-free service that:
- *  - exposes the same surface you'd expect from a realtime-backed HN service:
- *      - onStoriesValue(listType, cb) -> unsubscribe
- *      - onItemValue(itemId, cb) -> unsubscribe
- *      - fetchItem(itemId, { signal }) -> Promise<item>
- *      - onUserValue(userId, cb) -> unsubscribe
- *      - onUpdatesValue(cb) -> unsubscribe
- *  - runs in "mock mode" if no realtime backend is configured. Mock mode
- *    emits deterministic test data and simple periodic updates so the UI
- *    can be developed without a Firebase key.
+ * Firebase Realtime Database integration for the Hacker News public API.
+ * Uses the Firebase JS SDK v9 (modular) loaded lazily from CDN — no npm
+ * install required. Falls back to MockBackend if Firebase fails to load.
  *
- * Usage:
- *   const svc = new HNService({ mock: true })
- *   const unsubscribe = svc.onItemValue('123', item => { ... })
+ * Public API:
+ *   onStoriesValue(listType, cb) -> unsub
+ *   onItemValue(id, cb)          -> unsub
+ *   fetchItem(id, { signal })    -> Promise<item>
+ *   onUserValue(id, cb)          -> unsub
+ *   onUpdatesValue(cb)           -> unsub
+ *   destroy()
  *
- * Notes:
- *  - This implementation intentionally keeps things simple and dependency-free.
- *  - Replace or extend this file to integrate an actual realtime database (e.g. Firebase).
+ * listType values: 'top' | 'newest' | 'ask' | 'show' | 'jobs'
  */
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const FIREBASE_CDN = "https://www.gstatic.com/firebasejs/10.12.2";
+const HN_DB_URL = "https://hacker-news.firebaseio.com";
+const API_ROOT = "/v0";
+
+const LIST_PATHS = {
+  top: `${API_ROOT}/topstories`,
+  newest: `${API_ROOT}/newstories`,
+  ask: `${API_ROOT}/askstories`,
+  show: `${API_ROOT}/showstories`,
+  jobs: `${API_ROOT}/jobstories`,
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
 
-/** Create a shallow clone with predictable shape similar to HN API */
-function createMockItem(id, opts = {}) {
-  const base = {
-    id: Number(id),
-    by: opts.by || `user${(id % 10) + 1}`,
-    time: opts.time || nowSeconds() - (id % 600),
-    text: opts.text || `This is a mock comment/story for id ${id}.`,
-    title: opts.title || (opts.type === 'story' ? `Mock story ${id}` : undefined),
-    url: opts.url || (opts.type === 'story' ? `https://example.com/story/${id}` : undefined),
-    kids: Array.isArray(opts.kids) ? opts.kids : (opts.kids === undefined ? [] : opts.kids),
-    score: opts.score != null ? opts.score : Math.max(1, (Number(id) % 100)),
-    type: opts.type || (opts.title ? 'story' : 'comment'),
-    dead: false,
-    deleted: false
-  };
-  return base;
-}
+function noop() {}
 
 /**
- * Small in-memory store used by the mock mode to simulate realtime behavior.
- * Not exported; internal to this file.
+ * Simple cancellable debounce (mirrors react-hn's cancellableDebounce).
  */
+function debounce(fn, wait) {
+  let t = null;
+  const debounced = (...args) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => {
+      t = null;
+      fn(...args);
+    }, wait);
+  };
+  debounced.cancel = () => {
+    if (t) {
+      clearTimeout(t);
+      t = null;
+    }
+  };
+  return debounced;
+}
+
+// ---------------------------------------------------------------------------
+// MockBackend
+// ---------------------------------------------------------------------------
+
+function createMockItem(id, opts = {}) {
+  const n = Number(id) || 1;
+  return {
+    id: n,
+    by: opts.by || `user${(n % 10) + 1}`,
+    time: opts.time || nowSeconds() - (n % 3600),
+    text:
+      opts.text ||
+      (opts.type !== "story" ? `Mock comment body for id ${n}.` : undefined),
+    title: opts.type === "story" ? opts.title || `Mock story ${n}` : undefined,
+    url:
+      opts.type === "story"
+        ? opts.url || `https://example.com/story/${n}`
+        : undefined,
+    kids: Array.isArray(opts.kids) ? opts.kids : [],
+    score: opts.score != null ? opts.score : Math.max(1, n % 200),
+    descendants: opts.descendants != null ? opts.descendants : n % 30,
+    type: opts.type || "story",
+    dead: false,
+    deleted: false,
+  };
+}
+
 class MockBackend {
   constructor() {
-    this._storiesByList = {
-      top: this._generateStoryIds(1, 30),
-      newest: this._generateStoryIds(31, 60),
-      ask: this._generateStoryIds(61, 75),
-      show: this._generateStoryIds(76, 90),
-      jobs: this._generateStoryIds(91, 100)
-    };
     this._items = new Map();
-    // Pre-populate some items
+    this._lists = {
+      top: this._range(1, 30),
+      newest: this._range(31, 60),
+      ask: this._range(61, 75),
+      show: this._range(76, 90),
+      jobs: this._range(91, 100),
+    };
+
+    // Pre-populate items
     for (let id = 1; id <= 200; id++) {
-      this._items.set(String(id), createMockItem(String(id), { type: id % 5 === 0 ? 'story' : 'comment' }));
+      const type = id <= 100 ? "story" : "comment";
+      const kids =
+        type === "story" && id % 3 === 0 ? [id + 200, id + 201, id + 202] : [];
+      this._items.set(String(id), createMockItem(String(id), { type, kids }));
+    }
+    // A few comment items for kids
+    for (let id = 201; id <= 500; id++) {
+      this._items.set(
+        String(id),
+        createMockItem(String(id), {
+          type: "comment",
+          kids: id % 4 === 0 ? [id + 300] : [],
+        }),
+      );
     }
 
-    // listeners
-    this._storyListeners = new Map(); // key: listType -> Set(callback)
-    this._itemListeners = new Map(); // key: itemId -> Set(callback)
-    this._userListeners = new Map(); // key: userId -> Set(callback)
+    this._storyListeners = new Map(); // listType → Set<cb>
+    this._itemListeners = new Map(); // id       → Set<cb>
+    this._userListeners = new Map(); // id       → Set<cb>
     this._updatesListeners = new Set();
 
-    // simulate some activity
-    this._tickInterval = setInterval(() => this._tick(), 4000);
+    this._tick = debounce(this._doTick.bind(this), 0);
+    this._tickInterval = setInterval(() => this._doTick(), 4000);
   }
 
-  _generateStoryIds(start, end) {
+  _range(start, end) {
     const arr = [];
     for (let i = start; i <= end; i++) arr.push(String(i));
     return arr;
   }
 
-  _tick() {
-    // Randomly pick an existing item and "update" it (simulate new comment or changed score)
+  _doTick() {
+    // Randomly bump a score or add a child comment
     const keys = Array.from(this._items.keys());
-    if (keys.length === 0) return;
-    const idx = Math.floor(Math.random() * keys.length);
-    const id = keys[idx];
+    const id = keys[Math.floor(Math.random() * keys.length)];
     const item = this._items.get(id);
     if (!item) return;
 
-    // 30% chance to add a child comment (new kid)
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.3 && item.type === "story") {
       const newId = String(this._items.size + 1);
-      const child = createMockItem(newId, { type: 'comment', text: `Auto-generated child for ${id}` });
+      const child = createMockItem(newId, {
+        type: "comment",
+        text: `Auto comment on ${id}`,
+      });
       this._items.set(newId, child);
-      item.kids = item.kids ? [...item.kids, newId] : [newId];
-      // notify item listeners for the parent and the new child
+      item.kids = [...(item.kids || []), newId];
+      item.descendants = (item.descendants || 0) + 1;
       this._notifyItem(id, item);
       this._notifyItem(newId, child);
     } else {
-      // occasionally bump the score
       item.score = (item.score || 0) + 1;
       this._notifyItem(id, item);
     }
+  }
 
-    // Occasionally notify high-level updates (e.g., top stories changed)
-    if (Math.random() < 0.1) {
-      for (const cb of this._updatesListeners) {
-        try { cb({ timestamp: Date.now() }); } catch (e) { console.warn(e); }
+  _notifyItem(id, payload) {
+    const listeners = this._itemListeners.get(String(id));
+    if (!listeners) return;
+    for (const cb of listeners) {
+      try {
+        cb({ ...payload });
+      } catch (e) {
+        /* swallow */
       }
     }
   }
 
-  _notifyStories(listType) {
-    const ids = this._storiesByList[listType] || [];
-    const listeners = this._storyListeners.get(listType);
-    if (!listeners) return;
-    for (const cb of listeners) {
-      try { cb(ids.slice()); } catch (e) { console.warn(e); }
-    }
-  }
+  // -- public surface --------------------------------------------------------
 
-  _notifyItem(itemId, payload) {
-    const listeners = this._itemListeners.get(String(itemId));
-    if (!listeners) return;
-    for (const cb of listeners) {
-      try { cb({ ...payload }); } catch (e) { console.warn(e); }
-    }
-  }
-
-  // Public-ish APIs used by HNService mock mode
-  watchStories(listType, cb) {
-    const set = this._storyListeners.get(listType) || new Set();
+  onStoriesValue(listType, cb) {
+    const type = listType || "top";
+    const set = this._storyListeners.get(type) || new Set();
     set.add(cb);
-    this._storyListeners.set(listType, set);
-    // immediate initial delivery
+    this._storyListeners.set(type, set);
+
+    const ids = (this._lists[type] || []).slice();
+    const items = ids.map((id) => this._items.get(id)).filter(Boolean);
     setTimeout(() => {
-      try { cb((this._storiesByList[listType] || []).slice()); } catch (e) { console.warn(e); }
+      try {
+        cb(items);
+      } catch (e) {
+        /* swallow */
+      }
     }, 0);
-    // return unsubscribe
-    return () => { set.delete(cb); };
+
+    return () => set.delete(cb);
   }
 
-  watchItem(itemId, cb) {
+  onItemValue(itemId, cb) {
     const id = String(itemId);
     const set = this._itemListeners.get(id) || new Set();
     set.add(cb);
     this._itemListeners.set(id, set);
-    // immediate initial delivery
-    const initial = this._items.get(id) || createMockItem(id, { type: 'story' });
+
+    const item = this._items.get(id) || createMockItem(id, { type: "comment" });
     setTimeout(() => {
-      try { cb({ ...initial }); } catch (e) { console.warn(e); }
+      try {
+        cb({ ...item });
+      } catch (e) {
+        /* swallow */
+      }
     }, 0);
-    return () => { set.delete(cb); };
+
+    return () => set.delete(cb);
   }
 
   async fetchItem(itemId) {
+    await new Promise((r) => setTimeout(r, 80 + Math.random() * 120));
     const id = String(itemId);
-    // simulate network latency
-    await new Promise(resolve => setTimeout(resolve, 120 + Math.random() * 200));
     let item = this._items.get(id);
     if (!item) {
-      item = createMockItem(id, { type: 'comment' });
+      item = createMockItem(id, { type: "comment" });
       this._items.set(id, item);
     }
     return { ...item };
   }
 
-  watchUser(userId, cb) {
+  onUserValue(userId, cb) {
     const id = String(userId);
     const set = this._userListeners.get(id) || new Set();
     set.add(cb);
     this._userListeners.set(id, set);
-    // deliver a mock user
     setTimeout(() => {
       try {
         cb({
           id,
-          about: `Mock user ${id}`,
-          created: nowSeconds() - 3600 * (Number(id) % 48),
-          karma: (Number(id) % 200)
+          about: `<p>Mock user <em>${id}</em></p>`,
+          created: nowSeconds() - 86400 * 365,
+          karma: (id.length * 137) % 9999,
         });
-      } catch (e) { console.warn(e); }
+      } catch (e) {
+        /* swallow */
+      }
     }, 0);
-    return () => { set.delete(cb); };
+    return () => set.delete(cb);
   }
 
-  watchUpdates(cb) {
+  onUpdatesValue(cb) {
     this._updatesListeners.add(cb);
-    // immediate initial ping
     setTimeout(() => {
-      try { cb({ timestamp: Date.now() }); } catch (e) { console.warn(e); }
+      try {
+        cb({ items: [], profiles: [] });
+      } catch (e) {}
     }, 0);
-    return () => { this._updatesListeners.delete(cb); };
+    return () => this._updatesListeners.delete(cb);
   }
 
   destroy() {
@@ -199,139 +256,259 @@ class MockBackend {
     this._itemListeners.clear();
     this._userListeners.clear();
     this._updatesListeners.clear();
-    this._items.clear();
   }
 }
+
+// ---------------------------------------------------------------------------
+// FirebaseBackend
+// ---------------------------------------------------------------------------
+
+class FirebaseBackend {
+  constructor() {
+    this._app = null;
+    this._db = null;
+    this._sdk = null; // { ref, child, onValue, get, off }
+    this._destroyed = false;
+
+    this._firebaseReady = this._init();
+  }
+
+  async _init() {
+    const [{ initializeApp }, { getDatabase, ref, child, onValue, get }] =
+      await Promise.all([
+        import(`${FIREBASE_CDN}/firebase-app.js`),
+        import(`${FIREBASE_CDN}/firebase-database.js`),
+      ]);
+
+    if (this._destroyed) return;
+
+    this._app = initializeApp(
+      { databaseURL: HN_DB_URL },
+      `vanilla-hn-${Date.now()}`,
+    );
+    this._db = getDatabase(this._app);
+    this._sdk = { ref, child, onValue, get };
+  }
+
+  _ref(path) {
+    const { ref, child } = this._sdk;
+    // path like '/v0/topstories' or '/v0/item/123'
+    const db = this._db;
+    // ref(db) gives the root; child navigates from there
+    return child(ref(db), path.replace(/^\//, ""));
+  }
+
+  /**
+   * Attach a realtime listener. Returns an unsubscribe function.
+   * If Firebase isn't ready yet, queues the attachment.
+   */
+  _subscribe(path, cb, transform) {
+    let realUnsub = null;
+    let cancelled = false;
+
+    this._firebaseReady
+      .then(() => {
+        if (cancelled || this._destroyed) return;
+        const dbRef = this._ref(path);
+        const handler = (snapshot) => {
+          const val = snapshot.val();
+          try {
+            cb(transform ? transform(val) : val);
+          } catch (e) {
+            /* swallow cb errors */
+          }
+        };
+        realUnsub = this._sdk.onValue(dbRef, handler, (err) => {
+          console.warn(`[HNService] Firebase listener error on ${path}:`, err);
+        });
+      })
+      .catch((err) => {
+        console.warn(
+          `[HNService] Firebase not ready, cannot subscribe to ${path}:`,
+          err,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+      if (typeof realUnsub === "function") realUnsub();
+    };
+  }
+
+  onStoriesValue(listType, cb) {
+    const path = LIST_PATHS[listType] || LIST_PATHS.top;
+    return this._subscribe(path, cb, (val) => {
+      // val is an array of numeric ids from Firebase
+      if (!Array.isArray(val)) return [];
+      // Return ids as strings for consistency; ItemView will fetch each item
+      return val.map(String);
+    });
+  }
+
+  onItemValue(itemId, cb) {
+    return this._subscribe(`${API_ROOT}/item/${itemId}`, cb);
+  }
+
+  async fetchItem(itemId, opts = {}) {
+    const signal = opts && opts.signal;
+    if (signal && signal.aborted)
+      throw new DOMException("Aborted", "AbortError");
+
+    await this._firebaseReady;
+    if (this._destroyed) throw new Error("HNService destroyed");
+
+    const dbRef = this._ref(`${API_ROOT}/item/${itemId}`);
+    const snapPromise = this._sdk.get(dbRef).then((snap) => snap.val());
+
+    if (!signal) return snapPromise;
+
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(new DOMException("Aborted", "AbortError"));
+      signal.addEventListener("abort", onAbort, { once: true });
+      snapPromise
+        .then((v) => {
+          signal.removeEventListener("abort", onAbort);
+          resolve(v);
+        })
+        .catch((e) => {
+          signal.removeEventListener("abort", onAbort);
+          reject(e);
+        });
+    });
+  }
+
+  onUserValue(userId, cb) {
+    return this._subscribe(`${API_ROOT}/user/${userId}`, cb);
+  }
+
+  onUpdatesValue(cb) {
+    return this._subscribe(`${API_ROOT}/updates`, cb);
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    if (this._app) {
+      import(`${FIREBASE_CDN}/firebase-app.js`)
+        .then(({ deleteApp }) => deleteApp(this._app).catch(noop))
+        .catch(noop);
+      this._app = null;
+    }
+    this._db = null;
+    this._sdk = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// HNService — public class
+// ---------------------------------------------------------------------------
 
 /**
  * HNService
  *
- * Constructor options:
- *   - mock: boolean (force mock mode)
- *   - databaseURL: string (if provided, you would wire real Firebase here)
+ * Usage:
+ *   const svc = new HNService()           // real Firebase, mock fallback
+ *   const svc = new HNService({mock:true}) // force mock
  *
- * In this scaffolded repo we default to mock mode. The class is written so you can
- * swap the internals with a Firebase-backed implementation that satisfies the same API.
+ * All methods return an unsubscribe function (or Promise for fetchItem).
  */
 export default class HNService {
   constructor(options = {}) {
-    this.options = options || {};
-    this.mock = Boolean(this.options.mock) || !this.options.databaseURL;
     this._destroyed = false;
+    this._forceMock = Boolean(options && options.mock);
 
-    if (this.mock) {
+    if (this._forceMock) {
       this._backend = new MockBackend();
+      this._usingMock = true;
+      this._firebaseReady = Promise.resolve();
     } else {
-      // Placeholder for real backend initialization (Firebase/etc).
-      // In a real integration you'd initialize the SDK here and set up
-      // methods that attach to realtime listeners and return unsubscribe functions.
-      // Keep a tiny, resilient fallback so the service won't crash.
-      console.warn('HNService: real backend not implemented in this scaffold — falling back to mock mode.');
-      this._backend = new MockBackend();
-      this.mock = true;
-    }
-  }
+      const firebase = new FirebaseBackend();
+      this._backend = firebase;
+      this._usingMock = false;
 
-  /**
-   * onStoriesValue(listType, callback)
-   * - listType: 'top' | 'newest' | 'ask' | 'show' | 'jobs' etc.
-   * - callback receives an array of item ids (strings) in the list order.
-   * Returns an unsubscribe function.
-   */
-  onStoriesValue(listType, callback) {
-    if (this._destroyed) return () => {};
-    if (this.mock) {
-      return this._backend.watchStories(listType, callback);
-    }
-    // Real backend would look like:
-    // const ref = ref(db, `v0/${listType}`);
-    // const listener = onValue(ref, snap => { callback(process(snap)) });
-    // return () => off(ref, 'value', listener);
-    throw new Error('onStoriesValue not implemented for non-mock mode');
-  }
-
-  /**
-   * onItemValue(itemId, callback)
-   * - callback receives the full item object whenever it changes.
-   * Returns an unsubscribe function.
-   */
-  onItemValue(itemId, callback) {
-    if (this._destroyed) return () => {};
-    if (this.mock) {
-      return this._backend.watchItem(itemId, callback);
-    }
-    throw new Error('onItemValue not implemented for non-mock mode');
-  }
-
-  /**
-   * fetchItem(itemId, { signal })
-   * - one-off fetch of an item (no persistent listener).
-   * - honors AbortSignal if provided.
-   */
-  async fetchItem(itemId, opts = {}) {
-    if (this._destroyed) throw new Error('HNService destroyed');
-    const signal = opts.signal;
-    if (signal && signal.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
-
-    if (this.mock) {
-      const p = this._backend.fetchItem(itemId);
-      if (!signal) return p;
-      // wire abort
-      return new Promise((resolve, reject) => {
-        const onAbort = () => {
-          reject(new DOMException('Aborted', 'AbortError'));
-        };
-        signal.addEventListener('abort', onAbort, { once: true });
-        p.then((v) => {
-          signal.removeEventListener('abort', onAbort);
-          resolve(v);
-        }).catch((err) => {
-          signal.removeEventListener('abort', onAbort);
-          reject(err);
-        });
+      // If Firebase fails to init, swap to mock automatically
+      this._firebaseReady = firebase._firebaseReady.catch((err) => {
+        console.warn(
+          "[HNService] Firebase failed to load — switching to MockBackend.",
+          err,
+        );
+        if (this._destroyed) return;
+        const mock = new MockBackend();
+        this._backend = mock;
+        this._usingMock = true;
+        firebase.destroy();
       });
     }
+  }
 
-    // Real fetch code would go here (e.g., fetch from REST endpoint)
-    throw new Error('fetchItem not implemented for non-mock mode');
+  get isUsingMock() {
+    return this._usingMock;
   }
 
   /**
-   * onUserValue(userId, callback)
-   * - callback receives the user object whenever it changes.
-   * Returns an unsubscribe function.
+   * Subscribe to a story list.
+   * cb receives:
+   *   - MockBackend: array of full item objects
+   *   - FirebaseBackend: array of id strings (views should fetch each via onItemValue)
+   *
+   * Returns unsubscribe function.
    */
-  onUserValue(userId, callback) {
-    if (this._destroyed) return () => {};
-    if (this.mock) {
-      return this._backend.watchUser(userId, callback);
-    }
-    throw new Error('onUserValue not implemented for non-mock mode');
+  onStoriesValue(listType, cb) {
+    if (this._destroyed) return noop;
+    return this._backend.onStoriesValue(listType, cb);
   }
 
   /**
-   * onUpdatesValue(callback)
-   * - top-level updates feed (e.g. global "updates" channel).
-   * Returns an unsubscribe function.
+   * Subscribe to realtime updates for a single item.
+   * cb receives the full item object whenever it changes.
+   * Returns unsubscribe function.
    */
-  onUpdatesValue(callback) {
-    if (this._destroyed) return () => {};
-    if (this.mock) {
-      return this._backend.watchUpdates(callback);
-    }
-    throw new Error('onUpdatesValue not implemented for non-mock mode');
+  onItemValue(itemId, cb) {
+    if (this._destroyed) return noop;
+    return this._backend.onItemValue(itemId, cb);
   }
 
   /**
-   * Shutdown and release resources.
+   * One-off fetch of a single item. Respects AbortSignal.
+   * Returns Promise<item>.
+   */
+  async fetchItem(itemId, opts = {}) {
+    if (this._destroyed) throw new Error("HNService destroyed");
+    // Wait for backend to be decided (mock swap may be in flight)
+    await this._firebaseReady.catch(noop);
+    return this._backend.fetchItem(itemId, opts);
+  }
+
+  /**
+   * Subscribe to realtime updates for a user.
+   * Returns unsubscribe function.
+   */
+  onUserValue(userId, cb) {
+    if (this._destroyed) return noop;
+    return this._backend.onUserValue(userId, cb);
+  }
+
+  /**
+   * Subscribe to the HN updates feed.
+   * Returns unsubscribe function.
+   */
+  onUpdatesValue(cb) {
+    if (this._destroyed) return noop;
+    return this._backend.onUpdatesValue(cb);
+  }
+
+  /**
+   * Tear down the service and release all resources.
    */
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
-    if (this._backend && typeof this._backend.destroy === 'function') {
-      try { this._backend.destroy(); } catch (e) { /* ignore */ }
+    if (this._backend && typeof this._backend.destroy === "function") {
+      try {
+        this._backend.destroy();
+      } catch (e) {
+        /* ignore */
+      }
     }
     this._backend = null;
   }

@@ -1,456 +1,899 @@
-/vanilla-hn/src/stores/StoryCommentThreadStore.js
 /**
  * StoryCommentThreadStore.js
  *
- * Manages per-story thread metadata used to:
- *  - track last visit timestamps for stories
- *  - record maximum seen comment id for a story (heuristic for new comment detection)
- *  - store per-comment collapsed state for individual threads
- *  - compute counts of new/total child comments for a given comment subtree
- *  - persist lightweight per-session state (sessionStorage preferred, localStorage fallback)
+ * A single-class ES module that merges the behaviour of react-hn's
+ * CommentThreadStore (base) and StoryCommentThreadStore (derived) into one
+ * clean, dependency-light implementation.
  *
- * The store is intentionally lightweight and does not keep full comment payloads.
- * To compute child aggregates it can accept a `getItemById` helper (in constructor options)
- * which should return an item object with a `kids` array (if available). If no helper is
- * provided, `getChildCounts()` will make conservative estimates based on stored metadata.
+ * Responsibilities
+ * ----------------
+ *  - Track every comment payload, parent→child relationships and per-comment
+ *    flags (isNew, isCollapsed, dead) for a single story thread.
+ *  - Detect "new" comments by comparing comment ids against the highest id seen
+ *    on the previous visit (prevMaxCommentId).
+ *  - Persist a lightweight snapshot (lastVisit, commentCount, maxCommentId) to
+ *    storage on every meaningful state change, debounced to 123 ms.
+ *  - Auto-collapse threads that contain no new comments once the initial load
+ *    completes (when SettingsStore.autoCollapse is on).
+ *  - Expose an observer API (addListener / notify) so views can react to changes
+ *    without coupling to any specific framework.
  *
- * API (selected):
- *  - constructor(options)
- *    - options.getItemById: optional function(id) => item payload (with .kids array)
- *    - options.storageKey: optional override for persistence key
- *  - loadState()
- *  - saveState()
- *  - commentAdded(storyId, commentId, parentId, commentTime)
- *  - toggleCollapse(storyId, commentId, collapsed?) -> boolean
- *  - isCollapsed(storyId, commentId)
- *  - getChildCounts(storyId, rootCommentId) -> { total, new }
- *  - collapseThreadsWithoutNewComments(predictive = true) -> void
- *  - markAsRead(storyId) -> void
- *  - addListener(fn) -> unsubscribe
- *  - getState(storyId) -> shallow state object
+ * Data structures (all per-instance, keyed by comment id)
+ * -------------------------------------------------------
+ *  comments        {id → comment object}          full payloads
+ *  children        {id → id[]}                    story root + every comment
+ *  parents         {commentId → parentId}         excludes story root
+ *  isNew           {commentId → true}             comments newer than last visit
+ *  isCollapsed     {commentId → true}             collapsed comment roots
+ *  deadComments    {commentId → true}             dead comments
  *
- * Notes:
- *  - "new" determination uses two heuristics:
- *      1) commentId > stored maxCommentId
- *      2) commentTime (seconds) > lastVisit (seconds)
- *    If commentId is not numeric or unavailable, time-based heuristic is used.
+ * Scalar state
+ * ------------
+ *  lastVisit           unix-ms timestamp of previous visit (null on first visit)
+ *  prevMaxCommentId    highest comment id from previous visit
+ *  maxCommentId        highest comment id seen this visit
+ *  commentCount        loaded non-deleted (and non-dead-if-showDead-off) comments
+ *  newCommentCount     loaded comments that are "new"
+ *  expectedComments    number of comments still expected to arrive
+ *  itemDescendantCount item.descendants from the API
+ *  loading             true until initial load completes
  *
- *  - Persistence uses sessionStorage when available so state is per-tab. A fallback
- *    to localStorage is attempted when sessionStorage is unavailable.
+ * Usage
+ * -----
+ *  import StoryCommentThreadStore, { loadState } from './StoryCommentThreadStore.js';
  *
- *  - The store is NOT responsible for fetching comments; views/services should call
- *    `commentAdded()` when realtime updates arrive so the store can keep counts.
- *
- *  - This implementation focuses on correctness and clarity rather than extreme optimization.
+ *  const store = new StoryCommentThreadStore(storyId, { storage: localStorage });
+ *  store.addListener(change => render(change));
+ *  store.initForItem(item);   // call once when the story payload arrives
+ *  // … feed comments via store.commentAdded(comment) as they stream in …
  */
 
-const DEFAULT_KEY = 'vanilla-hn:thread-state:v1';
+import SettingsStoreClass from "./SettingsStore.js";
 
-function nowSeconds() {
-  return Math.floor(Date.now() / 1000);
-}
-
-function safeParse(jsonStr, fallback = {}) {
-  try {
-    const v = JSON.parse(jsonStr);
-    return v && typeof v === 'object' ? v : fallback;
-  } catch (e) {
-    return fallback;
-  }
-}
+// ---------------------------------------------------------------------------
+// Module-level SettingsStore singleton
+//
+// react-hn's SettingsStore is a plain singleton object with direct property
+// access (SettingsStore.autoCollapse, SettingsStore.showDead, etc.).
+// vanilla-hn's SettingsStore is a class whose state lives in this._state and
+// is accessed via instance.get(key).
+//
+// To match react-hn's usage pattern throughout this file we create one shared
+// module-level instance and expose a thin adapter object with the same
+// property names that react-hn's code reads directly.  Callers can override
+// the instance via `options.settings` in the constructor (useful for tests).
+// ---------------------------------------------------------------------------
 
 /**
- * Small debounce helper used to coalesce saves.
- * Not exported.
+ * Create a duck-typed adapter around a SettingsStore instance so that code
+ * written against react-hn's plain-object SettingsStore (i.e. `Settings.autoCollapse`)
+ * works without change.
+ *
+ * @param {InstanceType<SettingsStoreClass>} instance
+ * @returns {{ autoCollapse: boolean, showDead: boolean, showDeleted: boolean }}
  */
-function debounce(fn, wait = 150) {
-  let t = null;
-  return (...args) => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => {
-      t = null;
-      try { fn(...args); } catch (e) { /* swallow */ }
-    }, wait);
+function makeSettingsAdapter(instance) {
+  return {
+    get autoCollapse() {
+      return Boolean(instance.get("autoCollapse"));
+    },
+    get showDead() {
+      return Boolean(instance.get("showDead"));
+    },
+    get showDeleted() {
+      return Boolean(instance.get("showDeleted"));
+    },
   };
 }
 
 /**
- * Normalize id to string
+ * Shared default settings instance.  Created lazily on first import so that
+ * tests can import the module without a real `window.localStorage`.
  */
-function sid(id) {
-  return id == null ? '' : String(id);
+let _defaultSettingsInstance = null;
+function getDefaultSettings() {
+  if (!_defaultSettingsInstance) {
+    _defaultSettingsInstance = makeSettingsAdapter(new SettingsStoreClass());
+  }
+  return _defaultSettingsInstance;
 }
+
+// ---------------------------------------------------------------------------
+// Module-level helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Tiny cancellable debounce (mirrors react-hn's cancellableDebounce utility).
+ * Returns a function with a `.cancel()` method.
+ *
+ * @param {Function} fn   Function to debounce.
+ * @param {number}   wait Milliseconds to wait after the last call.
+ * @returns {Function & { cancel: Function }}
+ */
+function cancellableDebounce(fn, wait) {
+  let timeout = null;
+  let context, args, timestamp;
+
+  function later() {
+    const elapsed = Date.now() - timestamp;
+    if (elapsed < wait && elapsed >= 0) {
+      timeout = setTimeout(later, wait - elapsed);
+    } else {
+      timeout = null;
+      fn.apply(context, args);
+      if (!timeout) context = args = null;
+    }
+  }
+
+  function debounced() {
+    context = this; // eslint-disable-line no-invalid-this
+    args = arguments;
+    timestamp = Date.now();
+    if (!timeout) timeout = setTimeout(later, wait);
+  }
+
+  debounced.cancel = function cancel() {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+
+  return debounced;
+}
+
+/**
+ * Safe localStorage/sessionStorage wrapper so the rest of the code never has
+ * to guard against missing storage or quota errors.
+ */
+const defaultStorage = {
+  get(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (e) {
+      /* quota / private mode */
+    }
+  },
+};
+
+/**
+ * Pluralise helper (mirrors react-hn's pluralise utility).
+ * @param {number} n
+ * @returns {string} '' for 1, 's' otherwise
+ */
+function pluralise(n) {
+  return n === 1 ? "" : "s";
+}
+
+// ---------------------------------------------------------------------------
+// Exported named helper — mirrors StoryCommentThreadStore.loadState
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the persisted comment-thread state for a story from storage.
+ *
+ * Returns a default shape when the story has never been visited.
+ *
+ * @param {number|string} storyId
+ * @param {object}        [storage]  Object with `.get(key)` → string | null.
+ *                                   Defaults to localStorage via `defaultStorage`.
+ * @returns {{ lastVisit: number|null, commentCount: number, maxCommentId: number }}
+ */
+export function loadState(storyId, storage = defaultStorage) {
+  const raw = storage.get(String(storyId));
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      // Malformed JSON — fall through to defaults.
+    }
+  }
+  return { lastVisit: null, commentCount: 0, maxCommentId: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// Main class
+// ---------------------------------------------------------------------------
 
 export default class StoryCommentThreadStore {
   /**
-   * @param {Object} options
-   * @param {Function} [options.getItemById] optional function(id) => item (with .kids[])
-   * @param {string} [options.storageKey] override persistence key
-   * @param {Storage} [options.storage] optional injected storage (sessionStorage/localStorage)
+   * @param {number|string} storyId
+   * @param {object}        [options]
+   * @param {string}        [options.storageKey]  Override the key used for persistence.
+   *                                              Defaults to the storyId itself (react-hn
+   *                                              stores each story under its own id).
+   * @param {object}        [options.storage]     Injectable storage; must expose
+   *                                              `.get(key)` and `.set(key, value)`.
+   *                                              Defaults to localStorage.
    */
-  constructor(options = {}) {
-    this.getItemById = typeof options.getItemById === 'function' ? options.getItemById : null;
-    this.storageKey = options.storageKey || DEFAULT_KEY;
-    // prefer sessionStorage for per-tab caching, fallback to localStorage
-    this._storage = options.storage || (typeof sessionStorage !== 'undefined' ? sessionStorage : (typeof localStorage !== 'undefined' ? localStorage : null));
+  constructor(storyId, options = {}) {
+    this.storyId = storyId;
+    this._storageKey =
+      options.storageKey != null ? options.storageKey : String(storyId);
+    this._storage = options.storage != null ? options.storage : defaultStorage;
 
-    // Internal shape:
-    // this._map = {
-    //   [storyId]: {
-    //     lastVisit: unixSeconds,
-    //     commentCount: number,
-    //     maxCommentId: number, // highest numeric id seen
-    //     collapsed: { [commentId]: true }
-    //   }
-    // }
-    this._map = Object.create(null);
-    this._listeners = new Set();
-
-    // Debounced save
-    this._saveDebounced = debounce(() => this.saveState(), 150);
-
-    // Try to load persisted state
-    this.loadState();
-  }
-
-  /* ---------------------------
-   * Persistence
-   * --------------------------- */
-
-  loadState() {
-    if (!this._storage) return;
-    try {
-      const raw = this._storage.getItem(this.storageKey);
-      if (!raw) return;
-      const parsed = safeParse(raw, {});
-      // Validate structure: expect object with keys mapping to small objects
-      for (const [k, v] of Object.entries(parsed)) {
-        // Normalize entry
-        const entry = {
-          lastVisit: typeof v.lastVisit === 'number' ? v.lastVisit : (typeof v.lastVisit === 'string' ? Number(v.lastVisit) || 0 : 0),
-          commentCount: typeof v.commentCount === 'number' ? v.commentCount : (v.commentCount ? Number(v.commentCount) || 0 : 0),
-          maxCommentId: typeof v.maxCommentId === 'number' ? v.maxCommentId : (v.maxCommentId ? Number(v.maxCommentId) || 0 : 0),
-          collapsed: (v.collapsed && typeof v.collapsed === 'object') ? Object.assign({}, v.collapsed) : {}
-        };
-        this._map[sid(k)] = entry;
-      }
-    } catch (e) {
-      // ignore parse errors
-      // console.warn('StoryCommentThreadStore.loadState failed', e);
+    /**
+     * Settings adapter — provides `.autoCollapse`, `.showDead`, `.showDeleted`.
+     * Consumers can inject a custom adapter via `options.settings` (handy for
+     * tests or when the app already holds a SettingsStore instance).
+     *
+     * Accepted shapes:
+     *   - A raw SettingsStoreClass instance  → wrapped in makeSettingsAdapter
+     *   - A plain adapter object with the expected boolean properties
+     *   - Omitted / null                     → module-level default singleton
+     */
+    if (options.settings != null) {
+      this._settings =
+        options.settings instanceof SettingsStoreClass
+          ? makeSettingsAdapter(options.settings)
+          : options.settings;
+    } else {
+      this._settings = getDefaultSettings();
     }
+
+    // -----------------------------------------------------------------
+    // Core comment-graph maps  (CommentThreadStore layer in react-hn)
+    // -----------------------------------------------------------------
+
+    /**
+     * Full comment payloads keyed by id.
+     * @type {Object.<number, object>}
+     */
+    this.comments = {};
+
+    /**
+     * Child id arrays keyed by parent id.
+     * The story root is pre-seeded as an empty array so BFS can start there.
+     * @type {Object.<number, number[]>}
+     */
+    this.children = {};
+    // Root entry is created in initForItem once the story id is confirmed.
+
+    /**
+     * Parent id keyed by comment id (story root excluded).
+     * @type {Object.<number, number>}
+     */
+    this.parents = {};
+
+    /**
+     * Truthy flags for comments that are newer than the last visit.
+     * @type {Object.<number, true>}
+     */
+    this.isNew = {};
+
+    /**
+     * Truthy flags for comment roots that are collapsed.
+     * @type {Object.<number, true>}
+     */
+    this.isCollapsed = {};
+
+    /**
+     * Truthy flags for dead comments.
+     * @type {Object.<number, true>}
+     */
+    this.deadComments = {};
+
+    // -----------------------------------------------------------------
+    // Scalar state  (StoryCommentThreadStore layer in react-hn)
+    // -----------------------------------------------------------------
+
+    /** Number of non-deleted (and non-dead-when-showDead-off) comments loaded. */
+    this.commentCount = 0;
+
+    /** Number of comments that are "new" (id > prevMaxCommentId). */
+    this.newCommentCount = 0;
+
+    /** Highest comment id observed this session. */
+    this.maxCommentId = 0;
+
+    /** True while the initial wave of comments is still streaming in. */
+    this.loading = true;
+
+    /**
+     * How many comments we are currently waiting for.
+     * Starts as the number of top-level kids; grows as nested kids are discovered.
+     */
+    this.expectedComments = 0;
+
+    /**
+     * item.descendants from the API — includes deleted comments so may never
+     * equal commentCount, but we persist it for the "new comments since last
+     * visit" heuristic on list pages.
+     */
+    this.itemDescendantCount = 0;
+
+    // -----------------------------------------------------------------
+    // Persisted state loaded from storage
+    // -----------------------------------------------------------------
+
+    const saved = loadState(this._storageKey, this._storage);
+
+    /** Unix-ms timestamp of the previous visit; null on first ever visit. */
+    this.lastVisit = saved.lastVisit;
+
+    /**
+     * Highest comment id seen during the previous visit.
+     * Used to decide which comments are "new" this time round.
+     */
+    this.prevMaxCommentId = saved.maxCommentId;
+
+    /** True when this is the user's very first visit to this story. */
+    this.isFirstVisit = saved.lastVisit === null;
+
+    // -----------------------------------------------------------------
+    // Internal bookkeeping
+    // -----------------------------------------------------------------
+
+    /** Unix-ms time this instance was created, for load-time logging. */
+    this._startedLoading = Date.now();
+
+    /** Observer list. */
+    this._listeners = [];
+
+    /**
+     * Debounced version of _notifyCountChanged so we don't spam the view
+     * with re-renders while hundreds of comments are streaming in.
+     * Matches react-hn's 123 ms debounce interval exactly.
+     */
+    this._debouncedCountChanged = cancellableDebounce(
+      () => this.notify({ type: "number" }),
+      123,
+    );
+
+    /**
+     * Debounced persistence.  Also fires at 123 ms to match react-hn.
+     */
+    this._debouncedSave = cancellableDebounce(() => this._persistState(), 123);
   }
 
-  saveState() {
-    if (!this._storage) return;
-    try {
-      // Persist a lightweight snapshot (avoid storing transient large objects)
-      const snapshot = Object.create(null);
-      for (const [storyId, entry] of Object.entries(this._map)) {
-        snapshot[storyId] = {
-          lastVisit: entry.lastVisit || 0,
-          commentCount: entry.commentCount || 0,
-          maxCommentId: entry.maxCommentId || 0,
-          collapsed: entry.collapsed || {}
-        };
-      }
-      this._storage.setItem(this.storageKey, JSON.stringify(snapshot));
-    } catch (e) {
-      // ignore storage errors (quota etc.)
-      // console.warn('StoryCommentThreadStore.saveState failed', e);
-    }
-  }
+  // -------------------------------------------------------------------------
+  // Observer API
+  // -------------------------------------------------------------------------
 
-  _scheduleSave() {
-    this._saveDebounced();
-  }
-
-  /* ---------------------------
-   * Listener API
-   * --------------------------- */
-
+  /**
+   * Register a listener function.  It will be called with a change descriptor
+   * `{ type: string, ... }` whenever the store's state changes.
+   *
+   * Returns an unsubscribe function for convenience.
+   *
+   * @param {Function} fn
+   * @returns {Function} unsubscribe
+   */
   addListener(fn) {
-    if (typeof fn !== 'function') throw new TypeError('addListener expects a function');
-    this._listeners.add(fn);
-    // call immediately with no args so subscribers can initialize if desired
-    try { fn(); } catch (e) { /* ignore subscriber errors */ }
-    return () => this._listeners.delete(fn);
-  }
-
-  removeListener(fn) {
-    this._listeners.delete(fn);
-  }
-
-  _notify(change = {}) {
-    for (const fn of Array.from(this._listeners)) {
-      try { fn(change); } catch (e) { /* swallow subscriber errors */ }
-    }
-  }
-
-  /* ---------------------------
-   * Basic getters / setters
-   * --------------------------- */
-
-  /**
-   * Ensure a thread entry exists and return it.
-   * @param {string|number} storyId
-   */
-  _ensureEntry(storyId) {
-    const sidKey = sid(storyId);
-    if (!this._map[sidKey]) {
-      this._map[sidKey] = {
-        lastVisit: 0,
-        commentCount: 0,
-        maxCommentId: 0,
-        collapsed: Object.create(null)
-      };
-    }
-    return this._map[sidKey];
-  }
-
-  /**
-   * Return shallow snapshot of state for a story
-   * @param {string|number} storyId
-   */
-  getState(storyId) {
-    const e = this._map[sid(storyId)];
-    if (!e) return null;
-    return {
-      lastVisit: e.lastVisit,
-      commentCount: e.commentCount,
-      maxCommentId: e.maxCommentId,
-      collapsed: Object.assign({}, e.collapsed)
+    if (typeof fn !== "function")
+      throw new TypeError("addListener: expected a function");
+    this._listeners.push(fn);
+    return () => {
+      const idx = this._listeners.indexOf(fn);
+      if (idx !== -1) this._listeners.splice(idx, 1);
     };
   }
 
   /**
-   * Set commentCount / maxCommentId directly for a story (rarely needed externally)
-   * @param {string|number} storyId
-   * @param {Object} opts { commentCount, maxCommentId, lastVisit }
+   * Notify all registered listeners with a change descriptor.
+   *
+   * @param {{ type: string }} change
    */
-  update(storyId, opts = {}) {
-    const entry = this._ensureEntry(storyId);
-    if (typeof opts.commentCount === 'number') entry.commentCount = opts.commentCount;
-    if (typeof opts.maxCommentId === 'number') entry.maxCommentId = opts.maxCommentId;
-    if (typeof opts.lastVisit === 'number') entry.lastVisit = opts.lastVisit;
-    this._scheduleSave();
-    this._notify({ type: 'update', storyId: sid(storyId) });
-  }
-
-  /* ---------------------------
-   * New-comment detection / updates
-   * --------------------------- */
-
-  /**
-   * Notify the store that a comment was added.
-   * This function is expected to be called by the service layer when an update arrives.
-   *
-   * @param {string|number} storyId - top-level story id the comment belongs to
-   * @param {string|number} commentId - id of the new comment
-   * @param {string|number|null} parentId - id of the parent comment (may be null)
-   * @param {number|null} commentTime - unix seconds timestamp for the comment (optional)
-   */
-  commentAdded(storyId, commentId, parentId = null, commentTime = null) {
-    if (storyId == null || commentId == null) return;
-    const entry = this._ensureEntry(storyId);
-    // Update total comment count heuristic
-    entry.commentCount = Math.max(entry.commentCount || 0, (entry.commentCount || 0) + 1);
-
-    // Try to interpret numeric commentId to update maxCommentId
-    const numericId = Number(commentId);
-    if (!Number.isNaN(numericId) && numericId > (entry.maxCommentId || 0)) {
-      entry.maxCommentId = numericId;
-    }
-
-    // If we have a commentTime and it's newer than lastVisit, this indicates "new"
-    if (typeof commentTime === 'number' && commentTime > (entry.lastVisit || 0)) {
-      // nothing to store per-comment here; getChildCounts will use heuristics when asked
-    }
-
-    this._scheduleSave();
-    this._notify({ type: 'commentAdded', storyId: sid(storyId), commentId: sid(commentId), parentId: sid(parentId) });
-  }
-
-  /**
-   * Mark the entire story as read: update lastVisit time and reset max/new heuristics.
-   * @param {string|number} storyId
-   */
-  markAsRead(storyId) {
-    if (storyId == null) return;
-    const entry = this._ensureEntry(storyId);
-    entry.lastVisit = nowSeconds();
-    // Resetting maxCommentId is optional; keep it to avoid treating old comments as new.
-    // But we also reset commentCount to 0 if desired. Here we keep commentCount.
-    this._scheduleSave();
-    this._notify({ type: 'markAsRead', storyId: sid(storyId) });
-  }
-
-  /* ---------------------------
-   * Collapse state management
-   * --------------------------- */
-
-  /**
-   * Toggle collapse state for a comment inside a story.
-   * If commentId is falsy, toggles a top-level "story collapsed" flag under special key '__story'
-   *
-   * @param {string|number} storyId
-   * @param {string|number|null} commentId
-   * @param {boolean|null} explicit optional explicit boolean to set state
-   * @returns {boolean} resulting collapsed state
-   */
-  toggleCollapse(storyId, commentId = '__story', explicit = null) {
-    if (storyId == null) return false;
-    const entry = this._ensureEntry(storyId);
-    const key = sid(commentId == null ? '__story' : commentId);
-    const current = Boolean(entry.collapsed && entry.collapsed[key]);
-    const next = explicit === null ? !current : Boolean(explicit);
-    entry.collapsed = entry.collapsed || Object.create(null);
-    if (next) entry.collapsed[key] = true;
-    else delete entry.collapsed[key];
-    this._scheduleSave();
-    this._notify({ type: 'toggleCollapse', storyId: sid(storyId), commentId: key, collapsed: next });
-    return next;
-  }
-
-  isCollapsed(storyId, commentId = '__story') {
-    const entry = this._map[sid(storyId)];
-    if (!entry || !entry.collapsed) return false;
-    return Boolean(entry.collapsed[sid(commentId == null ? '__story' : commentId)]);
-  }
-
-  /* ---------------------------
-   * Child traversal and counts
-   * --------------------------- */
-
-  /**
-   * Compute child counts for a subtree rooted at rootCommentId under storyId.
-   *
-   * If `getItemById` helper was provided at construction, this will traverse
-   * the kids arrays to count total children and number of children considered "new".
-   *
-   * Heuristics for "new":
-   *  - If a child's numeric id > stored maxCommentId -> considered new
-   *  - Else if child's time (seconds) > lastVisit -> considered new
-   *
-   * If no getItemById is available, the method can still return best-effort values
-   * based on stored commentCount and lastVisit (conservative).
-   *
-   * @param {string|number} storyId
-   * @param {string|number|null} rootCommentId - if null/undefined, compute for entire story (using top-level kids if available)
-   * @returns {{ total: number, new: number }}
-   */
-  getChildCounts(storyId, rootCommentId = null) {
-    const entry = this._map[sid(storyId)];
-    const result = { total: 0, new: 0 };
-
-    if (!entry) {
-      return result;
-    }
-
-    // If we have a traversal helper, perform iterative traversal
-    if (this.getItemById) {
-      const stack = [];
-      if (rootCommentId) stack.push(sid(rootCommentId));
-      else {
-        // try to get the story item and push its kids
-        const storyItem = this.getItemById(sid(storyId));
-        if (storyItem && Array.isArray(storyItem.kids) && storyItem.kids.length > 0) {
-          for (let i = storyItem.kids.length - 1; i >= 0; i--) stack.push(sid(storyItem.kids[i]));
-        } else {
-          // nothing to traverse
-          return result;
-        }
+  notify(change) {
+    const snapshot = this._listeners.slice();
+    for (let i = 0; i < snapshot.length; i++) {
+      try {
+        snapshot[i](change);
+      } catch (e) {
+        /* never let a bad listener break the store */
       }
+    }
+  }
 
-      while (stack.length > 0) {
-        const id = stack.pop();
-        const item = this.getItemById(id);
-        if (!item) continue;
-        result.total++;
-        // determine new via id comparison or time
-        const numericId = Number(item.id);
-        if (!Number.isNaN(numericId) && numericId > (entry.maxCommentId || 0)) {
-          result.new++;
-        } else if (typeof item.time === 'number' && item.time > (entry.lastVisit || 0)) {
-          result.new++;
-        }
-        // push children
-        if (Array.isArray(item.kids) && item.kids.length > 0) {
-          for (let i = item.kids.length - 1; i >= 0; i--) stack.push(sid(item.kids[i]));
-        }
+  // -------------------------------------------------------------------------
+  // Lifecycle
+  // -------------------------------------------------------------------------
+
+  /**
+   * Call this once the story item payload has been fetched.
+   *
+   * Sets up the root children entry, reads persisted state, seeds expectedComments
+   * from the item's top-level kids array, and kicks off an immediate completion
+   * check (so stories with zero comments finish loading right away).
+   *
+   * Mirrors the logic in the react-hn StoryCommentThreadStore constructor that
+   * runs after `CommentThreadStore.call(this, item, …)`.
+   *
+   * @param {object} item  HN item payload (must have `.id`, may have `.kids`, `.descendants`).
+   */
+  initForItem(item) {
+    // Seed the root children entry so BFS always has a starting point.
+    this.children[item.id] = this.children[item.id] || [];
+
+    this.itemDescendantCount = item.descendants || 0;
+    this.expectedComments = item.kids ? item.kids.length : 0;
+
+    // Run an immediate check: if there are genuinely zero comments the loading
+    // spinner should disappear without waiting for any comment events.
+    this.checkLoadCompletion();
+  }
+
+  // -------------------------------------------------------------------------
+  // Comment ingestion
+  // -------------------------------------------------------------------------
+
+  /**
+   * Register a comment that has arrived from the API.
+   *
+   * Handles deleted comments (decrement expectedComments, skip payload storage),
+   * dead comments (skip count when showDead is off), isNew detection, children/
+   * parents wiring, and triggers a completion check during the initial load.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#commentAdded.
+   *
+   * @param {object} comment  HN comment payload.
+   */
+  commentAdded(comment) {
+    // ------------------------------------------------------------------
+    // Deleted comments do not count; just reduce what we're waiting for.
+    // ------------------------------------------------------------------
+    if (comment.deleted) {
+      if (this.loading) {
+        this.expectedComments--;
+        this.checkLoadCompletion();
       }
-
-      return result;
+      return;
     }
 
-    // No traversal helper: best-effort using stored totals
-    // If rootCommentId is falsy, return the stored commentCount as total
-    if (!rootCommentId) {
-      result.total = entry.commentCount || 0;
-      // For new count, we cannot compute accurately; assume 0 unless maxCommentId indicates something
-      // Best-effort: if maxCommentId > 0 and lastVisit < now then any maxCommentId > 0 might imply new comments
-      // But that's too noisy; return 0 so UI can conservatively hide new badges without service assistance.
-      result.new = 0;
-      return result;
+    // ------------------------------------------------------------------
+    // Wire into the comment graph (CommentThreadStore layer).
+    // ------------------------------------------------------------------
+    this.comments[comment.id] = comment;
+    this.children[comment.id] = this.children[comment.id] || [];
+
+    // Guard against an orphaned comment whose parent entry doesn't exist yet.
+    if (!this.children[comment.parent]) {
+      this.children[comment.parent] = [];
+    }
+    this.children[comment.parent].push(comment.id);
+
+    if (comment.dead) {
+      this.deadComments[comment.id] = true;
     }
 
-    // If rootCommentId provided but no helper, return 0s (unknown)
-    return result;
+    // ------------------------------------------------------------------
+    // Count and "new" detection  (StoryCommentThreadStore layer).
+    // ------------------------------------------------------------------
+
+    // Dead comments don't contribute to the visible count when showDead is off.
+    if (comment.dead && !this._settings.showDead) {
+      // Reduce expectedComments so the loading indicator isn't stalled waiting
+      // for a comment that will never appear in the count.
+      this.expectedComments--;
+    } else {
+      this.commentCount++;
+    }
+
+    // Expand expectedComments to include this comment's own children.
+    if (this.loading && comment.kids) {
+      this.expectedComments += comment.kids.length;
+    }
+
+    // Mark as new if it arrived after the last visit.
+    if (
+      this.prevMaxCommentId > 0 &&
+      comment.id > this.prevMaxCommentId &&
+      (!comment.dead || this._settings.showDead)
+    ) {
+      this.newCommentCount++;
+      this.isNew[comment.id] = true;
+    }
+
+    // Track the high-water mark for comment ids.
+    if (comment.id > this.maxCommentId) {
+      this.maxCommentId = comment.id;
+    }
+
+    // Record parent relationship (the story root itself is excluded).
+    if (comment.parent !== this.storyId) {
+      this.parents[comment.id] = comment.parent;
+    }
+
+    // Debounced notification so the view isn't thrashed during bulk load.
+    this._debouncedCountChanged();
+
+    if (this.loading) {
+      this.checkLoadCompletion();
+    }
   }
 
   /**
-   * Collapse threads that do not contain new comments.
-   * If `predictive` is true, will use stored/getItem heuristics to detect new comments.
+   * Remove a comment that was previously registered but has since been deleted.
    *
-   * This will set collapsed=true for comment nodes (by id) that have zero new children.
-   * The exact behavior depends on getItemById; if that helper is not present, the method
-   * will operate only at the story level (collapsing whole story threads with no new comments).
+   * Mirrors react-hn StoryCommentThreadStore#commentDeleted (which delegates to
+   * CommentThreadStore#commentDeleted then adjusts counts).
    *
-   * @param {boolean} [predictive=true]
+   * @param {object|null} comment  Comment object (may be null for comments that
+   *                               never fully loaded before being deleted).
    */
-  collapseThreadsWithoutNewComments(predictive = true) {
-    // Iterate all known stories
-    for (const [storyId, entry] of Object.entries(this._map)) {
-      if (!entry) continue;
-      // If no traversal helper, collapse the whole story if it has no "recent" comments (best-effort)
-      if (!this.getItemById) {
-        const hasNew = (entry.maxCommentId || 0) > 0 && (entry.lastVisit || 0) < nowSeconds();
-        if (!hasNew) {
-          // collapse top-level story marker
-          entry.collapsed = entry.collapsed || Object.create(null);
-          entry.collapsed['__story'] = true;
-          this._notify({ type: 'autoCollapse', storyId });
-        }
-        continue;
-      }
+  commentDeleted(comment) {
+    if (!comment) return;
 
-      // With traversal helper, check each top-level child; collapse those without new children
-      const storyItem = this.getItemById(storyId);
-      if (!storyItem || !Array.isArray(storyItem.kids) || storyItem.kids.length === 0) {
-        // nothing to collapse; if the story itself has no new comment, collapse top-level
-        const totals = this.getChildCounts(storyId, null);
-        if (!totals || totals.new === 0) {
-          entry.collapsed = entry.collapsed || Object.create(null);
-          entry.collapsed['__story'] = true;
-          this._notify({ type: 'autoCollapse', storyId });
-        }
-        continue;
-      }
+    // --- CommentThreadStore layer ---
+    delete this.comments[comment.id];
 
-      // For each top-level kid, collapse if its subtree reports zero new comments
-      entry.collapsed = entry.collapsed || Object.create(null);
-      for (const kidId of storyItem.kids) {
-        try {
-          const counts = this.getChildCounts(storyId, kidId);
-          if (counts && counts.new === 0) {
-            entry.collapsed[sid(kidId)] = true;
-            this._notify({ type: 'autoCollapse', storyId, commentId: sid(kidId) });
+    const siblings = this.children[comment.parent];
+    if (siblings) {
+      const idx = siblings.indexOf(comment.id);
+      if (idx !== -1) siblings.splice(idx, 1);
+    }
+
+    if (comment.dead) {
+      delete this.deadComments[comment.id];
+    }
+
+    // --- StoryCommentThreadStore layer ---
+    this.commentCount--;
+
+    if (this.isNew[comment.id]) {
+      this.newCommentCount--;
+      delete this.isNew[comment.id];
+    }
+
+    delete this.parents[comment.id];
+
+    this._debouncedCountChanged();
+  }
+
+  /**
+   * Called when a comment that was expected to arrive has been delayed
+   * (e.g. Firebase returned null and the retry is pending).
+   * We stop waiting for it so the loading indicator can resolve.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#commentDelayed.
+   *
+   * @param {number} commentId
+   */
+  commentDelayed(commentId) {
+    // eslint-disable-line no-unused-vars
+    this.expectedComments--;
+    // No checkLoadCompletion here: react-hn doesn't call it in commentDelayed either.
+  }
+
+  /**
+   * Adjust expectedComments by a delta (positive or negative) and re-check
+   * whether loading has completed.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#adjustExpectedComments.
+   *
+   * @param {number} delta
+   */
+  adjustExpectedComments(delta) {
+    this.expectedComments += delta;
+    this.checkLoadCompletion();
+  }
+
+  /**
+   * Update the item descriptor when a fresh version of the story arrives from
+   * the API (e.g. a Firebase realtime update).
+   *
+   * Mirrors react-hn StoryCommentThreadStore#itemUpdated.
+   *
+   * @param {object} item
+   */
+  itemUpdated(item) {
+    this.itemDescendantCount = item.descendants;
+  }
+
+  // -------------------------------------------------------------------------
+  // Load completion
+  // -------------------------------------------------------------------------
+
+  /**
+   * Check whether all expected comments have arrived and, if so, finalise the
+   * loading state and trigger any post-load side-effects.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#checkLoadCompletion.
+   */
+  checkLoadCompletion() {
+    if (!this.loading) return;
+    if (this.commentCount < this.expectedComments) return;
+
+    // Log load timing in non-production environments.
+    if (
+      typeof process === "undefined" ||
+      process.env.NODE_ENV !== "production"
+    ) {
+      const elapsed = ((Date.now() - this._startedLoading) / 1000).toFixed(2);
+      console.info(
+        `Initial load of ${this.commentCount} comment${pluralise(this.commentCount)}` +
+          ` for ${this.storyId} took ${elapsed}s`,
+      );
+    }
+
+    this.loading = false;
+
+    if (this.isFirstVisit) {
+      // First ever visit: establish the baseline for future new-comment detection.
+      this.firstLoadComplete();
+    } else if (this._settings.autoCollapse && this.newCommentCount > 0) {
+      // Returning visit with new comments: fold away threads without new content.
+      this.collapseThreadsWithoutNewComments();
+    }
+
+    // Persist the updated state (saves lastVisit, commentCount, maxCommentId).
+    this._persistState();
+  }
+
+  /**
+   * Called the very first time a story finishes loading.
+   * Establishes the visit timestamp and prevMaxCommentId baseline that future
+   * visits will use for new-comment detection.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#firstLoadComplete.
+   */
+  firstLoadComplete() {
+    this.lastVisit = Date.now();
+    this.prevMaxCommentId = this.maxCommentId;
+    this.isFirstVisit = false;
+    this.notify({ type: "first_load_complete" });
+  }
+
+  // -------------------------------------------------------------------------
+  // Collapse management
+  // -------------------------------------------------------------------------
+
+  /**
+   * Toggle the collapsed state of a single comment root.
+   * Notifies listeners with `{ type: 'collapse' }`.
+   *
+   * Mirrors react-hn CommentThreadStore#toggleCollapse.
+   *
+   * @param {number} commentId
+   */
+  toggleCollapse(commentId) {
+    this.isCollapsed[commentId] = !this.isCollapsed[commentId];
+    this.notify({ type: "collapse" });
+  }
+
+  /**
+   * Collapse every top-level comment thread that contains no new comments.
+   *
+   * Algorithm (matches react-hn exactly):
+   *  1. Walk up the parents chain from every isNew comment, building a
+   *     `hasNewComments` lookup of all ancestor ids (but NOT the new comment
+   *     itself — the lookup is for *ancestors*).
+   *  2. BFS the comment tree from the story root, one level at a time:
+   *       - If a comment id is NOT in hasNewComments AND is NOT itself new
+   *         → mark it for collapsing (its whole subtree has nothing new).
+   *       - If a comment id IS in hasNewComments → recurse into its children.
+   *  3. Replace isCollapsed with the result; notify.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#collapseThreadsWithoutNewComments.
+   */
+  collapseThreadsWithoutNewComments() {
+    // Step 1 — build ancestor lookup from isNew comments.
+    const newCommentIds = Object.keys(this.isNew);
+    const hasNewComments = {};
+
+    for (let i = 0; i < newCommentIds.length; i++) {
+      let parent = this.parents[newCommentIds[i]];
+      while (parent) {
+        if (hasNewComments[parent]) break; // already visited this chain
+        hasNewComments[parent] = true;
+        parent = this.parents[parent];
+      }
+    }
+
+    // Step 2 — BFS from story root, marking subtrees for collapse.
+    const shouldCollapse = {};
+    let commentIds = this.children[this.storyId] || [];
+
+    while (commentIds.length) {
+      const nextCommentIds = [];
+
+      for (let i = 0; i < commentIds.length; i++) {
+        const commentId = commentIds[i];
+
+        if (!hasNewComments[commentId]) {
+          // This subtree has no new comments.
+          // Collapse it unless the root comment is itself new (its children
+          // must then all be new too, so collapsing would hide them).
+          if (!this.isNew[commentId]) {
+            shouldCollapse[commentId] = true;
           }
-        } catch (e) {
-          // ignore
+        } else {
+          // This subtree contains new comments — keep it open and go deeper.
+          const childIds = this.children[commentId];
+          if (childIds && childIds.length) {
+            nextCommentIds.push(...childIds);
+          }
         }
       }
+
+      commentIds = nextCommentIds;
     }
 
-    this._scheduleSave();
+    // Step 3 — apply and notify.
+    this.isCollapsed = shouldCollapse;
+    this.notify({ type: "collapse" });
+  }
+
+  // -------------------------------------------------------------------------
+  // Time-index / highlight helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Return the comment at the given 1-based position when all comment ids are
+   * sorted in ascending order (ascending id ≈ chronological order on HN).
+   *
+   * Dead comments are excluded when SettingsStore.showDead is false.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#getCommentByTimeIndex.
+   *
+   * @param {number} timeIndex  1-based index.
+   * @returns {object|undefined}
+   */
+  getCommentByTimeIndex(timeIndex) {
+    let sortedIds = Object.keys(this.comments).map(Number);
+
+    if (!this._settings.showDead) {
+      sortedIds = sortedIds.filter((id) => !this.deadComments[id]);
+    }
+
+    sortedIds.sort((a, b) => a - b);
+
+    const commentId = sortedIds[timeIndex - 1];
+    return this.comments[commentId];
+  }
+
+  /**
+   * Highlight comments that arrived after the comment at `timeIndex` and then
+   * collapse all threads that contain none of them.
+   *
+   * This powers the "show comments since N" slider in react-hn.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#highlightNewCommentsSince.
+   *
+   * @param {number} timeIndex  1-based index (passed to getCommentByTimeIndex).
+   */
+  highlightNewCommentsSince(timeIndex) {
+    const referenceComment = this.getCommentByTimeIndex(timeIndex);
+    if (!referenceComment) return;
+
+    // BFS the tree, rebuilding isNew for any comment with id > reference.id.
+    const isNew = {};
+    let commentIds = this.children[this.storyId] || [];
+
+    while (commentIds.length) {
+      const nextCommentIds = [];
+
+      for (let i = 0; i < commentIds.length; i++) {
+        const commentId = commentIds[i];
+
+        if (commentId > referenceComment.id) {
+          isNew[commentId] = true;
+        }
+
+        const childIds = this.children[commentId];
+        if (childIds && childIds.length) {
+          nextCommentIds.push(...childIds);
+        }
+      }
+
+      commentIds = nextCommentIds;
+    }
+
+    this.isNew = isNew;
+    this.collapseThreadsWithoutNewComments();
+  }
+
+  // -------------------------------------------------------------------------
+  // Counts
+  // -------------------------------------------------------------------------
+
+  /**
+   * Iterative BFS that counts the total children and new-comment children of
+   * a given comment, using the in-memory `children` map.
+   *
+   * Mirrors react-hn CommentThreadStore#getChildCounts.
+   *
+   * @param {object} comment  Must have a numeric `.id` property.
+   * @returns {{ children: number, newComments: number }}
+   */
+  getChildCounts(comment) {
+    let childCount = 0;
+    let newCommentCount = 0;
+
+    // Each iteration of the while-loop processes one "generation".
+    let nodes = [comment.id];
+
+    while (nodes.length) {
+      const nextNodes = [];
+
+      for (let i = 0; i < nodes.length; i++) {
+        const nodeChildren = this.children[nodes[i]];
+        if (nodeChildren && nodeChildren.length) {
+          nextNodes.push(...nodeChildren);
+        }
+      }
+
+      // Count new comments in the next generation.
+      for (let i = 0; i < nextNodes.length; i++) {
+        if (this.isNew[nextNodes[i]]) newCommentCount++;
+      }
+
+      childCount += nextNodes.length;
+      nodes = nextNodes;
+    }
+
+    return { children: childCount, newComments: newCommentCount };
+  }
+
+  // -------------------------------------------------------------------------
+  // Mark as read
+  // -------------------------------------------------------------------------
+
+  /**
+   * Mark the current thread as read:
+   *  - Reset newCommentCount and isNew map.
+   *  - Advance prevMaxCommentId to maxCommentId so future visits start fresh.
+   *  - Persist immediately.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#markAsRead.
+   */
+  markAsRead() {
+    this.lastVisit = Date.now();
+    this.newCommentCount = 0;
+    this.prevMaxCommentId = this.maxCommentId;
+    this.isNew = {};
+    this._persistState();
+  }
+
+  // -------------------------------------------------------------------------
+  // Persistence
+  // -------------------------------------------------------------------------
+
+  /**
+   * Write the lightweight persistence snapshot to storage immediately (no debounce).
+   *
+   * Schema mirrors react-hn StoryCommentThreadStore#_storeState:
+   *   { lastVisit: ms, commentCount: itemDescendantCount, maxCommentId }
+   *
+   * We store `itemDescendantCount` (not the loaded commentCount) because the
+   * HN API's descendants field includes deleted comments; it gives a more
+   * accurate "total posts" figure for the list-page new-comment badge heuristic.
+   */
+  _persistState() {
+    this._storage.set(
+      this._storageKey,
+      JSON.stringify({
+        lastVisit: Date.now(),
+        commentCount: this.itemDescendantCount,
+        maxCommentId: this.maxCommentId,
+      }),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Teardown
+  // -------------------------------------------------------------------------
+
+  /**
+   * Persist state and cancel any pending debounced callbacks.
+   * Call this when navigating away from the story page.
+   *
+   * Mirrors react-hn StoryCommentThreadStore#dispose.
+   */
+  dispose() {
+    // Cancel any in-flight debounced calls to avoid stale writes after
+    // the instance is logically dead.
+    this._debouncedCountChanged.cancel();
+    this._debouncedSave.cancel();
+
+    // One final synchronous write so we don't lose the current session's data.
+    this._persistState();
   }
 }
