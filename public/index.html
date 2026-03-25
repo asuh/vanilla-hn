@@ -5,18 +5,18 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>vanilla-hn</title>
 
-        <!-- Content Security Policy: allow scripts from self and Firebase CDN -->
+        <!-- Content Security Policy: scripts from self only; Firebase connects to HN realtime DB -->
         <meta
             http-equiv="Content-Security-Policy"
-            content="default-src 'self'; script-src 'self' https://www.gstatic.com 'unsafe-inline'; connect-src 'self' https://hacker-news.firebaseio.com wss://hacker-news.firebaseio.com https://www.gstatic.com; style-src 'self' 'unsafe-inline';"
+            content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://hacker-news.firebaseio.com wss://hacker-news.firebaseio.com; style-src 'self' 'unsafe-inline';"
         />
 
-        <!-- Import map: lets dynamic import('firebase/app') resolve to CDN URLs -->
+        <!-- Import map: resolves firebase bare specifiers to locally vendored files -->
         <script type="importmap">
             {
                 "imports": {
-                    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-                    "firebase/database": "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"
+                    "firebase/app": "/vendor/firebase-app.js",
+                    "firebase/database": "/vendor/firebase-database.js"
                 }
             }
         </script>

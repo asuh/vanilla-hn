@@ -1,8 +1,11 @@
+import { initializeApp, deleteApp } from "firebase/app";
+import { getDatabase, ref, child, onValue, get } from "firebase/database";
+
 /**
  * hn-service.js
  *
  * Firebase Realtime Database integration for the Hacker News public API.
- * Uses the Firebase JS SDK v9 (modular) loaded lazily from CDN — no npm
+ * Firebase SDK is resolved via importmap to local vendor files — no npm
  * install required. Falls back to MockBackend if Firebase fails to load.
  *
  * Public API:
@@ -266,24 +269,31 @@ class FirebaseBackend {
   constructor() {
     this._app = null;
     this._db = null;
-    this._sdk = null; // { ref, child, onValue, get, off }
+    this._sdk = null; // { ref, child, onValue, get }
     this._destroyed = false;
 
-    this._firebaseReady = this._init();
+    // _init is now synchronous (static imports resolved at module load time)
+    this._firebaseReady = new Promise((resolve, reject) => {
+      try {
+        this._init();
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
   }
 
-  async _init() {
-    const [{ initializeApp }, { getDatabase, ref, child, onValue, get }] =
-      await Promise.all([import("firebase/app"), import("firebase/database")]);
-
-    if (this._destroyed) return;
-
-    this._app = initializeApp(
-      { databaseURL: HN_DB_URL },
-      `vanilla-hn-${Date.now()}`,
-    );
-    this._db = getDatabase(this._app);
-    this._sdk = { ref, child, onValue, get };
+  _init() {
+    try {
+      this._app = initializeApp(
+        { databaseURL: HN_DB_URL },
+        `vanilla-hn-${Date.now()}`,
+      );
+      this._db = getDatabase(this._app);
+      this._sdk = { ref, child, onValue, get };
+    } catch (e) {
+      throw e;
+    }
   }
 
   _ref(path) {
@@ -385,9 +395,11 @@ class FirebaseBackend {
     if (this._destroyed) return;
     this._destroyed = true;
     if (this._app) {
-      import("firebase/app")
-        .then(({ deleteApp }) => deleteApp(this._app).catch(noop))
-        .catch(noop);
+      try {
+        deleteApp(this._app).catch(noop);
+      } catch (e) {
+        /* ignore */
+      }
       this._app = null;
     }
     this._db = null;
