@@ -1,422 +1,770 @@
-/* Core styles for vanilla-hn
- *
- * Design goals:
- * - Lightweight, readable, accessible defaults
- * - CSS variables for theming and user preferences
- * - Minimal layout to closely resemble Hacker News palette
- * - Support for comment threading, collapsed state, and "new" highlighting
- */
+/* =============================================================================
+   vanilla-hn styles
+   Faithful migration of react-hn's style.css to vanilla-hn class names.
+   Adds CSS custom properties for theming and dark mode support.
+   Font, colour, spacing and layout decisions preserved from the original.
+   ============================================================================= */
 
-/* Theme variables (preserve classic HN palette) */
-:root{
-  --bg: #ffffff;
-  --panel: #ffffff;
-  --muted: #6a6a6a;
-  --text: #222222;
-  --link: #ff6600;
-  --border: #e6e6e6;
-  --accent-bg: #fff6eb;
-  --radius: 6px;
+/* -----------------------------------------------------------------------------
+   Custom properties (theme tokens)
+   ----------------------------------------------------------------------------- */
+:root {
+    /* Colours — classic HN palette */
+    --color-bg: #f5f5f5;
+    --color-page-bg: #ffffff;
+    --color-text: #000000;
+    --color-muted: #666666;
+    --color-link: #000000;
+    --color-link-visited: #666666;
+    --color-accent: #ff6600;
+    --color-new-bg: #ffffde;
+    --color-new-text: #000000;
+    --color-header-bg: #222222;
+    --color-header-text: #ffffff;
+    --color-header-link: #ffffff;
+    --color-border: #e7e7e7;
+    --color-dead: #dddddd;
+    --color-error: #ff3333;
 
-  /* sizing */
-  --gap: 12px;
-  --container-width: 980px;
-  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-size-base: 16px;
-  --font-size-title: 18px;
-  --font-size-meta: 13px;
+    /* Typography */
+    --font-family: Verdana, Geneva, sans-serif;
+    --font-size-base: 13.3333px;
+    --font-size-title: 18px;
+    --font-size-meta: 13px;
+    --line-height: 1.4;
 
-  /* Comment styles */
-  --comment-bg: #fff;
-  --comment-border: #f0f0f0;
-  --comment-muted: #666;
-  --new-badge-bg: #ffedd5;
-  --new-badge-color: #7a2e00;
+    /* Layout */
+    --container-width: 1280px;
+    --container-margin: 8px auto;
+    --content-padding: 1.25em;
+    --gap: 8px;
+
+    /* Comment indentation step */
+    --comment-indent: 2.5em;
 }
 
-/* Dark theme override (applies when body.dark is present) */
+/* Dark mode — toggled by adding .dark to <body> via SettingsStore */
 body.dark {
-  --bg: #0f1720;
-  --panel: #0b1116;
-  --muted: #9aa4ad;
-  --text: #dbeafe;
-  --link: #ff9b4a;
-  --border: #1f2933;
-  --accent-bg: #1f2a35;
-  --comment-bg: #0b1116;
-  --comment-border: #16202a;
-  --new-badge-bg: #2b1b0d;
-  --new-badge-color: #ffd8a8;
+    --color-bg: #0f1720;
+    --color-page-bg: #0b1116;
+    --color-text: #dbeafe;
+    --color-muted: #9aa4ad;
+    --color-link: #dbeafe;
+    --color-link-visited: #9aa4ad;
+    --color-accent: #ff9b4a;
+    --color-new-bg: #2b2b00;
+    --color-new-text: #ffffde;
+    --color-header-bg: #111820;
+    --color-header-text: #dbeafe;
+    --color-header-link: #dbeafe;
+    --color-border: #1f2933;
+    --color-dead: #333333;
+    --color-error: #ff6666;
 }
 
-/* Global reset / base */
+/* -----------------------------------------------------------------------------
+   Reset / base
+   ----------------------------------------------------------------------------- */
 *,
 *::before,
-*::after { box-sizing: border-box; }
-
-html,body{
-  height: 100%;
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-family);
-  font-size: var(--font-size-base);
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-  line-height: 1.4;
+*::after {
+    box-sizing: border-box;
 }
 
-.container {
-  max-width: var(--container-width);
-  margin-left: auto;
-  margin-right: auto;
-  padding: calc(var(--gap) * 0.75);
+body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Header */
-.site-header {
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+form {
+    margin: 0;
 }
 
-.site-header .container {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  padding-top: 10px;
-  padding-bottom: 10px;
+h2 {
+    padding-left: var(--content-padding);
 }
 
-.site-title {
-  margin: 0;
-  font-size: var(--font-size-title);
-  font-weight: 600;
-}
-
-.site-title a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.site-nav {
-  margin-left: auto;
-}
-
-.site-nav a {
-  color: var(--link);
-  text-decoration: none;
-  font-weight: 600;
-  margin-left: 12px;
-}
-
-/* Main app container */
-.app-container {
-  min-height: 60vh;
-  padding-top: calc(var(--gap) * 1.25);
-  padding-bottom: calc(var(--gap) * 1.25);
-}
-
-/* List of stories */
-.story-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: block;
-}
-
-.story-list .item {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  align-items: flex-start;
-  background: transparent;
-}
-
-.story-list .item .title {
-  font-size: 1rem;
-  margin: 0 0 6px 0;
-  line-height: 1.2;
-}
-
-.story-list .item .title a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.story-list .item .meta {
-  font-size: var(--font-size-meta);
-  color: var(--muted);
-}
-
-.story-list .item .meta a {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-/* Badges */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 12px;
-  border-radius: 999px;
-  background: var(--accent-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  margin-left: 8px;
-}
-
-/* New count badge (more visible) */
-.badge--new {
-  background: var(--new-badge-bg);
-  color: var(--new-badge-color);
-  border-color: rgba(0,0,0,0.04);
-  font-weight: 600;
-}
-
-/* Item external link host */
-.item-host {
-  color: var(--muted);
-  margin-left: 8px;
-  font-size: 12px;
-}
-
-/* Item controls (mark read, hide, etc.) */
-.item-controls {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-/* Item link colors on hover/focus */
-.story-list .item .title a:hover,
-.story-list .item .title a:focus {
-  color: var(--link);
-  text-decoration: underline;
-  outline: none;
-}
-
-/* Comment tree */
-.comment-thread {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Generic comment element */
-.comment {
-  display: block;
-  border: 1px solid var(--comment-border);
-  background: var(--comment-bg);
-  padding: 8px 10px;
-  margin: 8px 0;
-  border-radius: 6px;
-  font-size: 14px;
-  color: var(--text);
-}
-
-.comment--child {
-  margin-left: 18px;
-  border-left: 3px solid var(--border);
-  padding-left: 10px;
-}
-
-.comment--collapsed {
-  opacity: 0.7;
-  background: linear-gradient(180deg, rgba(0,0,0,0.01), transparent);
-}
-
-/* Meta row inside comment */
-.comment-meta {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: var(--comment-muted);
-  margin-bottom: 6px;
-}
-
-.comment-meta .by {
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.comment-meta button.toggle {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-/* Toggle button focus styles */
-.comment-meta button.toggle:focus {
-  outline: 2px solid color-mix(in srgb, var(--link) 24%, transparent);
-  outline-offset: 2px;
-}
-
-/* The comment text body */
-.comment-text {
-  font-size: 14px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  color: var(--text);
-}
-
-/* Collapsed placeholder summary style */
-.comment-placeholder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  font-style: italic;
-  color: var(--muted);
-}
-
-/* Children container */
-.comment-kids {
-  margin-top: 8px;
-  padding-left: 8px;
-}
-
-/* New comment indicator dot (small) */
-.comment--new > .comment-meta > .new-dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  background: var(--link);
-  border-radius: 50%;
-  margin-left: 6px;
-  box-shadow: 0 0 0 3px rgba(255,102,0,0.08);
-}
-
-/* Highlight for comments that contain new children */
-.comment--has-new {
-  border-color: color-mix(in srgb, var(--link) 22%, transparent);
-  box-shadow: 0 1px 0 rgba(0,0,0,0.02) inset;
-}
-
-/* Read / unread story row */
-.item--read {
-  opacity: 0.65;
-}
-
-/* Small utility classes */
-.hidden { display: none !important; }
-.visually-hidden {
-  position: absolute !important;
-  left: -9999px !important;
-  width: 1px !important;
-  height: 1px !important;
-  overflow: hidden !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 720px) {
-  .container { padding-left: 10px; padding-right: 10px; }
-  .site-title { font-size: 1rem; }
-  .site-nav a { margin-left: 8px; font-size: 14px; }
-  .comment--child { margin-left: 12px; }
-}
-
-/* Focus states for accessibility */
-a:focus, button:focus, [role="button"]:focus {
-  outline: 3px solid color-mix(in srgb, var(--link) 25%, transparent);
-  outline-offset: 2px;
-}
-
-/* Reduced motion for users who prefer it */
-@media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; scroll-behavior: auto !important; }
-}
-
-/* Small utilities for layout in ListView/ItemView */
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.col {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Footer */
-.site-footer {
-  border-top: 1px solid var(--border);
-  padding: 12px 0;
-  color: var(--muted);
-  font-size: 13px;
-  background: transparent;
-}
-
-/* Settings panel (simple) */
-.settings {
-  border: 1px solid var(--border);
-  padding: 10px;
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-
-/* Comment slider (time-based) */
-.comment-slider {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 0;
-}
-
-.comment-slider button {
-  background: none;
-  border: 1px solid var(--border);
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.comment-slider button.active {
-  background: var(--accent-bg);
-  border-color: color-mix(in srgb, var(--link) 22%, transparent);
-}
-
-/* Tiny utility for code / inline pre */
-.kv {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
-  background: color-mix(in srgb, var(--muted) 6%, transparent);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-/* Ensure images, if any, are constrained */
 img {
-  max-width: 100%;
-  height: auto;
-  display: block;
+    vertical-align: text-bottom;
+    max-width: 100%;
 }
 
-/* Make sure lists in comments look good */
-.comment-text ul, .comment-text ol {
-  margin: 8px 0 8px 1rem;
+pre {
+    white-space: pre-wrap;
 }
 
-/* Ensure long URLs wrap */
-a, .comment-text { word-break: break-word; }
+a {
+    color: var(--color-link);
+    word-break: break-word;
+}
 
-/* Tiny helper for skeleton / loading spinners */
+a:visited {
+    color: var(--color-link-visited);
+}
+
+/* Inline interactive controls (collapse toggles, mark-as-read etc.) */
+.control {
+    cursor: pointer;
+}
+.control:hover {
+    text-decoration: underline;
+}
+
+/* Accessibility: visually hidden but reachable by screen readers */
+.visually-hidden {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   App shell
+   ----------------------------------------------------------------------------- */
+.app-wrap {
+    width: 90%;
+    max-width: var(--container-width);
+    margin: var(--container-margin);
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    font-size: var(--font-size-base);
+    font-family: var(--font-family);
+}
+
+/* -----------------------------------------------------------------------------
+   Site header  (.App__header equivalent)
+   ----------------------------------------------------------------------------- */
+.site-header {
+    color: var(--color-header-text);
+    background-color: var(--color-header-bg);
+    padding: 6px;
+    line-height: 18px;
+    vertical-align: middle;
+    position: relative;
+}
+
+.site-header img {
+    border: 1px solid #00d8ff;
+    margin-right: 0.25em;
+}
+
+.site-header a {
+    color: var(--color-header-text);
+    text-decoration: none;
+}
+
+.site-header a:visited {
+    color: var(--color-header-text);
+}
+
+.site-header a:hover,
+.site-header a.active {
+    color: #ffffff;
+}
+
+/* Home / brand link */
+.site-header__homelink {
+    text-decoration: none;
+    font-weight: bold;
+    color: #00d8ff !important;
+    margin-right: 0.75em;
+}
+
+.site-header__homelink:visited {
+    color: #00d8ff !important;
+}
+
+.site-header__homelink.active {
+    color: #ffffff !important;
+}
+
+/* Settings gear / toggle in the header */
+.site-header__settings {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    cursor: pointer;
+}
+
+/* Primary navigation links inside the header */
+.main-nav {
+    display: inline;
+}
+
+.main-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: inline;
+}
+
+.main-nav li {
+    display: inline;
+    margin-right: 0.5em;
+}
+
+.main-nav a {
+    color: var(--color-header-text);
+    text-decoration: none;
+}
+
+.main-nav a:hover,
+.main-nav a.active {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+   Main content area
+   ----------------------------------------------------------------------------- */
+.app-content {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    background-color: var(--color-page-bg);
+}
+
+#app {
+    background-color: var(--color-page-bg);
+}
+
+/* -----------------------------------------------------------------------------
+   Footer
+   ----------------------------------------------------------------------------- */
+.site-footer {
+    margin-top: 1em;
+    border-top: 1px solid var(--color-border);
+    text-align: center;
+    color: #333333;
+    padding: 6px 0;
+}
+
+.site-footer a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+   Settings panel
+   ----------------------------------------------------------------------------- */
+.settings-panel {
+    box-sizing: border-box;
+    padding: 0.75em;
+    position: absolute;
+    width: 36%;
+    background-color: var(--color-header-bg);
+    right: 0;
+    border-bottom-left-radius: 1em;
+    border-bottom-right-radius: 1em;
+    z-index: 100;
+}
+
+.settings-panel td:first-child {
+    text-align: right;
+}
+
+.settings-panel p {
+    color: #ffffff;
+}
+
+.settings-panel div:last-child > p:last-child {
+    margin-bottom: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Story list  (.Items / .Items__list / .ListItem equivalents)
+   ----------------------------------------------------------------------------- */
+.items > p {
+    padding-left: var(--content-padding);
+}
+
+.story-list {
+    list-style: none;
+    padding-left: 3em;
+    padding-right: var(--content-padding);
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+
+/* Individual story row */
+.story-list__item {
+    margin-bottom: 16px;
+}
+
+.story-list__item--loading {
+    min-height: 34px;
+}
+
+/* New-comment count badge on a list item */
+.story-list__item .new-comments a {
+    font-weight: bold;
+}
+
+/* Read stories are visually de-emphasised */
+.story-list__item--read {
+    opacity: 0.6;
+}
+
+/* -----------------------------------------------------------------------------
+   Paginator
+   ----------------------------------------------------------------------------- */
+.paginator {
+    margin-left: 3em;
+    padding: 0.5em 0;
+}
+
+.paginator a {
+    font-weight: bold;
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.paginator a:hover {
+    text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+   Item / story detail  (.Item equivalent)
+   ----------------------------------------------------------------------------- */
+.item-view__content,
+.item-view--loading {
+    padding: 1em var(--content-padding) 0 var(--content-padding);
+    margin-bottom: 1em;
+}
+
+/* Story title */
+.item-view__title {
+    color: var(--color-muted);
+    font-size: var(--font-size-title);
+}
+
+.item-view__title a {
+    text-decoration: none;
+    color: var(--color-text);
+}
+
+.item-view__title a:hover {
+    text-decoration: underline;
+}
+
+.item-view__title a:visited {
+    color: var(--color-muted);
+}
+
+/* Domain / host shown next to title */
+.item-view__host {
+    color: var(--color-muted);
+    font-size: 0.9em;
+}
+
+/* Story metadata bar (score, author, time, comment count) */
+.item-view__meta {
+    color: var(--color-muted);
+}
+
+.item-view > .item-view__meta {
+    margin-bottom: 1em;
+}
+
+.item-view__meta a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.item-view__meta a:hover {
+    text-decoration: underline;
+}
+
+/* Inline new-comment count in meta bar */
+.item-view__meta em {
+    font-style: normal;
+    background-color: var(--color-new-bg);
+    color: var(--color-new-text);
+}
+
+/* Author link in meta */
+.item-view__by a {
+    font-weight: bold;
+}
+
+/* Story self-text (Ask HN, jobs etc.) */
+.item-view__text {
+    margin-top: 1em;
+}
+
+/* Poll options container */
+.item-view__poll {
+    margin-top: 1em;
+    padding-left: 2.5em;
+}
+
+/* Controls bar: auto-collapse, mark as read */
+.item-view__controls {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    color: var(--color-muted);
+    font-size: var(--font-size-meta);
+}
+
+.item-view__controls .control {
+    color: var(--color-muted);
+    font-size: var(--font-size-meta);
+}
+
+/* Comment time-range slider */
+.item-view__slider {
+    margin-top: 1em;
+    opacity: 0;
+    transition: opacity 0.33s ease-out;
+}
+
+.item-view__slider--visible {
+    opacity: 1;
+}
+
+.item-view__slider input[type="range"] {
+    margin: 0;
+    vertical-align: middle;
+}
+
+/* -----------------------------------------------------------------------------
+   Poll option
+   ----------------------------------------------------------------------------- */
+.poll-option {
+    margin-bottom: 10px;
+}
+
+.poll-option__score {
+    color: var(--color-muted);
+}
+
+/* -----------------------------------------------------------------------------
+   Comments  (.Comment equivalent)
+   ----------------------------------------------------------------------------- */
+
+/* Kids container — no default indent; indentation applied per-level below */
+.comment-kids {
+    /* intentionally empty; child comments use level classes */
+}
+
+/* Base comment block */
+.comment {
+    /* no border or bg by default — content padding defines the visual block */
+}
+
+/* Comment content area gets padding; level classes increase left-padding */
+.comment__content,
+.comment--loading {
+    padding-right: var(--content-padding);
+    padding-top: 0.65em;
+    padding-bottom: 0.65em;
+}
+
+/* Level-based left indentation — mirrors react-hn exactly */
+.comment--level0 .comment__content,
+.comment--level0.comment--loading {
+    padding-left: 1.25em;
+}
+.comment--level1 .comment__content,
+.comment--level1.comment--loading {
+    padding-left: 3.75em;
+}
+.comment--level2 .comment__content,
+.comment--level2.comment--loading {
+    padding-left: 6.25em;
+}
+.comment--level3 .comment__content,
+.comment--level3.comment--loading {
+    padding-left: 8.75em;
+}
+.comment--level4 .comment__content,
+.comment--level4.comment--loading {
+    padding-left: 11.25em;
+}
+.comment--level5 .comment__content,
+.comment--level5.comment--loading {
+    padding-left: 13.75em;
+}
+.comment--level6 .comment__content,
+.comment--level6.comment--loading {
+    padding-left: 16.25em;
+}
+.comment--level7 .comment__content,
+.comment--level7.comment--loading {
+    padding-left: 18.75em;
+}
+.comment--level8 .comment__content,
+.comment--level8.comment--loading {
+    padding-left: 21.25em;
+}
+.comment--level9 .comment__content,
+.comment--level9.comment--loading {
+    padding-left: 23.75em;
+}
+.comment--level10 .comment__content,
+.comment--level10.comment--loading {
+    padding-left: 26.25em;
+}
+.comment--level11 .comment__content,
+.comment--level11.comment--loading {
+    padding-left: 28.75em;
+}
+.comment--level12 .comment__content,
+.comment--level12.comment--loading {
+    padding-left: 31.25em;
+}
+.comment--level13 .comment__content,
+.comment--level13.comment--loading {
+    padding-left: 33.75em;
+}
+.comment--level14 .comment__content,
+.comment--level14.comment--loading {
+    padding-left: 36.25em;
+}
+.comment--level15 .comment__content,
+.comment--level15.comment--loading {
+    padding-left: 38.75em;
+}
+
+/* New comment highlight */
+.comment--new > .comment__content {
+    background-color: var(--color-new-bg);
+}
+
+/* Collapsed: hide text and children */
+.comment--collapsed .comment__text,
+.comment--collapsed > .comment-kids {
+    display: none;
+}
+
+/* Dead comment */
+.comment--dead > .comment__content > .comment__text {
+    color: var(--color-dead) !important;
+}
+
+/* Error state */
+.comment--error .comment__meta {
+    color: var(--color-error);
+}
+
+/* Comment meta row (author, time, collapse toggle, link) */
+.comment__meta {
+    color: var(--color-muted);
+    margin-bottom: 0.5em;
+}
+
+.comment__meta a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.comment__meta a:hover {
+    text-decoration: underline;
+}
+
+/* Inline new-count in collapsed meta */
+.comment__meta em {
+    font-style: normal;
+    background-color: var(--color-new-bg);
+    color: var(--color-new-text);
+}
+
+/* Author name */
+.comment__user {
+    font-weight: bold;
+}
+
+/* Collapse toggle control (the [+] / [–] span) */
+.comment__collapse {
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Comment body text */
+.comment__text a {
+    color: var(--color-text);
+}
+
+.comment__text a:visited {
+    color: var(--color-muted);
+}
+
+.comment__text p:last-child,
+.comment__text pre:last-child {
+    margin-bottom: 0;
+}
+
+/* Reply link */
+.comment__reply a {
+    color: var(--color-muted);
+    text-decoration: none;
+    font-size: var(--font-size-meta);
+}
+
+.comment__reply a:hover {
+    text-decoration: underline;
+}
+
+/* Permalinked comment extra spacing */
+.comment--permalinked > .comment__content {
+    margin-bottom: 1em;
+}
+
+/* -----------------------------------------------------------------------------
+   User profile  (.UserProfile equivalent)
+   ----------------------------------------------------------------------------- */
+.user-profile {
+    padding-left: var(--content-padding);
+    padding-top: 1em;
+}
+
+.user-profile h4 {
+    margin: 0 0 1em 0;
+}
+
+.user-profile dl {
+    margin: 0 0 1em 0;
+}
+
+.user-profile dt {
+    font-weight: bold;
+    display: inline;
+}
+
+.user-profile dd {
+    display: inline;
+    margin-left: 0.5em;
+}
+
+.user-profile dd::after {
+    display: block;
+    content: "";
+}
+
+.user-profile__about a {
+    color: var(--color-text);
+}
+
+/* -----------------------------------------------------------------------------
+   Spinner  (.Spinner equivalent — SpinKit bounce dots)
+   ----------------------------------------------------------------------------- */
 .spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--link);
-  animation: spin 800ms linear infinite;
+    /* container */
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
-/* End of styles */
+.spinner > div {
+    background-color: #666666;
+    border-radius: 100%;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+    animation: spinner-bouncedelay 1.4s infinite ease-in-out both;
+}
+
+.spinner .bounce1 {
+    animation-delay: -0.32s;
+}
+
+.spinner .bounce2 {
+    animation-delay: -0.16s;
+}
+
+@keyframes spinner-bouncedelay {
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   Updates view
+   ----------------------------------------------------------------------------- */
+.updates--loading {
+    padding: 1em var(--content-padding) 0 var(--content-padding);
+    margin-bottom: 1em;
+}
+
+.updates__notice {
+    padding: 0 var(--content-padding);
+}
+
+.updates .comment {
+    margin-bottom: 0.75em;
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive
+   ----------------------------------------------------------------------------- */
+@media only screen and (max-width: 750px) and (min-width: 300px) {
+    .app-wrap {
+        width: 100%;
+        margin: 0 auto;
+    }
+
+    .site-header__homelink {
+        display: none;
+    }
+
+    .settings-panel {
+        width: 100%;
+    }
+}
+
+/* Hide settings on iPhone 5 */
+@media (device-height: 568px) and (device-width: 320px) and (-webkit-min-device-pixel-ratio: 2) {
+    .site-header__settings {
+        display: none;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   Focus styles (accessibility)
+   ----------------------------------------------------------------------------- */
+a:focus,
+button:focus,
+[tabindex]:focus,
+[role="button"]:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Utility classes
+   ----------------------------------------------------------------------------- */
+.hidden {
+    display: none !important;
+}
+
+.text-muted {
+    color: var(--color-muted);
+}
+
+.font-bold {
+    font-weight: bold;
+}
