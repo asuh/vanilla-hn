@@ -5,10 +5,11 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>vanilla-hn</title>
 
-        <!-- Content Security Policy: scripts from self only; Firebase connects to HN realtime DB -->
+        <!-- Content Security Policy -->
+        <!-- Firebase uses dynamic *.firebaseio.com subdomains for WebSocket/long-poll connections -->
         <meta
             http-equiv="Content-Security-Policy"
-            content="default-src 'self'; script-src 'self' 'unsafe-inline' https://hacker-news.firebaseio.com; connect-src 'self' https://hacker-news.firebaseio.com wss://hacker-news.firebaseio.com; style-src 'self' 'unsafe-inline';"
+            content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.firebaseio.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com; style-src 'self' 'unsafe-inline'; frame-src https://*.firebaseio.com;"
         />
 
         <!-- Import map: resolves firebase bare specifiers to locally vendored files -->
