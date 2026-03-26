@@ -1,135 +1,969 @@
 /* =============================================================================
-   vanilla-hn styles
-   Faithful migration of react-hn's style.css to vanilla-hn class names.
-   Adds CSS custom properties for theming and dark mode support.
-   Font, colour, spacing and layout decisions preserved from the original.
+   vanilla-hn — styles.css
+   Follows the Recreation Prompt styling guidelines:
+   - CSS @layer for organisation
+   - Logical properties for RTL support
+   - CSS nesting
+   - @property for custom properties
+   - Container queries for responsive components
+   - Exact colour tokens from the prompt
+   - light-dark() for automatic colour scheme switching
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
-   Custom properties (theme tokens)
+   @property declarations
    ----------------------------------------------------------------------------- */
-:root {
-    /* Colours — classic HN palette */
-    --color-bg: #f5f5f5;
-    --color-page-bg: #ffffff;
-    --color-text: #000000;
-    --color-muted: #666666;
-    --color-link: #000000;
-    --color-link-visited: #666666;
-    --color-accent: #ff6600;
-    --color-new-bg: #ffffde;
-    --color-new-text: #000000;
-    --color-header-bg: #222222;
-    --color-header-text: #ffffff;
-    --color-header-link: #ffffff;
-    --color-border: #e7e7e7;
-    --color-dead: #dddddd;
-    --color-error: #ff3333;
 
-    /* Typography */
-    --font-family: Verdana, Geneva, sans-serif;
-    --font-size-base: 13.3333px;
-    --font-size-title: 18px;
-    --font-size-meta: 13px;
-    --line-height: 1.4;
-
-    /* Layout */
-    --container-width: 1280px;
-    --container-margin: 8px auto;
-    --content-padding: 1.25em;
-    --gap: 8px;
-
-    /* Comment indentation step */
-    --comment-indent: 2.5em;
+@property --comment-level {
+    syntax: "<integer>";
+    inherits: true;
+    initial-value: 0;
 }
 
-/* Dark mode — toggled by adding .dark to <body> via SettingsStore */
-body.dark {
-    --color-bg: #0f1720;
-    --color-page-bg: #0b1116;
-    --color-text: #dbeafe;
-    --color-muted: #9aa4ad;
-    --color-link: #dbeafe;
-    --color-link-visited: #9aa4ad;
-    --color-accent: #ff9b4a;
-    --color-new-bg: #2b2b00;
-    --color-new-text: #ffffde;
-    --color-header-bg: #111820;
-    --color-header-text: #dbeafe;
-    --color-header-link: #dbeafe;
-    --color-border: #1f2933;
-    --color-dead: #333333;
-    --color-error: #ff6666;
+@property --hn-primary {
+    syntax: "<color>";
+    inherits: false;
+    initial-value: #00d8ff;
 }
 
 /* -----------------------------------------------------------------------------
-   Reset / base
+   Layer order
    ----------------------------------------------------------------------------- */
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
+
+@layer reset, base, layout, components, utilities;
+
+/* =============================================================================
+   RESET
+   ============================================================================= */
+
+@layer reset {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    img,
+    svg {
+        display: block;
+        max-inline-size: 100%;
+    }
+
+    input,
+    button,
+    textarea,
+    select {
+        font: inherit;
+    }
+
+    p,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        overflow-wrap: break-word;
+    }
+
+    ul[role="list"],
+    ol[role="list"] {
+        list-style: none;
+    }
 }
 
-body {
-    margin: 0;
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    font-family: var(--font-family);
-    font-size: var(--font-size-base);
-    line-height: var(--line-height);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+/* =============================================================================
+   BASE
+   ============================================================================= */
+
+@layer base {
+    /* Colour tokens — prompt-specified values */
+    :root {
+        --hn-primary: #00d8ff;
+        --hn-header-bg: #222222;
+        --hn-bg-light: #f5f5f5;
+        --hn-bg-dark: #242424;
+        --hn-text-light: #000000;
+        --hn-text-dark: #e0e0e0;
+        --hn-new-comment-bg: #fffacd;
+        --hn-dead-color: #999999;
+
+        /* Additional tokens derived from react-hn */
+        --hn-page-bg-light: #ffffff;
+        --hn-page-bg-dark: #1a1a1a;
+        --hn-muted-light: #666666;
+        --hn-muted-dark: #9aa4ad;
+        --hn-border-light: #e7e7e7;
+        --hn-border-dark: #2a2a2a;
+        --hn-header-text: #ffffff;
+        --hn-error: #ff3333;
+
+        /* Spacing scale */
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.25rem;
+        --space-6: 1.5rem;
+
+        /* Typography */
+        --font-sans: Verdana, Geneva, sans-serif;
+        --font-mono:
+            ui-monospace, "SFMono-Regular", Menlo, Monaco, "Roboto Mono",
+            monospace;
+        --font-size-base: 13.3333px;
+        --font-size-title: 18px;
+        --font-size-meta: 12px;
+        --line-height: 1.4;
+
+        /* Layout */
+        --max-width: 1280px;
+        --content-padding-inline: var(--space-5);
+
+        /* Comment indentation step */
+        --comment-indent: 2.5em;
+
+        /* Transition */
+        --transition-fast: 0.15s ease;
+        --transition-base: 0.33s ease-out;
+    }
+
+    html {
+        color-scheme: light dark;
+    }
+
+    body {
+        background: light-dark(var(--hn-bg-light), var(--hn-bg-dark));
+        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+        font-family: var(--font-sans);
+        font-size: var(--font-size-base);
+        line-height: var(--line-height);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+
+        /* Dark class support (manual toggle via SettingsStore) */
+        &.dark {
+            color-scheme: dark;
+            background: var(--hn-bg-dark);
+            color: var(--hn-text-dark);
+        }
+    }
+
+    pre {
+        white-space: pre-wrap;
+        font-family: var(--font-mono);
+    }
+
+    form {
+        margin: 0;
+    }
+
+    img {
+        vertical-align: text-bottom;
+    }
+
+    /* Base link style — matches react-hn: black, no underline, underline on hover */
+    a {
+        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+        text-decoration: none;
+        overflow-wrap: break-word;
+        word-break: break-word;
+
+        &:visited {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+        }
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    /* Inline interactive control (collapse toggles, mark-as-read etc.) */
+    .control {
+        cursor: pointer;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    h2 {
+        padding-inline-start: var(--content-padding-inline);
+    }
 }
 
-form {
-    margin: 0;
+/* =============================================================================
+   LAYOUT
+   ============================================================================= */
+
+@layer layout {
+    /* Outer app wrapper — equivalent to .App__wrap */
+    .app-wrap {
+        inline-size: 90%;
+        max-inline-size: var(--max-width);
+        margin-inline: auto;
+        margin-block: var(--space-2);
+        background-color: light-dark(var(--hn-bg-light), var(--hn-bg-dark));
+        font-size: var(--font-size-base);
+        font-family: var(--font-sans);
+        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+    }
+
+    /* Main content area */
+    .app-content,
+    #app {
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        background-color: light-dark(
+            var(--hn-page-bg-light),
+            var(--hn-page-bg-dark)
+        );
+    }
 }
 
-h2 {
-    padding-left: var(--content-padding);
+/* =============================================================================
+   COMPONENTS
+   ============================================================================= */
+
+@layer components {
+    /* ---------------------------------------------------------------------------
+     Site header
+     --------------------------------------------------------------------------- */
+
+    .site-header {
+        color: var(--hn-header-text);
+        background-color: var(--hn-header-bg);
+        padding-block: 6px;
+        padding-inline: 6px;
+        line-height: 18px;
+        position: relative;
+
+        & img {
+            border: 1px solid var(--hn-primary);
+            margin-inline-end: 0.25em;
+            vertical-align: middle;
+        }
+
+        & a {
+            color: var(--hn-header-text);
+            text-decoration: none;
+
+            &:visited {
+                color: var(--hn-header-text);
+            }
+
+            &:hover,
+            &.active {
+                color: #ffffff;
+                text-decoration: none;
+            }
+        }
+    }
+
+    /* Home / brand link */
+    .site-header__homelink {
+        text-decoration: none;
+        font-weight: bold;
+        color: var(--hn-primary) !important;
+        margin-inline-end: 0.75em;
+
+        &:visited {
+            color: var(--hn-primary) !important;
+        }
+
+        &.active {
+            color: #ffffff !important;
+        }
+    }
+
+    /* Settings toggle in header */
+    .site-header__settings {
+        position: absolute;
+        inset-block-start: 6px;
+        inset-inline-end: 10px;
+        cursor: pointer;
+    }
+
+    /* Navigation links */
+    .main-nav {
+        display: inline;
+
+        & ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: inline;
+        }
+
+        & li {
+            display: inline;
+            margin-inline-end: 0.5em;
+        }
+
+        & a {
+            color: var(--hn-header-text);
+            text-decoration: none;
+
+            &:hover,
+            &.active {
+                color: #ffffff;
+                text-decoration: underline;
+            }
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Settings panel
+     --------------------------------------------------------------------------- */
+
+    .settings-panel {
+        box-sizing: border-box;
+        padding: var(--space-3);
+        position: absolute;
+        inline-size: 36%;
+        inset-inline-end: 0;
+        background-color: var(--hn-header-bg);
+        border-end-start-radius: 1em;
+        border-end-end-radius: 1em;
+        z-index: 100;
+
+        & td:first-child {
+            text-align: end;
+        }
+
+        & p {
+            color: #ffffff;
+        }
+
+        & div:last-child > p:last-child {
+            margin-block-end: 0;
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Site footer
+     --------------------------------------------------------------------------- */
+
+    .site-footer {
+        margin-block-start: var(--space-4);
+        border-block-start: 1px solid
+            light-dark(var(--hn-border-light), var(--hn-border-dark));
+        text-align: center;
+        color: #333333;
+        padding-block: 6px;
+
+        & a {
+            color: inherit;
+            text-decoration: underline;
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Story list
+     --------------------------------------------------------------------------- */
+
+    .story-list {
+        list-style: none;
+        padding-inline-start: 3em;
+        padding-inline-end: var(--content-padding-inline);
+        margin-block-start: var(--space-4);
+        margin-block-end: 0.5em;
+
+        & > p {
+            padding-inline-start: var(--content-padding-inline);
+        }
+    }
+
+    .story-list__item {
+        margin-block-end: 16px;
+        container-type: inline-size;
+        container-name: story-item;
+
+        &--loading {
+            min-block-size: 34px;
+        }
+
+        &--read {
+            opacity: 0.6;
+        }
+
+        /* New-comment count inside a list item */
+        & .new-comments a {
+            font-weight: bold;
+        }
+
+        /* Skeleton loading shimmer */
+        &--skeleton {
+            & .skeleton-line {
+                display: block;
+                block-size: 0.9em;
+                background: light-dark(#e0e0e0, #333333);
+                border-radius: 3px;
+                margin-block-end: var(--space-2);
+                animation: shimmer 1.4s infinite ease-in-out both;
+            }
+
+            & .skeleton-line--title {
+                inline-size: 75%;
+            }
+
+            & .skeleton-line--meta {
+                inline-size: 40%;
+                block-size: 0.75em;
+            }
+        }
+
+        /* Container query: compact meta on narrow viewports */
+        @container story-item (width < 480px) {
+            & .item__meta {
+                font-size: 0.85em;
+            }
+        }
+    }
+
+    @keyframes shimmer {
+        0%,
+        80%,
+        100% {
+            opacity: 0.4;
+        }
+        40% {
+            opacity: 1;
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Paginator
+     --------------------------------------------------------------------------- */
+
+    .paginator {
+        margin-inline-start: 3em;
+        padding-block: 0.5em;
+
+        & a {
+            font-weight: bold;
+            color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+            text-decoration: none;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Item / story detail view
+     --------------------------------------------------------------------------- */
+
+    .item-view {
+        container-type: inline-size;
+        container-name: item-view;
+
+        &__content,
+        &--loading {
+            padding-block-start: var(--space-4);
+            padding-block-end: 0;
+            padding-inline: var(--content-padding-inline);
+            margin-block-end: var(--space-4);
+        }
+
+        /* Story title */
+        &__title {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            font-size: var(--font-size-title);
+
+            & a {
+                text-decoration: none;
+                color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+
+                &:hover {
+                    text-decoration: underline;
+                }
+
+                &:visited {
+                    color: light-dark(
+                        var(--hn-muted-light),
+                        var(--hn-muted-dark)
+                    );
+                }
+            }
+        }
+
+        /* Domain / host shown next to title */
+        &__host {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            font-size: 0.9em;
+        }
+
+        /* Metadata bar */
+        &__meta {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+
+            & a {
+                text-decoration: none;
+                color: inherit;
+
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            /* Inline new-comment count */
+            & em {
+                font-style: normal;
+                background-color: var(--hn-new-comment-bg);
+                color: var(--hn-text-light);
+            }
+        }
+
+        /* Controls bar: auto-collapse, mark as read */
+        &__controls {
+            margin-block: 0.5em;
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            font-size: var(--font-size-meta);
+
+            & .control {
+                color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            }
+        }
+
+        /* Author link */
+        &__by a {
+            font-weight: bold;
+        }
+
+        /* Self-text (Ask HN, jobs etc.) */
+        &__text {
+            margin-block-start: var(--space-4);
+        }
+
+        /* Poll options */
+        &__poll {
+            margin-block-start: var(--space-4);
+            padding-inline-start: 2.5em;
+        }
+
+        /* Comment time-range slider */
+        &__slider {
+            margin-block-start: var(--space-4);
+            opacity: 0;
+            transition: opacity var(--transition-base);
+
+            &--visible {
+                opacity: 1;
+            }
+
+            & input[type="range"] {
+                margin: 0;
+                vertical-align: middle;
+            }
+        }
+    }
+
+    /* Container query: narrower item view */
+    @container item-view (width < 600px) {
+        .item-view__title {
+            font-size: calc(var(--font-size-title) * 0.9);
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Poll option
+     --------------------------------------------------------------------------- */
+
+    .poll-option {
+        margin-block-end: 10px;
+
+        &__score {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Comments
+     --------------------------------------------------------------------------- */
+
+    .comment-thread {
+        container-type: inline-size;
+        container-name: comment-thread;
+    }
+
+    .comment {
+        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+
+        /* New comment highlight */
+        &--new > .comment__content {
+            background-color: var(--hn-new-comment-bg);
+        }
+
+        /* Collapsed: hide text and children */
+        &--collapsed .comment__text,
+        &--collapsed > .comment-kids {
+            display: none;
+        }
+
+        /* Dead comment */
+        &--dead > .comment__content > .comment__text {
+            color: var(--hn-dead-color) !important;
+        }
+
+        /* Error state */
+        &--error .comment__meta {
+            color: var(--hn-error);
+        }
+
+        /* Loading state */
+        &--loading {
+            padding-inline-end: var(--content-padding-inline);
+            padding-block: 0.65em;
+        }
+
+        /* Permalinked */
+        &--permalinked > .comment__content {
+            margin-block-end: var(--space-4);
+        }
+    }
+
+    /* Comment content area */
+    .comment__content {
+        padding-inline-end: var(--content-padding-inline);
+        padding-block: 0.65em;
+    }
+
+    /* Level-based indentation using logical properties */
+    /* Mirrors react-hn's 15 levels at 2.5em steps exactly */
+    .comment--level0 .comment__content,
+    .comment--level0.comment--loading {
+        padding-inline-start: 1.25em;
+    }
+    .comment--level1 .comment__content,
+    .comment--level1.comment--loading {
+        padding-inline-start: 3.75em;
+    }
+    .comment--level2 .comment__content,
+    .comment--level2.comment--loading {
+        padding-inline-start: 6.25em;
+    }
+    .comment--level3 .comment__content,
+    .comment--level3.comment--loading {
+        padding-inline-start: 8.75em;
+    }
+    .comment--level4 .comment__content,
+    .comment--level4.comment--loading {
+        padding-inline-start: 11.25em;
+    }
+    .comment--level5 .comment__content,
+    .comment--level5.comment--loading {
+        padding-inline-start: 13.75em;
+    }
+    .comment--level6 .comment__content,
+    .comment--level6.comment--loading {
+        padding-inline-start: 16.25em;
+    }
+    .comment--level7 .comment__content,
+    .comment--level7.comment--loading {
+        padding-inline-start: 18.75em;
+    }
+    .comment--level8 .comment__content,
+    .comment--level8.comment--loading {
+        padding-inline-start: 21.25em;
+    }
+    .comment--level9 .comment__content,
+    .comment--level9.comment--loading {
+        padding-inline-start: 23.75em;
+    }
+    .comment--level10 .comment__content,
+    .comment--level10.comment--loading {
+        padding-inline-start: 26.25em;
+    }
+    .comment--level11 .comment__content,
+    .comment--level11.comment--loading {
+        padding-inline-start: 28.75em;
+    }
+    .comment--level12 .comment__content,
+    .comment--level12.comment--loading {
+        padding-inline-start: 31.25em;
+    }
+    .comment--level13 .comment__content,
+    .comment--level13.comment--loading {
+        padding-inline-start: 33.75em;
+    }
+    .comment--level14 .comment__content,
+    .comment--level14.comment--loading {
+        padding-inline-start: 36.25em;
+    }
+    .comment--level15 .comment__content,
+    .comment--level15.comment--loading {
+        padding-inline-start: 38.75em;
+    }
+
+    /* Meta row */
+    .comment__meta {
+        color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+        margin-block-end: 0.5em;
+
+        & a {
+            text-decoration: none;
+            color: inherit;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+
+        /* Inline new-count badge */
+        & em {
+            font-style: normal;
+            background-color: var(--hn-new-comment-bg);
+            color: var(--hn-text-light);
+        }
+    }
+
+    /* Author name */
+    .comment__user {
+        font-weight: bold;
+    }
+
+    /* Collapse toggle — the [+] / [–] control */
+    .comment__collapse {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    /* Body text */
+    .comment__text {
+        & a {
+            color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+
+            &:visited {
+                color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            }
+        }
+
+        & p:last-child,
+        & pre:last-child {
+            margin-block-end: 0;
+        }
+    }
+
+    /* Reply link */
+    .comment__reply {
+        & a {
+            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            text-decoration: none;
+            font-size: var(--font-size-meta);
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    /* Container query: reduce indent on narrow viewports */
+    @container comment-thread (width < 500px) {
+        .comment__meta {
+            font-size: 0.85em;
+        }
+
+        /* Halve the indentation on very narrow screens */
+        .comment--level1 .comment__content {
+            padding-inline-start: 2em;
+        }
+        .comment--level2 .comment__content {
+            padding-inline-start: 3.25em;
+        }
+        .comment--level3 .comment__content {
+            padding-inline-start: 4.5em;
+        }
+        .comment--level4 .comment__content {
+            padding-inline-start: 5.75em;
+        }
+        .comment--level5 .comment__content {
+            padding-inline-start: 7em;
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     User profile
+     --------------------------------------------------------------------------- */
+
+    .user-profile {
+        padding-inline-start: var(--content-padding-inline);
+        padding-block-start: var(--space-4);
+
+        & h4 {
+            margin-block: 0 var(--space-4);
+        }
+
+        & dl {
+            margin-block-end: var(--space-4);
+        }
+
+        & dt {
+            font-weight: bold;
+            display: inline;
+        }
+
+        & dd {
+            display: inline;
+            margin-inline-start: 0.5em;
+
+            &::after {
+                display: block;
+                content: "";
+            }
+        }
+
+        &__about {
+            & a {
+                color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+            }
+        }
+
+        &__hn-link {
+            margin-block-start: var(--space-3);
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Spinner — SpinKit bounce dots (matches react-hn .Spinner)
+     --------------------------------------------------------------------------- */
+
+    .spinner > div {
+        background-color: #666666;
+        border-radius: 100%;
+        display: inline-block;
+        inline-size: 8px;
+        block-size: 8px;
+        margin-inline: 2px;
+        animation: spinner-bounce 1.4s infinite ease-in-out both;
+
+        &:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+        &:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+    }
+
+    @keyframes spinner-bounce {
+        0%,
+        80%,
+        100% {
+            transform: scale(0);
+        }
+        40% {
+            transform: scale(1);
+        }
+    }
+
+    /* ---------------------------------------------------------------------------
+     Updates view
+     --------------------------------------------------------------------------- */
+
+    .updates {
+        &--loading {
+            padding-block-start: var(--space-4);
+            padding-block-end: 0;
+            padding-inline: var(--content-padding-inline);
+            margin-block-end: var(--space-4);
+        }
+
+        &__notice {
+            padding-inline: var(--content-padding-inline);
+        }
+
+        & .comment {
+            margin-block-end: 0.75em;
+        }
+    }
 }
 
-img {
-    vertical-align: text-bottom;
-    max-width: 100%;
+/* =============================================================================
+   UTILITIES
+   ============================================================================= */
+
+@layer utilities {
+    .hidden {
+        display: none !important;
+    }
+
+    .visually-hidden {
+        position: absolute !important;
+        inline-size: 1px !important;
+        block-size: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    .text-muted {
+        color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+    }
+
+    .font-bold {
+        font-weight: bold;
+    }
+
+    .sr-only {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
 }
 
-pre {
-    white-space: pre-wrap;
+/* =============================================================================
+   RESPONSIVE  (outside layers — media queries applying globally)
+   ============================================================================= */
+
+@media only screen and (max-width: 750px) and (min-width: 300px) {
+    .app-wrap {
+        inline-size: 100%;
+        margin-inline: 0;
+    }
+
+    .site-header__homelink {
+        display: none;
+    }
+
+    .settings-panel {
+        inline-size: 100%;
+    }
 }
 
-a {
-    color: var(--color-link);
-    word-break: break-word;
+@media (device-height: 568px) and (device-width: 320px) and (-webkit-min-device-pixel-ratio: 2) {
+    .site-header__settings {
+        display: none;
+    }
 }
 
-a:visited {
-    color: var(--color-link-visited);
+/* Focus styles */
+@media (prefers-reduced-motion: no-preference) {
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    [tabindex]:focus-visible,
+    [role="button"]:focus-visible {
+        outline: 2px solid var(--hn-primary);
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
 }
 
-/* Inline interactive controls (collapse toggles, mark-as-read etc.) */
-.control {
-    cursor: pointer;
-}
-.control:hover {
-    text-decoration: underline;
-}
-
-/* Accessibility: visually hidden but reachable by screen readers */
-.visually-hidden {
-    position: absolute !important;
-    width: 1px !important;
-    height: 1px !important;
-    padding: 0 !important;
-    margin: -1px !important;
-    overflow: hidden !important;
-    clip: rect(0, 0, 0, 0) !important;
-    white-space: nowrap !important;
-    border: 0 !important;
-}
-
-/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -138,633 +972,4 @@ a:visited {
         transition-duration: 0.001ms !important;
         scroll-behavior: auto !important;
     }
-}
-
-/* -----------------------------------------------------------------------------
-   App shell
-   ----------------------------------------------------------------------------- */
-.app-wrap {
-    width: 90%;
-    max-width: var(--container-width);
-    margin: var(--container-margin);
-    color: var(--color-text);
-    background-color: var(--color-bg);
-    font-size: var(--font-size-base);
-    font-family: var(--font-family);
-}
-
-/* -----------------------------------------------------------------------------
-   Site header  (.App__header equivalent)
-   ----------------------------------------------------------------------------- */
-.site-header {
-    color: var(--color-header-text);
-    background-color: var(--color-header-bg);
-    padding: 6px;
-    line-height: 18px;
-    vertical-align: middle;
-    position: relative;
-}
-
-.site-header img {
-    border: 1px solid #00d8ff;
-    margin-right: 0.25em;
-}
-
-.site-header a {
-    color: var(--color-header-text);
-    text-decoration: none;
-}
-
-.site-header a:visited {
-    color: var(--color-header-text);
-}
-
-.site-header a:hover,
-.site-header a.active {
-    color: #ffffff;
-}
-
-/* Home / brand link */
-.site-header__homelink {
-    text-decoration: none;
-    font-weight: bold;
-    color: #00d8ff !important;
-    margin-right: 0.75em;
-}
-
-.site-header__homelink:visited {
-    color: #00d8ff !important;
-}
-
-.site-header__homelink.active {
-    color: #ffffff !important;
-}
-
-/* Settings gear / toggle in the header */
-.site-header__settings {
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    cursor: pointer;
-}
-
-/* Primary navigation links inside the header */
-.main-nav {
-    display: inline;
-}
-
-.main-nav ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: inline;
-}
-
-.main-nav li {
-    display: inline;
-    margin-right: 0.5em;
-}
-
-.main-nav a {
-    color: var(--color-header-text);
-    text-decoration: none;
-}
-
-.main-nav a:hover,
-.main-nav a.active {
-    color: #ffffff;
-    text-decoration: underline;
-}
-
-/* -----------------------------------------------------------------------------
-   Main content area
-   ----------------------------------------------------------------------------- */
-.app-content {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    background-color: var(--color-page-bg);
-}
-
-#app {
-    background-color: var(--color-page-bg);
-}
-
-/* -----------------------------------------------------------------------------
-   Footer
-   ----------------------------------------------------------------------------- */
-.site-footer {
-    margin-top: 1em;
-    border-top: 1px solid var(--color-border);
-    text-align: center;
-    color: #333333;
-    padding: 6px 0;
-}
-
-.site-footer a {
-    color: inherit;
-    text-decoration: underline;
-}
-
-/* -----------------------------------------------------------------------------
-   Settings panel
-   ----------------------------------------------------------------------------- */
-.settings-panel {
-    box-sizing: border-box;
-    padding: 0.75em;
-    position: absolute;
-    width: 36%;
-    background-color: var(--color-header-bg);
-    right: 0;
-    border-bottom-left-radius: 1em;
-    border-bottom-right-radius: 1em;
-    z-index: 100;
-}
-
-.settings-panel td:first-child {
-    text-align: right;
-}
-
-.settings-panel p {
-    color: #ffffff;
-}
-
-.settings-panel div:last-child > p:last-child {
-    margin-bottom: 0;
-}
-
-/* -----------------------------------------------------------------------------
-   Story list  (.Items / .Items__list / .ListItem equivalents)
-   ----------------------------------------------------------------------------- */
-.items > p {
-    padding-left: var(--content-padding);
-}
-
-.story-list {
-    list-style: none;
-    padding-left: 3em;
-    padding-right: var(--content-padding);
-    margin-top: 1em;
-    margin-bottom: 0.5em;
-}
-
-/* Individual story row */
-.story-list__item {
-    margin-bottom: 16px;
-}
-
-.story-list__item--loading {
-    min-height: 34px;
-}
-
-/* New-comment count badge on a list item */
-.story-list__item .new-comments a {
-    font-weight: bold;
-}
-
-/* Read stories are visually de-emphasised */
-.story-list__item--read {
-    opacity: 0.6;
-}
-
-/* -----------------------------------------------------------------------------
-   Paginator
-   ----------------------------------------------------------------------------- */
-.paginator {
-    margin-left: 3em;
-    padding: 0.5em 0;
-}
-
-.paginator a {
-    font-weight: bold;
-    color: var(--color-text);
-    text-decoration: none;
-}
-
-.paginator a:hover {
-    text-decoration: underline;
-}
-
-/* -----------------------------------------------------------------------------
-   Item / story detail  (.Item equivalent)
-   ----------------------------------------------------------------------------- */
-.item-view__content,
-.item-view--loading {
-    padding: 1em var(--content-padding) 0 var(--content-padding);
-    margin-bottom: 1em;
-}
-
-/* Story title */
-.item-view__title {
-    color: var(--color-muted);
-    font-size: var(--font-size-title);
-}
-
-.item-view__title a {
-    text-decoration: none;
-    color: var(--color-text);
-}
-
-.item-view__title a:hover {
-    text-decoration: underline;
-}
-
-.item-view__title a:visited {
-    color: var(--color-muted);
-}
-
-/* Domain / host shown next to title */
-.item-view__host {
-    color: var(--color-muted);
-    font-size: 0.9em;
-}
-
-/* Story metadata bar (score, author, time, comment count) */
-.item-view__meta {
-    color: var(--color-muted);
-}
-
-.item-view > .item-view__meta {
-    margin-bottom: 1em;
-}
-
-.item-view__meta a {
-    text-decoration: none;
-    color: inherit;
-}
-
-.item-view__meta a:hover {
-    text-decoration: underline;
-}
-
-/* Inline new-comment count in meta bar */
-.item-view__meta em {
-    font-style: normal;
-    background-color: var(--color-new-bg);
-    color: var(--color-new-text);
-}
-
-/* Author link in meta */
-.item-view__by a {
-    font-weight: bold;
-}
-
-/* Story self-text (Ask HN, jobs etc.) */
-.item-view__text {
-    margin-top: 1em;
-}
-
-/* Poll options container */
-.item-view__poll {
-    margin-top: 1em;
-    padding-left: 2.5em;
-}
-
-/* Controls bar: auto-collapse, mark as read */
-.item-view__controls {
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
-    color: var(--color-muted);
-    font-size: var(--font-size-meta);
-}
-
-.item-view__controls .control {
-    color: var(--color-muted);
-    font-size: var(--font-size-meta);
-}
-
-/* Comment time-range slider */
-.item-view__slider {
-    margin-top: 1em;
-    opacity: 0;
-    transition: opacity 0.33s ease-out;
-}
-
-.item-view__slider--visible {
-    opacity: 1;
-}
-
-.item-view__slider input[type="range"] {
-    margin: 0;
-    vertical-align: middle;
-}
-
-/* -----------------------------------------------------------------------------
-   Poll option
-   ----------------------------------------------------------------------------- */
-.poll-option {
-    margin-bottom: 10px;
-}
-
-.poll-option__score {
-    color: var(--color-muted);
-}
-
-/* -----------------------------------------------------------------------------
-   Comments  (.Comment equivalent)
-   ----------------------------------------------------------------------------- */
-
-/* Kids container — no default indent; indentation applied per-level below */
-.comment-kids {
-    /* intentionally empty; child comments use level classes */
-}
-
-/* Base comment block */
-.comment {
-    /* no border or bg by default — content padding defines the visual block */
-}
-
-/* Comment content area gets padding; level classes increase left-padding */
-.comment__content,
-.comment--loading {
-    padding-right: var(--content-padding);
-    padding-top: 0.65em;
-    padding-bottom: 0.65em;
-}
-
-/* Level-based left indentation — mirrors react-hn exactly */
-.comment--level0 .comment__content,
-.comment--level0.comment--loading {
-    padding-left: 1.25em;
-}
-.comment--level1 .comment__content,
-.comment--level1.comment--loading {
-    padding-left: 3.75em;
-}
-.comment--level2 .comment__content,
-.comment--level2.comment--loading {
-    padding-left: 6.25em;
-}
-.comment--level3 .comment__content,
-.comment--level3.comment--loading {
-    padding-left: 8.75em;
-}
-.comment--level4 .comment__content,
-.comment--level4.comment--loading {
-    padding-left: 11.25em;
-}
-.comment--level5 .comment__content,
-.comment--level5.comment--loading {
-    padding-left: 13.75em;
-}
-.comment--level6 .comment__content,
-.comment--level6.comment--loading {
-    padding-left: 16.25em;
-}
-.comment--level7 .comment__content,
-.comment--level7.comment--loading {
-    padding-left: 18.75em;
-}
-.comment--level8 .comment__content,
-.comment--level8.comment--loading {
-    padding-left: 21.25em;
-}
-.comment--level9 .comment__content,
-.comment--level9.comment--loading {
-    padding-left: 23.75em;
-}
-.comment--level10 .comment__content,
-.comment--level10.comment--loading {
-    padding-left: 26.25em;
-}
-.comment--level11 .comment__content,
-.comment--level11.comment--loading {
-    padding-left: 28.75em;
-}
-.comment--level12 .comment__content,
-.comment--level12.comment--loading {
-    padding-left: 31.25em;
-}
-.comment--level13 .comment__content,
-.comment--level13.comment--loading {
-    padding-left: 33.75em;
-}
-.comment--level14 .comment__content,
-.comment--level14.comment--loading {
-    padding-left: 36.25em;
-}
-.comment--level15 .comment__content,
-.comment--level15.comment--loading {
-    padding-left: 38.75em;
-}
-
-/* New comment highlight */
-.comment--new > .comment__content {
-    background-color: var(--color-new-bg);
-}
-
-/* Collapsed: hide text and children */
-.comment--collapsed .comment__text,
-.comment--collapsed > .comment-kids {
-    display: none;
-}
-
-/* Dead comment */
-.comment--dead > .comment__content > .comment__text {
-    color: var(--color-dead) !important;
-}
-
-/* Error state */
-.comment--error .comment__meta {
-    color: var(--color-error);
-}
-
-/* Comment meta row (author, time, collapse toggle, link) */
-.comment__meta {
-    color: var(--color-muted);
-    margin-bottom: 0.5em;
-}
-
-.comment__meta a {
-    text-decoration: none;
-    color: inherit;
-}
-
-.comment__meta a:hover {
-    text-decoration: underline;
-}
-
-/* Inline new-count in collapsed meta */
-.comment__meta em {
-    font-style: normal;
-    background-color: var(--color-new-bg);
-    color: var(--color-new-text);
-}
-
-/* Author name */
-.comment__user {
-    font-weight: bold;
-}
-
-/* Collapse toggle control (the [+] / [–] span) */
-.comment__collapse {
-    cursor: pointer;
-    user-select: none;
-}
-
-/* Comment body text */
-.comment__text a {
-    color: var(--color-text);
-}
-
-.comment__text a:visited {
-    color: var(--color-muted);
-}
-
-.comment__text p:last-child,
-.comment__text pre:last-child {
-    margin-bottom: 0;
-}
-
-/* Reply link */
-.comment__reply a {
-    color: var(--color-muted);
-    text-decoration: none;
-    font-size: var(--font-size-meta);
-}
-
-.comment__reply a:hover {
-    text-decoration: underline;
-}
-
-/* Permalinked comment extra spacing */
-.comment--permalinked > .comment__content {
-    margin-bottom: 1em;
-}
-
-/* -----------------------------------------------------------------------------
-   User profile  (.UserProfile equivalent)
-   ----------------------------------------------------------------------------- */
-.user-profile {
-    padding-left: var(--content-padding);
-    padding-top: 1em;
-}
-
-.user-profile h4 {
-    margin: 0 0 1em 0;
-}
-
-.user-profile dl {
-    margin: 0 0 1em 0;
-}
-
-.user-profile dt {
-    font-weight: bold;
-    display: inline;
-}
-
-.user-profile dd {
-    display: inline;
-    margin-left: 0.5em;
-}
-
-.user-profile dd::after {
-    display: block;
-    content: "";
-}
-
-.user-profile__about a {
-    color: var(--color-text);
-}
-
-/* -----------------------------------------------------------------------------
-   Spinner  (.Spinner equivalent — SpinKit bounce dots)
-   ----------------------------------------------------------------------------- */
-.spinner {
-    /* container */
-}
-
-.spinner > div {
-    background-color: #666666;
-    border-radius: 100%;
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin: 0 2px;
-    animation: spinner-bouncedelay 1.4s infinite ease-in-out both;
-}
-
-.spinner .bounce1 {
-    animation-delay: -0.32s;
-}
-
-.spinner .bounce2 {
-    animation-delay: -0.16s;
-}
-
-@keyframes spinner-bouncedelay {
-    0%,
-    80%,
-    100% {
-        transform: scale(0);
-    }
-    40% {
-        transform: scale(1);
-    }
-}
-
-/* -----------------------------------------------------------------------------
-   Updates view
-   ----------------------------------------------------------------------------- */
-.updates--loading {
-    padding: 1em var(--content-padding) 0 var(--content-padding);
-    margin-bottom: 1em;
-}
-
-.updates__notice {
-    padding: 0 var(--content-padding);
-}
-
-.updates .comment {
-    margin-bottom: 0.75em;
-}
-
-/* -----------------------------------------------------------------------------
-   Responsive
-   ----------------------------------------------------------------------------- */
-@media only screen and (max-width: 750px) and (min-width: 300px) {
-    .app-wrap {
-        width: 100%;
-        margin: 0 auto;
-    }
-
-    .site-header__homelink {
-        display: none;
-    }
-
-    .settings-panel {
-        width: 100%;
-    }
-}
-
-/* Hide settings on iPhone 5 */
-@media (device-height: 568px) and (device-width: 320px) and (-webkit-min-device-pixel-ratio: 2) {
-    .site-header__settings {
-        display: none;
-    }
-}
-
-/* -----------------------------------------------------------------------------
-   Focus styles (accessibility)
-   ----------------------------------------------------------------------------- */
-a:focus,
-button:focus,
-[tabindex]:focus,
-[role="button"]:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-}
-
-/* -----------------------------------------------------------------------------
-   Utility classes
-   ----------------------------------------------------------------------------- */
-.hidden {
-    display: none !important;
-}
-
-.text-muted {
-    color: var(--color-muted);
-}
-
-.font-bold {
-    font-weight: bold;
 }
