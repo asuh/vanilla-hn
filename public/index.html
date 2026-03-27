@@ -5,7 +5,6 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>vanilla-hn</title>
 
-        <!-- Content Security Policy -->
         <!-- Firebase uses dynamic *.firebaseio.com subdomains for WebSocket/long-poll connections -->
         <meta
             http-equiv="Content-Security-Policy"
@@ -25,13 +24,33 @@
         <link rel="stylesheet" href="/src/styles.css" />
     </head>
     <body>
+        <!-- Skip link for keyboard / screen-reader users -->
         <a id="skip-to-content" class="visually-hidden" href="#app"
             >Skip to content</a
         >
 
-        <header role="banner" class="site-header">
-            <div class="container">
-                <h1 class="site-title"><a href="#/">vanilla-hn</a></h1>
+        <!--
+          .app-wrap mirrors react-hn's .App__wrap:
+            width:90%; max-width:1280px; margin:8px auto; background:#f5f5f5
+          All three regions (header, main, footer) live inside it so the
+          background card effect is identical to the original.
+        -->
+        <div class="app-wrap">
+            <!--
+              Header mirrors react-hn's .App__header layout exactly:
+                [logo] [homelink] [nav links | pipe-separated] [settings]
+              Semantic <header> + <nav> is kept for accessibility while CSS
+              makes it render as a single flat bar.
+            -->
+            <header role="banner" class="site-header">
+                <a
+                    href="#/"
+                    class="site-header__homelinkicon"
+                    aria-label="vanilla-hn home"
+                >
+                    <img src="/img/logo.png" width="16" height="16" alt="" />
+                </a>
+                <a href="#/" class="site-header__homelink">vanilla-hn</a>
                 <nav
                     role="navigation"
                     aria-label="Primary navigation"
@@ -45,16 +64,145 @@
                         <li><a href="#/jobs">jobs</a></li>
                     </ul>
                 </nav>
-            </div>
-        </header>
+                <a
+                    class="site-header__settings"
+                    tabindex="0"
+                    role="button"
+                    aria-expanded="false"
+                    >settings</a
+                >
 
-        <main id="app" role="main" class="app-container" tabindex="-1"></main>
+                <!-- Settings panel — hidden until the settings link is clicked -->
+                <div
+                    class="settings-panel"
+                    id="settings-panel"
+                    hidden
+                    tabindex="-1"
+                >
+                    <form id="settings-form">
+                        <div class="settings-panel__setting">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="autoCollapse"
+                                    id="s-autoCollapse"
+                                />
+                                auto collapse
+                            </label>
+                            <p>
+                                Automatically collapse threads without new
+                                comments on load.
+                            </p>
+                        </div>
+                        <div class="settings-panel__setting">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="replyLinks"
+                                    id="s-replyLinks"
+                                />
+                                show reply links
+                            </label>
+                            <p>Show "reply" links to Hacker News.</p>
+                        </div>
+                        <div class="settings-panel__setting">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="showDead"
+                                    id="s-showDead"
+                                />
+                                show dead
+                            </label>
+                            <p>Show items flagged as dead.</p>
+                        </div>
+                        <div class="settings-panel__setting">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    name="showDeleted"
+                                    id="s-showDeleted"
+                                />
+                                show deleted
+                            </label>
+                            <p>Show comments flagged as deleted.</p>
+                        </div>
+                        <div class="settings-panel__setting">
+                            <table>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <label for="s-titleFontSize"
+                                                >title font size:</label
+                                            >
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                min="10"
+                                                max="30"
+                                                step="1"
+                                                name="titleFontSize"
+                                                id="s-titleFontSize"
+                                                value="18"
+                                            />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <label for="s-listSpacing"
+                                                >list spacing:</label
+                                            >
+                                        </td>
+                                        <td>
+                                            <select
+                                                name="listSpacing"
+                                                id="s-listSpacing"
+                                            >
+                                                <option value="compact">
+                                                    compact
+                                                </option>
+                                                <option value="normal" selected>
+                                                    normal
+                                                </option>
+                                                <option value="spacious">
+                                                    spacious
+                                                </option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <label for="s-theme">theme:</label>
+                                        </td>
+                                        <td>
+                                            <select name="theme" id="s-theme">
+                                                <option value="light" selected>
+                                                    light
+                                                </option>
+                                                <option value="dark">
+                                                    dark
+                                                </option>
+                                                <option value="system">
+                                                    system
+                                                </option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                </div>
+            </header>
 
-        <footer role="contentinfo" class="site-footer">
-            <div class="container">
-                <small>vanilla-hn</small>
-            </div>
-        </footer>
+            <!-- Main content mount point — views render here -->
+            <main id="app" role="main" tabindex="-1"></main>
+
+            <!-- Footer mirrors react-hn's .App__footer -->
+            <footer role="contentinfo" class="site-footer">vanilla-hn</footer>
+        </div>
+        <!-- /.app-wrap -->
 
         <script type="module" src="/src/main.js"></script>
     </body>

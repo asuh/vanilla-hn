@@ -294,6 +294,12 @@ export default class ListView extends View {
       this._unsub = null;
     }
 
+    // Tear down per-item subscriptions opened in Firebase (ID-list) mode
+    if (Array.isArray(this._itemUnsubs)) {
+      this._itemUnsubs.forEach((fn) => typeof fn === "function" && fn());
+      this._itemUnsubs = [];
+    }
+
     if (typeof this._undelegateClick === "function") {
       try {
         this._undelegateClick();
@@ -312,8 +318,18 @@ export default class ListView extends View {
 
   /**
    * Subscribe to hnService for the current list type.
-   * The callback receives the *full* array of item objects every time the
-   * data changes (initial load + any realtime updates).
+   *
+   * The FirebaseBackend returns an array of numeric ID strings (e.g. ["40000001", …])
+   * while the MockBackend returns full item objects. This method handles both cases:
+   *
+   *  - Full objects  → store directly in _allItems and render.
+   *  - ID strings    → store lightweight placeholders, render immediately so the
+   *                    skeleton layout is replaced, then open a per-item subscription
+   *                    via onItemValue() for each item on the current page so the
+   *                    full item data fills in as Firebase responds.
+   *
+   * Only items on the *current page* get individual subscriptions, which avoids
+   * opening hundreds of Firebase connections for the full 500-item top-stories list.
    */
   _subscribe() {
     if (!this._hn || typeof this._hn.onStoriesValue !== "function") {
@@ -321,11 +337,55 @@ export default class ListView extends View {
       return;
     }
 
+    // Initialise the per-item unsub array (used when backend returns IDs)
+    if (!Array.isArray(this._itemUnsubs)) {
+      this._itemUnsubs = [];
+    }
+
     this._unsub = this._hn.onStoriesValue(this.listType, (items) => {
       try {
-        this._allItems = Array.isArray(items) ? items : [];
-        this._loaded = true;
-        this._renderPage();
+        const rawItems = Array.isArray(items) ? items : [];
+
+        // Detect whether the backend gave us full item objects or bare ID strings/numbers.
+        // FirebaseBackend maps the Firebase snapshot to val.map(String), so the first
+        // element will be a string like "40000001" rather than an object.
+        const firstItem = rawItems[0];
+        const isIdList = firstItem != null && typeof firstItem !== "object";
+
+        if (isIdList) {
+          // ── Firebase mode: we received IDs, not full items ──────────────
+
+          // Cancel any per-item subscriptions from a previous list update
+          this._itemUnsubs.forEach((fn) => typeof fn === "function" && fn());
+          this._itemUnsubs = [];
+
+          // Seed _allItems with lightweight placeholder objects so _createItemEl
+          // has a valid `id` to work with while real data is in flight.
+          this._allItems = rawItems.map((id) => ({ id: String(id) }));
+          this._loaded = true;
+          this._renderPage(); // replace skeletons with placeholders immediately
+
+          // Subscribe to full item data only for the items on the current page
+          const start = (this.page - 1) * PAGE_SIZE;
+          const end = start + PAGE_SIZE;
+          const pageIds = rawItems.slice(start, end);
+
+          pageIds.forEach((id, pageIdx) => {
+            const allIdx = start + pageIdx;
+            const unsub = this._hn.onItemValue(id, (item) => {
+              if (item && typeof item === "object") {
+                this._allItems[allIdx] = item;
+                this._renderPage();
+              }
+            });
+            this._itemUnsubs.push(unsub);
+          });
+        } else {
+          // ── Mock / full-object mode ──────────────────────────────────────
+          this._allItems = rawItems;
+          this._loaded = true;
+          this._renderPage();
+        }
       } catch (err) {
         console.warn("ListView: error rendering story list", err);
       }

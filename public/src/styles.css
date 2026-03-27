@@ -1,34 +1,9 @@
 /* =============================================================================
    vanilla-hn — styles.css
-   Follows the Recreation Prompt styling guidelines:
-   - CSS @layer for organisation
-   - Logical properties for RTL support
-   - CSS nesting
-   - @property for custom properties
-   - Container queries for responsive components
-   - Exact colour tokens from the prompt
-   - light-dark() for automatic colour scheme switching
+   Visual match to react-hn, built with modern CSS (@layer, nesting, variables).
+   Class names target the *actual* DOM output of ListView, ItemView, and
+   CommentElement — not the old placeholder names that never matched the JS.
    ============================================================================= */
-
-/* -----------------------------------------------------------------------------
-   @property declarations
-   ----------------------------------------------------------------------------- */
-
-@property --comment-level {
-    syntax: "<integer>";
-    inherits: true;
-    initial-value: 0;
-}
-
-@property --hn-primary {
-    syntax: "<color>";
-    inherits: false;
-    initial-value: #00d8ff;
-}
-
-/* -----------------------------------------------------------------------------
-   Layer order
-   ----------------------------------------------------------------------------- */
 
 @layer reset, base, layout, components, utilities;
 
@@ -44,25 +19,21 @@
         margin: 0;
         padding: 0;
     }
-
     html {
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
     }
-
     img,
     svg {
         display: block;
         max-inline-size: 100%;
     }
-
     input,
     button,
     textarea,
     select {
         font: inherit;
     }
-
     p,
     h1,
     h2,
@@ -72,7 +43,6 @@
     h6 {
         overflow-wrap: break-word;
     }
-
     ul[role="list"],
     ol[role="list"] {
         list-style: none;
@@ -84,36 +54,26 @@
    ============================================================================= */
 
 @layer base {
-    /* Colour tokens — prompt-specified values */
+    /* ── Exact react-hn colour palette ────────────────────────────────────── */
     :root {
-        --hn-primary: #00d8ff;
+        --hn-primary: #00d8ff; /* cyan accent / homelink */
         --hn-header-bg: #222222;
-        --hn-bg-light: #f5f5f5;
-        --hn-bg-dark: #242424;
-        --hn-text-light: #000000;
-        --hn-text-dark: #e0e0e0;
-        --hn-new-comment-bg: #fffacd;
-        --hn-dead-color: #999999;
-
-        /* Additional tokens derived from react-hn */
-        --hn-page-bg-light: #ffffff;
-        --hn-page-bg-dark: #1a1a1a;
-        --hn-muted-light: #666666;
-        --hn-muted-dark: #9aa4ad;
-        --hn-border-light: #e7e7e7;
-        --hn-border-dark: #2a2a2a;
         --hn-header-text: #ffffff;
+        --hn-bg: #f5f5f5; /* .app-wrap background — matches App__wrap */
+        --hn-text: #000000;
+        --hn-muted: #666666;
+        --hn-border: #e7e7e7;
+        --hn-new-comment-bg: #ffffde; /* exact react-hn value — was wrong (#fffacd) */
+        --hn-dead: #dddddd;
         --hn-error: #ff3333;
+        --hn-footer-text: #333333;
 
-        /* Spacing scale */
-        --space-1: 0.25rem;
-        --space-2: 0.5rem;
-        --space-3: 0.75rem;
-        --space-4: 1rem;
-        --space-5: 1.25rem;
-        --space-6: 1.5rem;
+        /* Dark-mode extensions */
+        --hn-bg-dark: #242424;
+        --hn-text-dark: #e0e0e0;
+        --hn-muted-dark: #9aa4ad;
 
-        /* Typography */
+        /* Typography — exact react-hn values */
         --font-sans: Verdana, Geneva, sans-serif;
         --font-mono:
             ui-monospace, "SFMono-Regular", Menlo, Monaco, "Roboto Mono",
@@ -122,36 +82,26 @@
         --font-size-title: 18px;
         --font-size-meta: 12px;
         --line-height: 1.4;
-
-        /* Layout */
-        --max-width: 1280px;
-        --content-padding-inline: var(--space-5);
-
-        /* Comment indentation step */
-        --comment-indent: 2.5em;
-
-        /* Transition */
-        --transition-fast: 0.15s ease;
-        --transition-base: 0.33s ease-out;
     }
 
     html {
         color-scheme: light dark;
     }
 
+    /* react-hn: body { background-color: #fff; margin: 0; } */
     body {
-        background: light-dark(var(--hn-bg-light), var(--hn-bg-dark));
-        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+        background-color: #fff;
+        color: var(--hn-text);
         font-family: var(--font-sans);
         font-size: var(--font-size-base);
         line-height: var(--line-height);
+        margin: 0;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        /* Dark class support (manual toggle via SettingsStore) */
         &.dark {
             color-scheme: dark;
-            background: var(--hn-bg-dark);
+            background-color: #1a1a1a;
             color: var(--hn-text-dark);
         }
     }
@@ -160,42 +110,38 @@
         white-space: pre-wrap;
         font-family: var(--font-mono);
     }
-
     form {
         margin: 0;
     }
-
     img {
         vertical-align: text-bottom;
     }
 
-    /* Base link style — matches react-hn: black, no underline, underline on hover */
+    /* react-hn: links are black, no underline, underline on hover */
     a {
-        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+        color: var(--hn-text);
         text-decoration: none;
         overflow-wrap: break-word;
         word-break: break-word;
 
         &:visited {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+            color: var(--hn-muted);
         }
-
         &:hover {
             text-decoration: underline;
         }
     }
 
-    /* Inline interactive control (collapse toggles, mark-as-read etc.) */
-    .control {
+    /* Inline collapse toggles / control spans */
+    span.control {
         cursor: pointer;
-
         &:hover {
             text-decoration: underline;
         }
     }
 
     h2 {
-        padding-inline-start: var(--content-padding-inline);
+        padding-left: 1.25em;
     }
 }
 
@@ -204,27 +150,25 @@
    ============================================================================= */
 
 @layer layout {
-    /* Outer app wrapper — equivalent to .App__wrap */
+    /*
+     * .app-wrap mirrors react-hn's .App__wrap exactly:
+     *   width:90%; max-width:1280px; margin:8px auto;
+     *   background:#f5f5f5; font-size:13.3333px; font-family:Verdana
+     */
     .app-wrap {
-        inline-size: 90%;
-        max-inline-size: var(--max-width);
-        margin-inline: auto;
-        margin-block: var(--space-2);
-        background-color: light-dark(var(--hn-bg-light), var(--hn-bg-dark));
+        width: 90%;
+        max-width: 1280px;
+        margin: 8px auto;
+        color: var(--hn-text);
+        background-color: var(--hn-bg);
         font-size: var(--font-size-base);
         font-family: var(--font-sans);
-        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
     }
 
-    /* Main content area */
-    .app-content,
+    /* #app mirrors react-hn's .App__content */
     #app {
         overflow-wrap: break-word;
         word-wrap: break-word;
-        background-color: light-dark(
-            var(--hn-page-bg-light),
-            var(--hn-page-bg-dark)
-        );
     }
 }
 
@@ -233,65 +177,71 @@
    ============================================================================= */
 
 @layer components {
-    /* ---------------------------------------------------------------------------
-     Site header
-     --------------------------------------------------------------------------- */
+    /* ── Site header → .App__header ─────────────────────────────────────── */
 
     .site-header {
         color: var(--hn-header-text);
         background-color: var(--hn-header-bg);
-        padding-block: 6px;
-        padding-inline: 6px;
+        padding: 6px;
         line-height: 18px;
+        vertical-align: middle;
         position: relative;
 
+        /* Logo image */
         & img {
-            border: 1px solid var(--hn-primary);
-            margin-inline-end: 0.25em;
+            display: inline;
             vertical-align: middle;
+            border: 1px solid var(--hn-primary);
+            margin-right: 0.25em;
         }
 
+        /* All links inside the header default to white */
         & a {
-            color: var(--hn-header-text);
+            color: inherit;
             text-decoration: none;
 
             &:visited {
-                color: var(--hn-header-text);
+                color: inherit;
             }
-
             &:hover,
             &.active {
-                color: #ffffff;
+                color: #fff;
                 text-decoration: none;
             }
         }
     }
 
-    /* Home / brand link */
+    /* Logo icon link wrapper — no extra spacing */
+    .site-header__homelinkicon {
+        display: inline;
+        margin-right: 0;
+    }
+
+    /* Home / brand text link — cyan and bold, same as .App__homelink */
     .site-header__homelink {
-        text-decoration: none;
         font-weight: bold;
         color: var(--hn-primary) !important;
-        margin-inline-end: 0.75em;
+        text-decoration: none;
+        margin-right: 0.75em;
 
         &:visited {
             color: var(--hn-primary) !important;
         }
-
         &.active {
-            color: #ffffff !important;
+            color: #fff !important;
         }
     }
 
-    /* Settings toggle in header */
+    /* "settings" link — top-right, same as .App__settings */
     .site-header__settings {
         position: absolute;
-        inset-block-start: 6px;
-        inset-inline-end: 10px;
+        top: 6px;
+        right: 10px;
         cursor: pointer;
     }
 
-    /* Navigation links */
+    /* ── Main nav — pipe-separated like react-hn ────────────────────────── */
+
     .main-nav {
         display: inline;
 
@@ -304,60 +254,107 @@
 
         & li {
             display: inline;
-            margin-inline-end: 0.5em;
+
+            /* " | " separator before every item except the first */
+            & + li::before {
+                content: " | ";
+                color: var(--hn-header-text);
+            }
         }
 
         & a {
-            color: var(--hn-header-text);
+            color: inherit;
             text-decoration: none;
 
+            &:visited {
+                color: inherit;
+            }
             &:hover,
             &.active {
-                color: #ffffff;
+                color: #fff;
                 text-decoration: underline;
             }
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Settings panel
-     --------------------------------------------------------------------------- */
+    /* ── Settings panel → .Settings ─────────────────────────────────────── */
 
     .settings-panel {
         box-sizing: border-box;
-        padding: var(--space-3);
+        padding: 0.75em;
         position: absolute;
-        inline-size: 36%;
-        inset-inline-end: 0;
+        width: 36%;
+        right: 0;
         background-color: var(--hn-header-bg);
-        border-end-start-radius: 1em;
-        border-end-end-radius: 1em;
+        border-bottom-left-radius: 1em;
+        border-bottom-right-radius: 1em;
         z-index: 100;
 
         & td:first-child {
-            text-align: end;
+            text-align: right;
         }
-
         & p {
-            color: #ffffff;
+            color: #fff;
+            margin-bottom: 0.4em;
+        }
+        & label {
+            color: #fff;
+            cursor: pointer;
+        }
+        & div:last-child > p:last-child {
+            margin-bottom: 0;
         }
 
-        & div:last-child > p:last-child {
-            margin-block-end: 0;
+        & input[type="checkbox"] {
+            cursor: pointer;
+            margin-right: 0.3em;
+        }
+        & input[type="number"] {
+            width: 4em;
+        }
+        & select {
+            font-size: inherit;
+        }
+
+        & .settings-section {
+            margin-bottom: 0.6em;
+            padding-bottom: 0.6em;
+            border-bottom: 1px solid #444;
+
+            &:last-child {
+                margin-bottom: 0;
+                padding-bottom: 0;
+                border-bottom: none;
+            }
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Site footer
-     --------------------------------------------------------------------------- */
+    /* ── List-view title h1 — visible only to screen readers ────────────── */
+    /*
+     * ListView renders <h1 class="list-view__title"> with text like "News",
+     * "Newest", etc. It is useful for assistive technology but should not
+     * appear visually (react-hn has no equivalent heading in the list view).
+     */
+    .list-view__title {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* ── Footer → .App__footer ──────────────────────────────────────────── */
 
     .site-footer {
-        margin-block-start: var(--space-4);
-        border-block-start: 1px solid
-            light-dark(var(--hn-border-light), var(--hn-border-dark));
+        margin-top: 1em;
+        border-top: 1px solid var(--hn-border);
         text-align: center;
-        color: #333333;
-        padding-block: 6px;
+        color: var(--hn-footer-text);
+        padding: 6px 0;
 
         & a {
             color: inherit;
@@ -365,65 +362,63 @@
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Story list
-     --------------------------------------------------------------------------- */
+    /* ── Story list → .Items__list ──────────────────────────────────────── */
 
     .story-list {
         list-style: none;
-        padding-inline-start: 3em;
-        padding-inline-end: var(--content-padding-inline);
-        margin-block-start: var(--space-4);
-        margin-block-end: 0.5em;
+        padding: 0;
+        padding-left: 3em;
+        padding-right: 1.25em;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
 
         & > p {
-            padding-inline-start: var(--content-padding-inline);
+            padding-left: 1.25em;
         }
     }
 
-    .story-list__item {
-        margin-block-end: 16px;
-        container-type: inline-size;
-        container-name: story-item;
+    /* ── Story list item → .ListItem ────────────────────────────────────── */
+
+    .item {
+        margin-bottom: 16px;
+        position: relative; /* anchors .item__rank */
 
         &--loading {
-            min-block-size: 34px;
+            min-height: 34px;
         }
 
+        /* Read stories are dimmed (prompt requirement) */
         &--read {
             opacity: 0.6;
         }
 
-        /* New-comment count inside a list item */
-        & .new-comments a {
-            font-weight: bold;
+        /* Empty / error states */
+        &--empty,
+        &--error {
+            padding-left: 1.25em;
+            list-style: none;
         }
 
-        /* Skeleton loading shimmer */
+        /* ── Skeleton shimmer (matches .ListItem--loading spinner aesthetic) */
         &--skeleton {
-            & .skeleton-line {
+            & .item__title-link--skeleton {
                 display: block;
-                block-size: 0.9em;
-                background: light-dark(#e0e0e0, #333333);
+                height: 0.9em;
+                background: #e0e0e0;
                 border-radius: 3px;
-                margin-block-end: var(--space-2);
+                margin-bottom: 0.5rem;
                 animation: shimmer 1.4s infinite ease-in-out both;
+                color: transparent;
+                user-select: none;
             }
 
-            & .skeleton-line--title {
-                inline-size: 75%;
-            }
-
-            & .skeleton-line--meta {
-                inline-size: 40%;
-                block-size: 0.75em;
-            }
-        }
-
-        /* Container query: compact meta on narrow viewports */
-        @container story-item (width < 480px) {
-            & .item__meta {
-                font-size: 0.85em;
+            & .item__meta--skeleton {
+                display: block;
+                width: 40%;
+                height: 0.75em;
+                background: #e0e0e0;
+                border-radius: 3px;
+                animation: shimmer 1.4s infinite ease-in-out both;
             }
         }
     }
@@ -439,449 +434,442 @@
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Paginator
-     --------------------------------------------------------------------------- */
+    /* Rank number — floated into the 3em left-gutter of .story-list */
+    .item__rank {
+        position: absolute;
+        left: -2.5em;
+        width: 2em;
+        text-align: right;
+        color: var(--hn-muted);
+    }
 
-    .paginator {
-        margin-inline-start: 3em;
-        padding-block: 0.5em;
+    /* Title row → .Item__title */
+    .item__title {
+        color: var(--hn-muted);
+        font-size: var(--font-size-title);
+    }
 
-        & a {
-            font-weight: bold;
-            color: light-dark(var(--hn-text-light), var(--hn-text-dark));
-            text-decoration: none;
+    .item__title-link {
+        text-decoration: none;
+        color: var(--hn-text);
 
-            &:hover {
-                text-decoration: underline;
-            }
+        &:hover {
+            text-decoration: underline;
+        }
+        &:visited {
+            color: var(--hn-muted);
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Item / story detail view
-     --------------------------------------------------------------------------- */
-
-    .item-view {
-        container-type: inline-size;
-        container-name: item-view;
-
-        &__content,
-        &--loading {
-            padding-block-start: var(--space-4);
-            padding-block-end: 0;
-            padding-inline: var(--content-padding-inline);
-            margin-block-end: var(--space-4);
-        }
-
-        /* Story title */
-        &__title {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-            font-size: var(--font-size-title);
-
-            & a {
-                text-decoration: none;
-                color: light-dark(var(--hn-text-light), var(--hn-text-dark));
-
-                &:hover {
-                    text-decoration: underline;
-                }
-
-                &:visited {
-                    color: light-dark(
-                        var(--hn-muted-light),
-                        var(--hn-muted-dark)
-                    );
-                }
-            }
-        }
-
-        /* Domain / host shown next to title */
-        &__host {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-            font-size: 0.9em;
-        }
-
-        /* Metadata bar */
-        &__meta {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-
-            & a {
-                text-decoration: none;
-                color: inherit;
-
-                &:hover {
-                    text-decoration: underline;
-                }
-            }
-
-            /* Inline new-comment count */
-            & em {
-                font-style: normal;
-                background-color: var(--hn-new-comment-bg);
-                color: var(--hn-text-light);
-            }
-        }
-
-        /* Controls bar: auto-collapse, mark as read */
-        &__controls {
-            margin-block: 0.5em;
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-            font-size: var(--font-size-meta);
-
-            & .control {
-                color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-            }
-        }
-
-        /* Author link */
-        &__by a {
-            font-weight: bold;
-        }
-
-        /* Self-text (Ask HN, jobs etc.) */
-        &__text {
-            margin-block-start: var(--space-4);
-        }
-
-        /* Poll options */
-        &__poll {
-            margin-block-start: var(--space-4);
-            padding-inline-start: 2.5em;
-        }
-
-        /* Comment time-range slider */
-        &__slider {
-            margin-block-start: var(--space-4);
-            opacity: 0;
-            transition: opacity var(--transition-base);
-
-            &--visible {
-                opacity: 1;
-            }
-
-            & input[type="range"] {
-                margin: 0;
-                vertical-align: middle;
-            }
-        }
+    /* Domain badge next to title → .Item__host */
+    .item-host {
+        color: var(--hn-muted);
+        font-size: 0.85em;
+        margin-left: 0.25em;
     }
 
-    /* Container query: narrower item view */
-    @container item-view (width < 600px) {
-        .item-view__title {
-            font-size: calc(var(--font-size-title) * 0.9);
-        }
-    }
-
-    /* ---------------------------------------------------------------------------
-     Poll option
-     --------------------------------------------------------------------------- */
-
-    .poll-option {
-        margin-block-end: 10px;
-
-        &__score {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-        }
-    }
-
-    /* ---------------------------------------------------------------------------
-     Comments
-     --------------------------------------------------------------------------- */
-
-    .comment-thread {
-        container-type: inline-size;
-        container-name: comment-thread;
-    }
-
-    .comment {
-        color: light-dark(var(--hn-text-light), var(--hn-text-dark));
-
-        /* New comment highlight */
-        &--new > .comment__content {
-            background-color: var(--hn-new-comment-bg);
-        }
-
-        /* Collapsed: hide text and children */
-        &--collapsed .comment__text,
-        &--collapsed > .comment-kids {
-            display: none;
-        }
-
-        /* Dead comment */
-        &--dead > .comment__content > .comment__text {
-            color: var(--hn-dead-color) !important;
-        }
-
-        /* Error state */
-        &--error .comment__meta {
-            color: var(--hn-error);
-        }
-
-        /* Loading state */
-        &--loading {
-            padding-inline-end: var(--content-padding-inline);
-            padding-block: 0.65em;
-        }
-
-        /* Permalinked */
-        &--permalinked > .comment__content {
-            margin-block-end: var(--space-4);
-        }
-    }
-
-    /* Comment content area */
-    .comment__content {
-        padding-inline-end: var(--content-padding-inline);
-        padding-block: 0.65em;
-    }
-
-    /* Level-based indentation using logical properties */
-    /* Mirrors react-hn's 15 levels at 2.5em steps exactly */
-    .comment--level0 .comment__content,
-    .comment--level0.comment--loading {
-        padding-inline-start: 1.25em;
-    }
-    .comment--level1 .comment__content,
-    .comment--level1.comment--loading {
-        padding-inline-start: 3.75em;
-    }
-    .comment--level2 .comment__content,
-    .comment--level2.comment--loading {
-        padding-inline-start: 6.25em;
-    }
-    .comment--level3 .comment__content,
-    .comment--level3.comment--loading {
-        padding-inline-start: 8.75em;
-    }
-    .comment--level4 .comment__content,
-    .comment--level4.comment--loading {
-        padding-inline-start: 11.25em;
-    }
-    .comment--level5 .comment__content,
-    .comment--level5.comment--loading {
-        padding-inline-start: 13.75em;
-    }
-    .comment--level6 .comment__content,
-    .comment--level6.comment--loading {
-        padding-inline-start: 16.25em;
-    }
-    .comment--level7 .comment__content,
-    .comment--level7.comment--loading {
-        padding-inline-start: 18.75em;
-    }
-    .comment--level8 .comment__content,
-    .comment--level8.comment--loading {
-        padding-inline-start: 21.25em;
-    }
-    .comment--level9 .comment__content,
-    .comment--level9.comment--loading {
-        padding-inline-start: 23.75em;
-    }
-    .comment--level10 .comment__content,
-    .comment--level10.comment--loading {
-        padding-inline-start: 26.25em;
-    }
-    .comment--level11 .comment__content,
-    .comment--level11.comment--loading {
-        padding-inline-start: 28.75em;
-    }
-    .comment--level12 .comment__content,
-    .comment--level12.comment--loading {
-        padding-inline-start: 31.25em;
-    }
-    .comment--level13 .comment__content,
-    .comment--level13.comment--loading {
-        padding-inline-start: 33.75em;
-    }
-    .comment--level14 .comment__content,
-    .comment--level14.comment--loading {
-        padding-inline-start: 36.25em;
-    }
-    .comment--level15 .comment__content,
-    .comment--level15.comment--loading {
-        padding-inline-start: 38.75em;
-    }
-
-    /* Meta row */
-    .comment__meta {
-        color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-        margin-block-end: 0.5em;
+    /* Meta row → .Item__meta */
+    .item__meta {
+        color: var(--hn-muted);
 
         & a {
             text-decoration: none;
             color: inherit;
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
 
+    /* Author — bold, same as .Item__by a, .ListItem__newcomments a */
+    .item__by {
+        font-weight: bold;
+    }
+
+    /* New-comment badge → .ListItem__newcomments */
+    .badge--new {
+        font-weight: bold;
+        margin-left: 0.25em;
+
+        &::before {
+            content: "(";
+        }
+        &::after {
+            content: ")";
+        }
+    }
+
+    /* ── Paginator → .Paginator ─────────────────────────────────────────── */
+
+    .list-view__pagination {
+        margin-left: 3em;
+        padding: 0.5em 0;
+
+        & a {
+            font-weight: bold;
+            color: var(--hn-text);
+            text-decoration: none;
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    /* ── Item / story detail view → .Item ──────────────────────────────── */
+
+    /* Loading indicator shown before item data arrives */
+    .item-loading {
+        padding: 1em 1.25em 0 1.25em;
+        margin-bottom: 1em;
+        color: var(--hn-muted);
+    }
+
+    /* Content wrapper → .Item__content */
+    .item-content {
+        padding: 1em 1.25em 0 1.25em;
+        margin-bottom: 1em;
+    }
+
+    /* Title → .Item__title */
+    .item-title {
+        color: var(--hn-muted);
+        /* font-size set inline by ItemView from SettingsStore.titleFontSize */
+
+        & a {
+            text-decoration: none;
+            color: var(--hn-text);
+
+            &:hover {
+                text-decoration: underline;
+            }
+            &:visited {
+                color: var(--hn-muted);
+            }
+        }
+    }
+
+    /* Meta bar → .Item__meta (note: also has margin-bottom in item view) */
+    .item-meta {
+        color: var(--hn-muted);
+        margin-bottom: 1em;
+
+        & a {
+            text-decoration: none;
+            color: inherit;
             &:hover {
                 text-decoration: underline;
             }
         }
 
-        /* Inline new-count badge */
         & em {
             font-style: normal;
             background-color: var(--hn-new-comment-bg);
-            color: var(--hn-text-light);
+            color: var(--hn-text);
         }
     }
 
-    /* Author name */
-    .comment__user {
+    /* Author in item-meta — bold */
+    .item-by {
         font-weight: bold;
     }
 
-    /* Collapse toggle — the [+] / [–] control */
-    .comment__collapse {
-        cursor: pointer;
-        user-select: none;
+    /* Controls bar (new-count info + auto-collapse + mark-as-read) */
+    .item-controls {
+        display: none; /* hidden until --visible modifier is added */
+        margin-bottom: 0.5em;
+        color: var(--hn-muted);
+        font-size: var(--font-size-meta);
+
+        &--visible {
+            display: block;
+        }
+
+        & em {
+            font-style: normal;
+            background-color: var(--hn-new-comment-bg);
+            color: var(--hn-text);
+        }
+
+        & .item-controls__btn {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            color: inherit;
+            font-size: inherit;
+            &:hover {
+                text-decoration: underline;
+            }
+        }
     }
 
-    /* Body text */
-    .comment__text {
-        & a {
-            color: light-dark(var(--hn-text-light), var(--hn-text-dark));
+    /* Item body text (Ask HN / job self-text) → .Item__text */
+    .item-text {
+        margin-top: 1em;
 
+        & a {
+            color: var(--hn-text);
             &:visited {
-                color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+                color: var(--hn-muted);
             }
         }
 
         & p:last-child,
         & pre:last-child {
-            margin-block-end: 0;
+            margin-bottom: 0;
         }
     }
 
-    /* Reply link */
-    .comment__reply {
-        & a {
-            color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
-            text-decoration: none;
-            font-size: var(--font-size-meta);
+    /* Comment time-range slider */
+    .item-slider-container {
+        margin-top: 1em;
+    }
 
+    .item-slider {
+        margin: 0;
+        vertical-align: middle;
+    }
+
+    .item-slider__btn {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: var(--hn-muted);
+        font-size: var(--font-size-meta);
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    /* Poll option */
+    .poll-option {
+        margin-bottom: 10px;
+    }
+    .poll-option__score {
+        color: var(--hn-muted);
+    }
+
+    /* ── Comments → .Comment ────────────────────────────────────────────── */
+    /*
+     * CommentElement generates:
+     *
+     *   <article class="comment [comment--child] [comment--collapsed] [comment--new]">
+     *     <div class="comment-meta">
+     *       <button class="toggle">−</button>
+     *       <span class="by">user</span>
+     *       <span class="sep">·</span>
+     *       <span class="time">N ago</span>
+     *       <span class="counts"><span class="desc">N replies</span></span>
+     *     </div>
+     *     <div class="comment-text">…</div>
+     *     <div class="comment-kids">   ← children recurse here
+     *       <article class="comment comment--child">…</article>
+     *     </div>
+     *   </article>
+     *
+     * INDENTATION  (matches react-hn's per-level padding-left exactly):
+     *   .comment > .comment-meta / .comment-text  get padding-left: 1.25em
+     *   .comment-kids                              adds padding-left: 2.5em
+     *
+     *   Level 0: 1.25em
+     *   Level 1: 2.5 + 1.25 = 3.75em
+     *   Level 2: 5.0 + 1.25 = 6.25em
+     *   Level N: N×2.5 + 1.25em  ← exact react-hn formula
+     */
+
+    .comment {
+        /* New comment: highlight background on the meta + text bands */
+        &--new > .comment-meta,
+        &--new > .comment-text {
+            background-color: var(--hn-new-comment-bg);
+        }
+
+        /* Collapsed: hide text and children */
+        &--collapsed > .comment-text,
+        &--collapsed > .comment-kids {
+            display: none;
+        }
+
+        /* Dead comment — dim text */
+        &--dead > .comment-text {
+            color: var(--hn-dead) !important;
+        }
+
+        /* Error */
+        &--error > .comment-meta {
+            color: var(--hn-error);
+        }
+    }
+
+    /* Vertical padding + right padding on content bands */
+    .comment > .comment-meta,
+    .comment > .comment-text {
+        padding-right: 1.25em;
+        padding-top: 0.65em;
+        padding-bottom: 0.65em;
+        padding-left: 1.25em; /* base indent for all levels */
+    }
+
+    /* Each nesting level adds 2.5em of indentation */
+    .comment-kids {
+        padding-left: 2.5em;
+    }
+
+    /* Comment meta row → .Comment__meta */
+    .comment-meta {
+        color: var(--hn-muted);
+        margin-bottom: 0.5em;
+
+        & a {
+            text-decoration: none;
+            color: inherit;
             &:hover {
                 text-decoration: underline;
             }
         }
-    }
 
-    /* Container query: reduce indent on narrow viewports */
-    @container comment-thread (width < 500px) {
-        .comment__meta {
-            font-size: 0.85em;
-        }
-
-        /* Halve the indentation on very narrow screens */
-        .comment--level1 .comment__content {
-            padding-inline-start: 2em;
-        }
-        .comment--level2 .comment__content {
-            padding-inline-start: 3.25em;
-        }
-        .comment--level3 .comment__content {
-            padding-inline-start: 4.5em;
-        }
-        .comment--level4 .comment__content {
-            padding-inline-start: 5.75em;
-        }
-        .comment--level5 .comment__content {
-            padding-inline-start: 7em;
+        & em {
+            font-style: normal;
+            background-color: var(--hn-new-comment-bg);
+            color: var(--hn-text);
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     User profile
-     --------------------------------------------------------------------------- */
+    /* Author → .Comment__user */
+    .comment-meta .by {
+        font-weight: bold;
+    }
+
+    /* Collapse toggle → .Comment__collapse */
+    .comment-meta .toggle {
+        cursor: pointer;
+        user-select: none;
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+    }
+
+    /* Separator and time */
+    .comment-meta .sep {
+        margin: 0 0.2em;
+    }
+    .comment-meta .time {
+        color: var(--hn-muted);
+    }
+
+    /* New-count badge inside comment meta */
+    .comment-meta .badge--new {
+        font-weight: bold;
+    }
+
+    /* Comment body → .Comment__text */
+    .comment-text {
+        & a {
+            color: var(--hn-text);
+            &:visited {
+                color: var(--hn-muted);
+            }
+        }
+
+        & p:last-child,
+        & pre:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    /* Placeholder shown while a comment is loading */
+    .comment-placeholder {
+        padding: 0.65em 1.25em;
+        color: var(--hn-muted);
+        font-size: var(--font-size-meta);
+    }
+
+    /* ── User profile → .UserProfile ────────────────────────────────────── */
 
     .user-profile {
-        padding-inline-start: var(--content-padding-inline);
-        padding-block-start: var(--space-4);
+        padding-left: 1.25em;
+        padding-top: 1em;
 
         & h4 {
-            margin-block: 0 var(--space-4);
+            margin: 0 0 1em 0;
         }
-
         & dl {
-            margin-block-end: var(--space-4);
+            margin-bottom: 1em;
         }
-
         & dt {
             font-weight: bold;
             display: inline;
         }
-
         & dd {
             display: inline;
-            margin-inline-start: 0.5em;
-
+            margin-left: 0.5em;
             &::after {
                 display: block;
                 content: "";
             }
         }
 
-        &__about {
-            & a {
-                color: light-dark(var(--hn-text-light), var(--hn-text-dark));
-            }
+        &__about a {
+            color: var(--hn-text);
         }
-
         &__hn-link {
-            margin-block-start: var(--space-3);
+            margin-top: 0.75em;
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Spinner — SpinKit bounce dots (matches react-hn .Spinner)
-     --------------------------------------------------------------------------- */
+    /* ── Spinner → .Spinner (SpinKit bounce dots) ───────────────────────── */
 
-    .spinner > div {
-        background-color: #666666;
+    .spinner > div,
+    .Spinner > div {
+        background-color: #666;
         border-radius: 100%;
         display: inline-block;
-        inline-size: 8px;
-        block-size: 8px;
-        margin-inline: 2px;
-        animation: spinner-bounce 1.4s infinite ease-in-out both;
+        width: 8px;
+        height: 8px;
+        margin: 0 2px;
+        -webkit-animation: bouncedelay 1.4s infinite ease-in-out both;
+        animation: bouncedelay 1.4s infinite ease-in-out both;
 
-        &:nth-child(1) {
+        &:nth-child(1),
+        &.bounce1 {
             animation-delay: -0.32s;
         }
-        &:nth-child(2) {
+        &:nth-child(2),
+        &.bounce2 {
             animation-delay: -0.16s;
         }
     }
 
-    @keyframes spinner-bounce {
+    @keyframes bouncedelay {
         0%,
         80%,
         100% {
             transform: scale(0);
+            -webkit-transform: scale(0);
         }
         40% {
             transform: scale(1);
+            -webkit-transform: scale(1);
         }
     }
 
-    /* ---------------------------------------------------------------------------
-     Updates view
-     --------------------------------------------------------------------------- */
+    /* ── Updates view ───────────────────────────────────────────────────── */
 
     .updates {
         &--loading {
-            padding-block-start: var(--space-4);
-            padding-block-end: 0;
-            padding-inline: var(--content-padding-inline);
-            margin-block-end: var(--space-4);
+            padding: 1em 1.25em 0 1.25em;
+            margin-bottom: 1em;
         }
 
         &__notice {
-            padding-inline: var(--content-padding-inline);
+            padding: 0 1.25em;
         }
 
         & .comment {
-            margin-block-end: 0.75em;
+            margin-bottom: 0.75em;
         }
     }
 }
@@ -897,8 +885,8 @@
 
     .visually-hidden {
         position: absolute !important;
-        inline-size: 1px !important;
-        block-size: 1px !important;
+        width: 1px !important;
+        height: 1px !important;
         padding: 0 !important;
         margin: -1px !important;
         overflow: hidden !important;
@@ -908,17 +896,16 @@
     }
 
     .text-muted {
-        color: light-dark(var(--hn-muted-light), var(--hn-muted-dark));
+        color: var(--hn-muted);
     }
-
     .font-bold {
         font-weight: bold;
     }
 
     .sr-only {
         position: absolute;
-        inline-size: 1px;
-        block-size: 1px;
+        width: 1px;
+        height: 1px;
         overflow: hidden;
         clip: rect(0 0 0 0);
         clip-path: inset(50%);
@@ -927,31 +914,34 @@
 }
 
 /* =============================================================================
-   RESPONSIVE  (outside layers — media queries applying globally)
+   RESPONSIVE
    ============================================================================= */
 
+/* Narrow viewports: full-width, no margin (react-hn behaviour) */
 @media only screen and (max-width: 750px) and (min-width: 300px) {
     .app-wrap {
-        inline-size: 100%;
-        margin-inline: 0;
+        width: 100%;
+        margin: 0 auto;
     }
 
+    /* Hide brand name homelink — react-hn hides .App__homelink on mobile */
     .site-header__homelink {
         display: none;
     }
 
     .settings-panel {
-        inline-size: 100%;
+        width: 100%;
     }
 }
 
+/* iPhone 5: hide settings link */
 @media (device-height: 568px) and (device-width: 320px) and (-webkit-min-device-pixel-ratio: 2) {
     .site-header__settings {
         display: none;
     }
 }
 
-/* Focus styles */
+/* Focus ring using brand colour */
 @media (prefers-reduced-motion: no-preference) {
     a:focus-visible,
     button:focus-visible,
@@ -964,6 +954,7 @@
     }
 }
 
+/* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -195,6 +195,120 @@
     // Start the router
     router.start();
 
+    // ── Settings panel wiring ──────────────────────────────────────────────
+    // The panel markup lives in index.html; we just toggle visibility and
+    // keep the form inputs in sync with the SettingsStore.
+    try {
+      const settingsBtn = document.querySelector(".site-header__settings");
+      const settingsPanel = document.getElementById("settings-panel");
+
+      if (settingsBtn && settingsPanel) {
+        const form = settingsPanel.querySelector("form");
+
+        // Sync every form control to the current store state.
+        const syncForm = (state) => {
+          if (!form) return;
+          for (const name of [
+            "autoCollapse",
+            "replyLinks",
+            "showDead",
+            "showDeleted",
+          ]) {
+            const input = form.querySelector(`[name="${name}"]`);
+            if (input) input.checked = Boolean(state[name]);
+          }
+          for (const name of ["titleFontSize"]) {
+            const input = form.querySelector(`[name="${name}"]`);
+            if (input) input.value = state[name];
+          }
+          for (const name of ["listSpacing", "theme"]) {
+            const input = form.querySelector(`[name="${name}"]`);
+            if (input) input.value = state[name];
+          }
+        };
+
+        // Subscribe — also fires immediately with current state to seed the form.
+        settingsStore.addListener(syncForm);
+
+        // Open / close helpers.
+        const openPanel = () => {
+          settingsPanel.hidden = false;
+          settingsBtn.textContent = "hide settings";
+          settingsBtn.setAttribute("aria-expanded", "true");
+          try {
+            settingsPanel.focus();
+          } catch (e) {
+            /* ignore */
+          }
+        };
+
+        const closePanel = () => {
+          settingsPanel.hidden = true;
+          settingsBtn.textContent = "settings";
+          settingsBtn.setAttribute("aria-expanded", "false");
+        };
+
+        // Toggle on button click / keyboard activation.
+        settingsBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settingsPanel.hidden ? openPanel() : closePanel();
+        });
+
+        settingsBtn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            settingsBtn.click();
+          }
+        });
+
+        // Close when clicking anywhere outside the panel.
+        document.addEventListener("click", (e) => {
+          if (
+            !settingsPanel.hidden &&
+            !settingsPanel.contains(e.target) &&
+            e.target !== settingsBtn
+          ) {
+            closePanel();
+          }
+        });
+
+        // Prevent panel-internal clicks from bubbling to the document listener.
+        settingsPanel.addEventListener("click", (e) => e.stopPropagation());
+
+        // Close on Escape.
+        settingsPanel.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            closePanel();
+            try {
+              settingsBtn.focus();
+            } catch (ex) {
+              /* ignore */
+            }
+          }
+        });
+
+        // Propagate form changes to the store.
+        if (form) {
+          form.addEventListener("change", (e) => {
+            const el = e.target;
+            if (!el.name) return;
+            let value;
+            if (el.type === "checkbox") {
+              value = el.checked;
+            } else if (el.type === "number") {
+              value = Number(el.value);
+            } else {
+              value = el.value;
+            }
+            settingsStore.update({ [el.name]: value });
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Settings panel wiring failed:", err);
+    }
+
     // Expose the core pieces for debugging and from-browser tinkering.
     window.vanillaHN = {
       router,
