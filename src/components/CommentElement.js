@@ -48,6 +48,7 @@ export class CommentElement {
     this._loadedKids = new Map(); // childId -> CommentElement
     this._unsubs = []; // unsubscribe functions from any listeners
     this._loadingPlaceholders = new Map(); // childId -> placeholder element
+    this._observer = null; // IntersectionObserver for lazy-loading kids
   }
 
   /**
@@ -81,10 +82,30 @@ export class CommentElement {
 
     // If there are declared kids, add lightweight placeholders so layout is predictable.
     if (Array.isArray(this.comment.kids) && this.comment.kids.length > 0) {
+      // Use IntersectionObserver to lazy-load children when their
+      // placeholder scrolls into (or near) the viewport.
+      this._observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const el = entry.target;
+            const kidId = el.dataset && el.dataset.kidId;
+            if (kidId) {
+              this._observer.unobserve(el);
+              this._loadChildAndReplacePlaceholder(kidId, el).catch(() => {
+                /* swallow individual errors */
+              });
+            }
+          }
+        },
+        { rootMargin: "200px" },
+      );
+
       for (const kidId of this.comment.kids) {
         const placeholder = this._createKidPlaceholder(kidId);
         this._kidsContainer.appendChild(placeholder);
         this._loadingPlaceholders.set(String(kidId), placeholder);
+        this._observer.observe(placeholder);
       }
     }
 
@@ -198,6 +219,7 @@ export class CommentElement {
           class: "comment-placeholder",
           role: "group",
           "aria-label": `Comment ${kidId} (loading)`,
+          "data-kid-id": String(kidId),
         },
       },
       `Loading comment ${kidId}…`,
@@ -438,6 +460,16 @@ export class CommentElement {
    * Remove listeners and free references. Should be called when the comment is unmounted.
    */
   cleanup() {
+    // Disconnect the IntersectionObserver so it stops firing for this tree.
+    if (this._observer) {
+      try {
+        this._observer.disconnect();
+      } catch (e) {
+        /* ignore */
+      }
+      this._observer = null;
+    }
+
     // Call cleanup on loaded child elements
     for (const child of this._loadedKids.values()) {
       try {

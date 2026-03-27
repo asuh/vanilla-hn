@@ -382,45 +382,43 @@
     .item {
         margin-bottom: 16px;
         position: relative; /* anchors .item__rank */
+    }
 
-        &--loading {
-            min-height: 34px;
-        }
+    .item--loading {
+        min-height: 34px;
+    }
 
-        /* Read stories are dimmed (prompt requirement) */
-        &--read {
-            opacity: 0.6;
-        }
+    /* Read stories are dimmed (prompt requirement) */
+    .item--read {
+        opacity: 0.6;
+    }
 
-        /* Empty / error states */
-        &--empty,
-        &--error {
-            padding-left: 1.25em;
-            list-style: none;
-        }
+    /* Empty / error states */
+    .item--empty,
+    .item--error {
+        padding-left: 1.25em;
+        list-style: none;
+    }
 
-        /* ── Skeleton shimmer (matches .ListItem--loading spinner aesthetic) */
-        &--skeleton {
-            & .item__title-link--skeleton {
-                display: block;
-                height: 0.9em;
-                background: #e0e0e0;
-                border-radius: 3px;
-                margin-bottom: 0.5rem;
-                animation: shimmer 1.4s infinite ease-in-out both;
-                color: transparent;
-                user-select: none;
-            }
+    /* ── Skeleton shimmer (matches .ListItem--loading spinner aesthetic) */
+    .item--skeleton .item__title-link--skeleton {
+        display: block;
+        height: 0.9em;
+        background: #e0e0e0;
+        border-radius: 3px;
+        margin-bottom: 0.5rem;
+        animation: shimmer 1.4s infinite ease-in-out both;
+        color: transparent;
+        user-select: none;
+    }
 
-            & .item__meta--skeleton {
-                display: block;
-                width: 40%;
-                height: 0.75em;
-                background: #e0e0e0;
-                border-radius: 3px;
-                animation: shimmer 1.4s infinite ease-in-out both;
-            }
-        }
+    .item--skeleton .item__meta--skeleton {
+        display: block;
+        width: 40%;
+        height: 0.75em;
+        background: #e0e0e0;
+        border-radius: 3px;
+        animation: shimmer 1.4s infinite ease-in-out both;
     }
 
     @keyframes shimmer {
@@ -580,10 +578,6 @@
         color: var(--hn-muted);
         font-size: var(--font-size-meta);
 
-        &--visible {
-            display: block;
-        }
-
         & em {
             font-style: normal;
             background-color: var(--hn-new-comment-bg);
@@ -601,6 +595,10 @@
                 text-decoration: underline;
             }
         }
+    }
+
+    .item-controls--visible {
+        display: block;
     }
 
     /* Item body text (Ask HN / job self-text) → .Item__text */
@@ -678,28 +676,26 @@
      *   Level N: N×2.5 + 1.25em  ← exact react-hn formula
      */
 
-    .comment {
-        /* New comment: highlight background on the meta + text bands */
-        &--new > .comment-meta,
-        &--new > .comment-text {
-            background-color: var(--hn-new-comment-bg);
-        }
+    /* New comment: highlight background on the meta + text bands */
+    .comment--new > .comment-meta,
+    .comment--new > .comment-text {
+        background-color: var(--hn-new-comment-bg);
+    }
 
-        /* Collapsed: hide text and children */
-        &--collapsed > .comment-text,
-        &--collapsed > .comment-kids {
-            display: none;
-        }
+    /* Collapsed: hide text and children */
+    .comment--collapsed > .comment-text,
+    .comment--collapsed > .comment-kids {
+        display: none;
+    }
 
-        /* Dead comment — dim text */
-        &--dead > .comment-text {
-            color: var(--hn-dead) !important;
-        }
+    /* Dead comment — dim text */
+    .comment--dead > .comment-text {
+        color: var(--hn-dead) !important;
+    }
 
-        /* Error */
-        &--error > .comment-meta {
-            color: var(--hn-error);
-        }
+    /* Error */
+    .comment--error > .comment-meta {
+        color: var(--hn-error);
     }
 
     /* Vertical padding + right padding on content bands */
@@ -811,13 +807,13 @@
                 content: "";
             }
         }
+    }
 
-        &__about a {
-            color: var(--hn-text);
-        }
-        &__hn-link {
-            margin-top: 0.75em;
-        }
+    .user-profile__about a {
+        color: var(--hn-text);
+    }
+    .user-profile__hn-link {
+        margin-top: 0.75em;
     }
 
     /* ── Spinner → .Spinner (SpinKit bounce dots) ───────────────────────── */
@@ -859,18 +855,18 @@
     /* ── Updates view ───────────────────────────────────────────────────── */
 
     .updates {
-        &--loading {
-            padding: 1em 1.25em 0 1.25em;
-            margin-bottom: 1em;
-        }
-
-        &__notice {
-            padding: 0 1.25em;
-        }
-
         & .comment {
             margin-bottom: 0.75em;
         }
+    }
+
+    .updates--loading {
+        padding: 1em 1.25em 0 1.25em;
+        margin-bottom: 1em;
+    }
+
+    .updates__notice {
+        padding: 0 1.25em;
     }
 }
 

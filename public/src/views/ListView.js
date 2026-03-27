@@ -164,6 +164,10 @@ export default class ListView extends View {
     // All items returned from the service for this list type
     this._allItems = [];
 
+    // Keyed DOM map: item id (string) → <li> element currently in the list.
+    // Used for efficient per-item patching instead of full-list rebuilds.
+    this._itemNodes = new Map();
+
     // Unsubscribe function returned by hnService.onStoriesValue
     this._unsub = null;
 
@@ -300,6 +304,8 @@ export default class ListView extends View {
       this._itemUnsubs = [];
     }
 
+    this._itemNodes.clear();
+
     if (typeof this._undelegateClick === "function") {
       try {
         this._undelegateClick();
@@ -363,9 +369,12 @@ export default class ListView extends View {
           // has a valid `id` to work with while real data is in flight.
           this._allItems = rawItems.map((id) => ({ id: String(id) }));
           this._loaded = true;
-          this._renderPage(); // replace skeletons with placeholders immediately
 
-          // Subscribe to full item data only for the items on the current page
+          // Build the initial keyed list, replacing skeletons in one pass.
+          this._renderPage();
+
+          // Subscribe to full item data only for the items on the current page.
+          // Each callback patches only its own <li> node via _patchItem.
           const start = (this.page - 1) * PAGE_SIZE;
           const end = start + PAGE_SIZE;
           const pageIds = rawItems.slice(start, end);
@@ -375,7 +384,7 @@ export default class ListView extends View {
             const unsub = this._hn.onItemValue(id, (item) => {
               if (item && typeof item === "object") {
                 this._allItems[allIdx] = item;
-                this._renderPage();
+                this._patchItem(item, start + pageIdx + 1);
               }
             });
             this._itemUnsubs.push(unsub);
@@ -397,8 +406,8 @@ export default class ListView extends View {
   ───────────────────────────────────── */
 
   /**
-   * Slice `_allItems` to the current page window and render the list items
-   * plus pagination controls.
+   * Full list render — used once on initial load or when the page set changes.
+   * Populates `_itemNodes` so subsequent updates can patch individual items.
    */
   _renderPage() {
     const start = (this.page - 1) * PAGE_SIZE; // inclusive, 0-based index
@@ -408,13 +417,16 @@ export default class ListView extends View {
 
     // ── Story list ─────────────────────────────────────────────────────────
     if (pageItems.length === 0) {
+      this._itemNodes.clear();
       this._renderEmpty();
     } else {
       const frag = document.createDocumentFragment();
+      this._itemNodes.clear();
       pageItems.forEach((item, idx) => {
-        frag.appendChild(
-          this._createItemEl(item, start + idx + 1 /* 1-based rank */),
-        );
+        const li = this._createItemEl(item, start + idx + 1);
+        const key = item.id != null ? String(item.id) : String(start + idx);
+        this._itemNodes.set(key, li);
+        frag.appendChild(li);
       });
       this._listEl.replaceChildren(frag);
     }
@@ -424,6 +436,29 @@ export default class ListView extends View {
 
     // ── Pagination ─────────────────────────────────────────────────────────
     this._renderPagination(hasMore);
+  }
+
+  /**
+   * Keyed update — replace a single item's <li> in place without touching the
+   * rest of the list. Falls back to a full _renderPage if the node is missing.
+   *
+   * @param {Object} item  Full HN item payload
+   * @param {number} rank  1-based display rank
+   */
+  _patchItem(item, rank) {
+    const key = item.id != null ? String(item.id) : null;
+    if (!key) return;
+
+    const oldNode = this._itemNodes.get(key);
+    if (!oldNode || !oldNode.parentNode) {
+      // Node not found in map or was removed — fall back to full render
+      this._renderPage();
+      return;
+    }
+
+    const newNode = this._createItemEl(item, rank);
+    oldNode.parentNode.replaceChild(newNode, oldNode);
+    this._itemNodes.set(key, newNode);
   }
 
   /**
