@@ -20,14 +20,14 @@
  *  - Full cleanup: dispose threadStore, unsubscribe all listeners, cleanup comment elements.
  */
 
-import View from './View.js';
-import { create, timeAgoFromUnix } from '../utils/dom.js';
-import { CommentElement } from '../components/CommentElement.js';
-import StoryCommentThreadStore from '../stores/StoryCommentThreadStore.js';
+import View from "./View.js";
+import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { CommentElement } from "../components/CommentElement.js";
+import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SITE_TITLE = 'Vanilla HN';
+const SITE_TITLE = "Vanilla HN";
 
 /** How many ms between polls when waiting for threadStore.loading to become false. */
 const LOAD_POLL_INTERVAL_MS = 200;
@@ -44,7 +44,7 @@ const LOAD_POLL_TIMEOUT_MS = 30_000;
  * @param {string} [plural]
  */
 function pluralise(n, singular, plural) {
-  const p = plural !== undefined ? plural : singular + 's';
+  const p = plural !== undefined ? plural : singular + "s";
   return n === 1 ? singular : p;
 }
 
@@ -55,24 +55,24 @@ function pluralise(n, singular, plural) {
  * @returns {string}
  */
 function sinceLastVisit(lastVisitSeconds) {
-  if (!lastVisitSeconds) return '';
+  if (!lastVisitSeconds) return "";
   const diffMs = Date.now() - lastVisitSeconds * 1000;
   const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
 
   const units = [
-    { name: 'year',   secs: 60 * 60 * 24 * 365 },
-    { name: 'month',  secs: 60 * 60 * 24 * 30  },
-    { name: 'week',   secs: 60 * 60 * 24 * 7   },
-    { name: 'day',    secs: 60 * 60 * 24        },
-    { name: 'hour',   secs: 60 * 60             },
-    { name: 'minute', secs: 60                  },
+    { name: "year", secs: 60 * 60 * 24 * 365 },
+    { name: "month", secs: 60 * 60 * 24 * 30 },
+    { name: "week", secs: 60 * 60 * 24 * 7 },
+    { name: "day", secs: 60 * 60 * 24 },
+    { name: "hour", secs: 60 * 60 },
+    { name: "minute", secs: 60 },
   ];
 
   for (const u of units) {
     const val = Math.floor(diffSeconds / u.secs);
     if (val >= 1) return `${val} ${pluralise(val, u.name)}`;
   }
-  return 'a moment';
+  return "a moment";
 }
 
 /**
@@ -82,11 +82,11 @@ function sinceLastVisit(lastVisitSeconds) {
  * @returns {string}
  */
 function parseHost(url) {
-  if (!url) return '';
+  if (!url) return "";
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch (e) {
-    return '';
+    return "";
   }
 }
 
@@ -102,7 +102,7 @@ export default class ItemView extends View {
   constructor(context = {}) {
     super(context);
 
-    this.itemId = (this.params && this.params.id) ? String(this.params.id) : null;
+    this.itemId = this.params && this.params.id ? String(this.params.id) : null;
 
     // Per-story thread store — created once we have item data.
     this._threadStore = null;
@@ -146,17 +146,25 @@ export default class ItemView extends View {
    */
   render() {
     // Root wrapper
-    const root = create('div', { attrs: { class: 'view item-view', 'data-item-id': this.itemId || '' } });
+    const root = create("div", {
+      attrs: { class: "view item-view", "data-item-id": this.itemId || "" },
+    });
 
     // Loading indicator (shown until item data arrives)
-    this._loadingEl = create('div', { attrs: { class: 'item-loading', role: 'status', 'aria-live': 'polite' } },
-      create('span', { attrs: { class: 'spinner' } }),
-      ' Loading story…'
+    this._loadingEl = create(
+      "div",
+      {
+        attrs: { class: "item-loading", role: "status", "aria-live": "polite" },
+      },
+      create("span", { attrs: { class: "spinner" } }),
+      " Loading story…",
     );
     root.appendChild(this._loadingEl);
 
     // Content wrapper — hidden until item loads
-    this._contentEl = create('div', { attrs: { class: 'item-content', hidden: true } });
+    this._contentEl = create("div", {
+      attrs: { class: "item-content", hidden: true },
+    });
     root.appendChild(this._contentEl);
 
     // Kick off subscription
@@ -179,33 +187,47 @@ export default class ItemView extends View {
     this._clearLoadPoll();
 
     // Unsubscribe from hnService item feed.
-    if (typeof this._itemUnsub === 'function') {
-      try { this._itemUnsub(); } catch (e) { /* ignore */ }
+    if (typeof this._itemUnsub === "function") {
+      try {
+        this._itemUnsub();
+      } catch (e) {
+        /* ignore */
+      }
       this._itemUnsub = null;
     }
 
     // Unsubscribe from threadStore.
-    if (typeof this._threadStoreUnsub === 'function') {
-      try { this._threadStoreUnsub(); } catch (e) { /* ignore */ }
+    if (typeof this._threadStoreUnsub === "function") {
+      try {
+        this._threadStoreUnsub();
+      } catch (e) {
+        /* ignore */
+      }
       this._threadStoreUnsub = null;
     }
 
     // Dispose the per-story thread store.
     if (this._threadStore) {
       try {
-        if (typeof this._threadStore.dispose === 'function') {
+        if (typeof this._threadStore.dispose === "function") {
           this._threadStore.dispose();
-        } else if (typeof this._threadStore.saveState === 'function') {
+        } else if (typeof this._threadStore.saveState === "function") {
           // vanilla StoryCommentThreadStore uses saveState instead of dispose
           this._threadStore.saveState();
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
       this._threadStore = null;
     }
 
     // Cleanup all rendered comment elements.
     for (const ce of this._commentElements.values()) {
-      try { if (typeof ce.cleanup === 'function') ce.cleanup(); } catch (e) { /* ignore */ }
+      try {
+        if (typeof ce.cleanup === "function") ce.cleanup();
+      } catch (e) {
+        /* ignore */
+      }
     }
     this._commentElements.clear();
 
@@ -220,8 +242,8 @@ export default class ItemView extends View {
    */
   _subscribeToItem() {
     const hn = this.services && this.services.hnService;
-    if (!hn || typeof hn.onItemValue !== 'function' || !this.itemId) {
-      this._showError('Service unavailable or missing item id.');
+    if (!hn || typeof hn.onItemValue !== "function" || !this.itemId) {
+      this._showError("Service unavailable or missing item id.");
       return;
     }
 
@@ -238,7 +260,7 @@ export default class ItemView extends View {
    */
   _onItemLoaded(item) {
     if (!item || !item.id) {
-      if (!this._item) this._showError('Story not found.');
+      if (!this._item) this._showError("Story not found.");
       return;
     }
 
@@ -271,7 +293,10 @@ export default class ItemView extends View {
       this._patchItemMeta(item);
 
       // If thread store exists and was loading, notify it of updated kids.
-      if (this._threadStore && typeof this._threadStore.initForItem === 'function') {
+      if (
+        this._threadStore &&
+        typeof this._threadStore.initForItem === "function"
+      ) {
         // Re-init is idempotent for updates; only call if the store supports it.
       }
     }
@@ -299,28 +324,35 @@ export default class ItemView extends View {
       const ce = this._commentElements.get(key);
       if (ce && ce.comment) return ce.comment;
       // Fallback to global threadStore's item cache if available
-      if (globalThreadStore && typeof globalThreadStore.getItemById === 'function') {
+      if (
+        globalThreadStore &&
+        typeof globalThreadStore.getItemById === "function"
+      ) {
         return globalThreadStore.getItemById(id);
       }
       return null;
     };
 
     // Create a fresh StoryCommentThreadStore scoped to this story.
-    this._threadStore = new StoryCommentThreadStore({ getItemById });
+    this._threadStore = new StoryCommentThreadStore(item.id, { getItemById });
 
     // Call initForItem if the store exposes it (some implementations do).
-    if (typeof this._threadStore.initForItem === 'function') {
-      try { this._threadStore.initForItem(item); } catch (e) { /* ignore */ }
+    if (typeof this._threadStore.initForItem === "function") {
+      try {
+        this._threadStore.initForItem(item);
+      } catch (e) {
+        /* ignore */
+      }
     } else {
       // Vanilla implementation uses update() to seed initial state.
       // Seed the store with any previously persisted state by ensuring entry exists.
-      if (typeof this._threadStore._ensureEntry === 'function') {
+      if (typeof this._threadStore._ensureEntry === "function") {
         this._threadStore._ensureEntry(item.id);
       }
     }
 
     // Subscribe to threadStore changes so we can re-render reactive sections.
-    if (typeof this._threadStore.addListener === 'function') {
+    if (typeof this._threadStore.addListener === "function") {
       this._threadStoreUnsub = this._threadStore.addListener((change) => {
         this._onThreadStoreChanged(change);
       });
@@ -341,7 +373,7 @@ export default class ItemView extends View {
     while (content.firstChild) content.removeChild(content.firstChild);
 
     // Story header section
-    const header = create('div', { attrs: { class: 'item-header' } });
+    const header = create("div", { attrs: { class: "item-header" } });
 
     // Title
     this._titleEl = this._buildTitle(item);
@@ -354,30 +386,35 @@ export default class ItemView extends View {
     content.appendChild(header);
 
     // Controls bar (new comments info + auto-collapse + mark-as-read)
-    this._controlsEl = create('div', { attrs: { class: 'item-controls' } });
+    this._controlsEl = create("div", { attrs: { class: "item-controls" } });
     content.appendChild(this._controlsEl);
     // Render controls immediately (may be empty on first visit)
     this._renderControls();
 
     // Comment time slider
-    this._sliderContainerEl = create('div', {
+    this._sliderContainerEl = create("div", {
       attrs: {
-        class: 'item-slider-container',
-        'aria-label': 'Highlight comments by position'
+        class: "item-slider-container",
+        "aria-label": "Highlight comments by position",
       },
-      style: { opacity: '0', transition: 'opacity .33s ease-out' }
+      style: { opacity: "0", transition: "opacity .33s ease-out" },
     });
     content.appendChild(this._sliderContainerEl);
     this._buildSlider();
 
     // Item body text (ask HN, job posts, etc.)
     if (item.text) {
-      this._itemTextEl = create('div', { attrs: { class: 'item-text' }, html: item.text });
+      this._itemTextEl = create("div", {
+        attrs: { class: "item-text" },
+        html: item.text,
+      });
       content.appendChild(this._itemTextEl);
     }
 
     // Comments section
-    this._kidsEl = create('div', { attrs: { class: 'item-kids', role: 'list', 'aria-label': 'Comments' } });
+    this._kidsEl = create("div", {
+      attrs: { class: "item-kids", role: "list", "aria-label": "Comments" },
+    });
     content.appendChild(this._kidsEl);
   }
 
@@ -388,32 +425,51 @@ export default class ItemView extends View {
    * @returns {HTMLElement}
    */
   _buildTitle(item) {
-    const titleText = item.dead ? `[dead] ${item.title || ''}` : (item.title || `Item ${item.id}`);
+    const titleText = item.dead
+      ? `[dead] ${item.title || ""}`
+      : item.title || `Item ${item.id}`;
     const settings = this.stores && this.stores.settingsStore;
-    const fontSize = (settings && typeof settings.get === 'function')
-      ? settings.get('titleFontSize')
-      : 18;
+    const fontSize =
+      settings && typeof settings.get === "function"
+        ? settings.get("titleFontSize")
+        : 18;
 
-    const titleWrapper = create('div', {
-      attrs: { class: 'item-title' },
-      style: { fontSize: `${fontSize || 18}px` }
+    const titleWrapper = create("div", {
+      attrs: { class: "item-title" },
+      style: { fontSize: `${fontSize || 18}px` },
     });
 
     if (item.url && !item.dead) {
-      const link = create('a', {
-        attrs: { href: item.url, target: '_blank', rel: 'noopener noreferrer' }
-      }, titleText);
+      const link = create(
+        "a",
+        {
+          attrs: {
+            href: item.url,
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+        },
+        titleText,
+      );
       titleWrapper.appendChild(link);
 
       const host = parseHost(item.url);
       if (host) {
-        const hostEl = create('span', { attrs: { class: 'item-host' } }, ` (${host})`);
+        const hostEl = create(
+          "span",
+          { attrs: { class: "item-host" } },
+          ` (${host})`,
+        );
         titleWrapper.appendChild(hostEl);
       }
     } else {
-      const link = create('a', {
-        attrs: { href: `#/item/${item.id}` }
-      }, titleText);
+      const link = create(
+        "a",
+        {
+          attrs: { href: `#/item/${item.id}` },
+        },
+        titleText,
+      );
       titleWrapper.appendChild(link);
     }
 
@@ -426,40 +482,59 @@ export default class ItemView extends View {
    * @returns {HTMLElement}
    */
   _buildMeta(item) {
-    const meta = create('div', { attrs: { class: 'item-meta' } });
+    const meta = create("div", { attrs: { class: "item-meta" } });
 
-    if (item.type === 'job') {
+    if (item.type === "job") {
       // Job posts only show time
-      const time = create('span', { attrs: { class: 'item-time' } }, timeAgoFromUnix(item.time));
+      const time = create(
+        "span",
+        { attrs: { class: "item-time" } },
+        timeAgoFromUnix(item.time),
+      );
       meta.appendChild(time);
       return meta;
     }
 
     // Score
-    const score = create('span', { attrs: { class: 'item-score' } },
-      `${item.score || 0} ${pluralise(item.score || 0, 'point')}`
+    const score = create(
+      "span",
+      { attrs: { class: "item-score" } },
+      `${item.score || 0} ${pluralise(item.score || 0, "point")}`,
     );
     meta.appendChild(score);
-    meta.appendChild(document.createTextNode(' by '));
+    meta.appendChild(document.createTextNode(" by "));
 
     // Author link
-    const byLink = create('a', { attrs: { href: `#/user/${item.by}`, class: 'item-by' } }, item.by || 'unknown');
+    const byLink = create(
+      "a",
+      { attrs: { href: `#/user/${item.by}`, class: "item-by" } },
+      item.by || "unknown",
+    );
     meta.appendChild(byLink);
-    meta.appendChild(document.createTextNode(' '));
+    meta.appendChild(document.createTextNode(" "));
 
     // Time
-    const timeEl = create('span', { attrs: { class: 'item-time' } }, timeAgoFromUnix(item.time));
+    const timeEl = create(
+      "span",
+      { attrs: { class: "item-time" } },
+      timeAgoFromUnix(item.time),
+    );
     meta.appendChild(timeEl);
-    meta.appendChild(document.createTextNode(' | '));
+    meta.appendChild(document.createTextNode(" | "));
 
     // Comments/discuss link
     const commentsCount = item.descendants != null ? item.descendants : 0;
-    const commentsText = commentsCount > 0
-      ? `${commentsCount} ${pluralise(commentsCount, 'comment')}`
-      : 'discuss';
-    const commentsLink = create('a', {
-      attrs: { href: `#/item/${item.id}`, class: 'item-comments-link' }
-    }, commentsText);
+    const commentsText =
+      commentsCount > 0
+        ? `${commentsCount} ${pluralise(commentsCount, "comment")}`
+        : "discuss";
+    const commentsLink = create(
+      "a",
+      {
+        attrs: { href: `#/item/${item.id}`, class: "item-comments-link" },
+      },
+      commentsText,
+    );
     meta.appendChild(commentsLink);
 
     return meta;
@@ -472,18 +547,20 @@ export default class ItemView extends View {
   _patchItemMeta(item) {
     if (!this._metaEl) return;
 
-    const scoreEl = this._metaEl.querySelector('.item-score');
-    if (scoreEl) scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, 'point')}`;
+    const scoreEl = this._metaEl.querySelector(".item-score");
+    if (scoreEl)
+      scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, "point")}`;
 
-    const timeEl = this._metaEl.querySelector('.item-time');
+    const timeEl = this._metaEl.querySelector(".item-time");
     if (timeEl) timeEl.textContent = timeAgoFromUnix(item.time);
 
-    const commentsEl = this._metaEl.querySelector('.item-comments-link');
+    const commentsEl = this._metaEl.querySelector(".item-comments-link");
     if (commentsEl) {
       const commentsCount = item.descendants != null ? item.descendants : 0;
-      commentsEl.textContent = commentsCount > 0
-        ? `${commentsCount} ${pluralise(commentsCount, 'comment')}`
-        : 'discuss';
+      commentsEl.textContent =
+        commentsCount > 0
+          ? `${commentsCount} ${pluralise(commentsCount, "comment")}`
+          : "discuss";
     }
   }
 
@@ -503,60 +580,77 @@ export default class ItemView extends View {
     if (!this._threadStore) return;
 
     const storyId = this._item && this._item.id;
-    const state = storyId && typeof this._threadStore.getState === 'function'
-      ? this._threadStore.getState(storyId)
-      : null;
+    const state =
+      storyId && typeof this._threadStore.getState === "function"
+        ? this._threadStore.getState(storyId)
+        : null;
 
-    const lastVisit = state ? state.lastVisit : (this._threadStore.lastVisit || null);
+    const lastVisit = state
+      ? state.lastVisit
+      : this._threadStore.lastVisit || null;
     const newCommentCount = this._getNewCommentCount();
 
     // Only show the controls bar when we've been here before and have new comments.
     if (!lastVisit || newCommentCount <= 0) return;
 
-    el.setAttribute('class', 'item-controls item-controls--visible');
+    el.setAttribute("class", "item-controls item-controls--visible");
 
     const since = sinceLastVisit(lastVisit);
 
     // "N new comments in the last X"
-    const newInfo = create('span', { attrs: { class: 'item-controls__new-info' } },
-      create('em', {}, `${newCommentCount} new ${pluralise(newCommentCount, 'comment')}`),
-      ` in the last ${since}`
+    const newInfo = create(
+      "span",
+      { attrs: { class: "item-controls__new-info" } },
+      create(
+        "em",
+        {},
+        `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`,
+      ),
+      ` in the last ${since}`,
     );
     el.appendChild(newInfo);
 
-    el.appendChild(document.createTextNode(' | '));
+    el.appendChild(document.createTextNode(" | "));
 
     // "auto collapse" button
-    const autoCollapseBtn = create('button', {
-      attrs: {
-        type: 'button',
-        class: 'item-controls__btn item-controls__btn--collapse',
-        title: 'Collapse threads without new comments'
+    const autoCollapseBtn = create(
+      "button",
+      {
+        attrs: {
+          type: "button",
+          class: "item-controls__btn item-controls__btn--collapse",
+          title: "Collapse threads without new comments",
+        },
+        events: {
+          click: (e) => {
+            e.preventDefault();
+            this._handleAutoCollapse();
+          },
+        },
       },
-      events: {
-        click: (e) => {
-          e.preventDefault();
-          this._handleAutoCollapse();
-        }
-      }
-    }, 'auto collapse');
+      "auto collapse",
+    );
     el.appendChild(autoCollapseBtn);
 
-    el.appendChild(document.createTextNode(' | '));
+    el.appendChild(document.createTextNode(" | "));
 
     // "mark as read" button
-    const markReadBtn = create('button', {
-      attrs: {
-        type: 'button',
-        class: 'item-controls__btn item-controls__btn--read'
+    const markReadBtn = create(
+      "button",
+      {
+        attrs: {
+          type: "button",
+          class: "item-controls__btn item-controls__btn--read",
+        },
+        events: {
+          click: (e) => {
+            e.preventDefault();
+            this._handleMarkAsRead();
+          },
+        },
       },
-      events: {
-        click: (e) => {
-          e.preventDefault();
-          this._handleMarkAsRead();
-        }
-      }
-    }, 'mark as read');
+      "mark as read",
+    );
     el.appendChild(markReadBtn);
   }
 
@@ -578,49 +672,60 @@ export default class ItemView extends View {
     if (commentCount < 2) return;
 
     // Show the slider section
-    container.style.opacity = '1';
-    container.setAttribute('aria-hidden', 'false');
+    container.style.opacity = "1";
+    container.setAttribute("aria-hidden", "false");
 
     // Default slider to the second-to-last comment (highlight most recent)
     if (this._sliderValue === null || this._sliderValue > commentCount - 1) {
       this._sliderValue = commentCount - 1;
     }
 
-    const slider = create('input', {
+    const slider = create("input", {
       attrs: {
-        type: 'range',
-        class: 'item-slider',
-        min: '1',
+        type: "range",
+        class: "item-slider",
+        min: "1",
         max: String(commentCount - 1),
         value: String(this._sliderValue),
-        'aria-label': 'Highlight comments after this position'
+        "aria-label": "Highlight comments after this position",
       },
-      style: { margin: '0', verticalAlign: 'middle' }
+      style: { margin: "0", verticalAlign: "middle" },
     });
 
     // Label showing "highlight N comments from <time>"
-    const label = create('span', { attrs: { class: 'item-slider__label' } });
+    const label = create("span", { attrs: { class: "item-slider__label" } });
     this._updateSliderLabel(label, this._sliderValue);
 
     // Button to apply the slider selection
-    const applyBtn = create('button', {
-      attrs: {
-        type: 'button',
-        class: 'item-slider__btn'
+    const applyBtn = create(
+      "button",
+      {
+        attrs: {
+          type: "button",
+          class: "item-slider__btn",
+        },
+        events: {
+          click: () => {
+            const val = parseInt(slider.value, 10);
+            this._sliderValue = val;
+            if (
+              this._threadStore &&
+              typeof this._threadStore.highlightNewCommentsSince === "function"
+            ) {
+              try {
+                this._threadStore.highlightNewCommentsSince(val);
+              } catch (e) {
+                /* ignore */
+              }
+            }
+            this._updateSliderLabel(label, val);
+          },
+        },
       },
-      events: {
-        click: () => {
-          const val = parseInt(slider.value, 10);
-          this._sliderValue = val;
-          if (this._threadStore && typeof this._threadStore.highlightNewCommentsSince === 'function') {
-            try { this._threadStore.highlightNewCommentsSince(val); } catch (e) { /* ignore */ }
-          }
-          this._updateSliderLabel(label, val);
-        }
-      }
-    }, label);
+      label,
+    );
 
-    slider.addEventListener('input', () => {
+    slider.addEventListener("input", () => {
       const val = parseInt(slider.value, 10);
       this._sliderValue = val;
       this._updateSliderLabel(label, val);
@@ -643,22 +748,33 @@ export default class ItemView extends View {
     const commentCount = this._getCommentCount();
     const howMany = Math.max(0, commentCount - sliderVal);
 
-    let timeStr = '';
-    if (this._threadStore && typeof this._threadStore.getCommentByTimeIndex === 'function') {
+    let timeStr = "";
+    if (
+      this._threadStore &&
+      typeof this._threadStore.getCommentByTimeIndex === "function"
+    ) {
       try {
-        const refComment = this._threadStore.getCommentByTimeIndex(sliderVal + 1);
+        const refComment = this._threadStore.getCommentByTimeIndex(
+          sliderVal + 1,
+        );
         if (refComment && refComment.time) {
           timeStr = timeAgoFromUnix(refComment.time);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
     }
 
-    labelEl.appendChild(document.createTextNode(
-      `highlight ${howMany} ${pluralise(howMany, 'comment')}${timeStr ? ' from ' : ''}`
-    ));
+    labelEl.appendChild(
+      document.createTextNode(
+        `highlight ${howMany} ${pluralise(howMany, "comment")}${timeStr ? " from " : ""}`,
+      ),
+    );
 
     if (timeStr) {
-      labelEl.appendChild(create('span', { attrs: { class: 'item-slider__time' } }, timeStr));
+      labelEl.appendChild(
+        create("span", { attrs: { class: "item-slider__time" } }, timeStr),
+      );
     }
   }
 
@@ -672,7 +788,7 @@ export default class ItemView extends View {
     if (commentCount >= 2) {
       this._buildSlider();
     } else {
-      this._sliderContainerEl.style.opacity = '0';
+      this._sliderContainerEl.style.opacity = "0";
     }
   }
 
@@ -686,7 +802,7 @@ export default class ItemView extends View {
   _subscribeToComments(item) {
     if (!item.kids || item.kids.length === 0) return;
     const hn = this.services && this.services.hnService;
-    if (!hn || typeof hn.onItemValue !== 'function') return;
+    if (!hn || typeof hn.onItemValue !== "function") return;
 
     const kidsEl = this._kidsEl;
     if (!kidsEl) return;
@@ -695,14 +811,18 @@ export default class ItemView extends View {
       const childIdStr = String(kidId);
 
       // Create a placeholder to preserve ordering while comments load
-      const placeholder = create('div', {
-        attrs: {
-          class: 'comment-placeholder',
-          'data-comment-id': childIdStr,
-          role: 'group',
-          'aria-label': `Comment ${childIdStr} loading`
-        }
-      }, `Loading comment…`);
+      const placeholder = create(
+        "div",
+        {
+          attrs: {
+            class: "comment-placeholder",
+            "data-comment-id": childIdStr,
+            role: "group",
+            "aria-label": `Comment ${childIdStr} loading`,
+          },
+        },
+        `Loading comment…`,
+      );
       kidsEl.appendChild(placeholder);
 
       // Subscribe — use the View base-class _unsubscribers array via a manual push
@@ -712,7 +832,7 @@ export default class ItemView extends View {
         this._onCommentLoaded(comment, placeholder);
       });
 
-      if (typeof unsub === 'function') {
+      if (typeof unsub === "function") {
         this._unsubscribers.push(unsub);
       }
     }
@@ -736,7 +856,11 @@ export default class ItemView extends View {
     if (existingCE) {
       // Update existing CommentElement with fresh data.
       existingCE.comment = comment;
-      try { if (typeof existingCE.update === 'function') existingCE.update(); } catch (e) { /* ignore */ }
+      try {
+        if (typeof existingCE.update === "function") existingCE.update();
+      } catch (e) {
+        /* ignore */
+      }
       // Apply collapse state from threadStore if it changed.
       this._applyCollapseState(existingCE, comment.id);
       return;
@@ -745,7 +869,7 @@ export default class ItemView extends View {
     // Build a CommentElement for this top-level comment.
     const storesForComment = {
       ...(this.stores || {}),
-      threadStore: this._threadStore
+      threadStore: this._threadStore,
     };
 
     let ce;
@@ -754,10 +878,14 @@ export default class ItemView extends View {
         comment,
         services: this.services,
         stores: storesForComment,
-        depth: 0
+        depth: 0,
       });
     } catch (err) {
-      console.warn('ItemView: failed to create CommentElement for', comment.id, err);
+      console.warn(
+        "ItemView: failed to create CommentElement for",
+        comment.id,
+        err,
+      );
       if (placeholder && placeholder.parentNode) {
         placeholder.textContent = `[Error loading comment ${comment.id}]`;
       }
@@ -771,7 +899,11 @@ export default class ItemView extends View {
     try {
       commentNode = ce.render();
     } catch (err) {
-      console.warn('ItemView: CommentElement.render() failed for', comment.id, err);
+      console.warn(
+        "ItemView: CommentElement.render() failed for",
+        comment.id,
+        err,
+      );
       if (placeholder && placeholder.parentNode) {
         placeholder.textContent = `[Error rendering comment ${comment.id}]`;
       }
@@ -801,15 +933,10 @@ export default class ItemView extends View {
   _notifyThreadStoreComment(comment) {
     if (!this._threadStore || !this._item) return;
     try {
-      if (typeof this._threadStore.commentAdded === 'function') {
-        const fn = this._threadStore.commentAdded.bind(this._threadStore);
-        // Vanilla StoryCommentThreadStore takes (storyId, commentId, parentId, commentTime)
-        // React version takes (comment object) — detect by arity.
-        if (fn.length >= 2 || this._threadStore.constructor.name === 'StoryCommentThreadStore') {
-          fn(this._item.id, comment.id, comment.parent, comment.time);
-        } else {
-          fn(comment);
-        }
+      if (typeof this._threadStore.commentAdded === "function") {
+        // Always pass the full comment object — both the vanilla StoryCommentThreadStore
+        // and the react-hn-style store expect commentAdded(commentObject).
+        this._threadStore.commentAdded(comment);
       }
     } catch (e) {
       // Ignore; store notification is best-effort
@@ -827,15 +954,23 @@ export default class ItemView extends View {
     if (!this._threadStore || !ce) return;
     try {
       let collapsed = false;
-      if (typeof this._threadStore.isCollapsed === 'function') {
-        collapsed = this._threadStore.isCollapsed(this._item && this._item.id, commentId);
-      } else if (this._threadStore.isCollapsed && typeof this._threadStore.isCollapsed === 'object') {
+      if (typeof this._threadStore.isCollapsed === "function") {
+        collapsed = this._threadStore.isCollapsed(
+          this._item && this._item.id,
+          commentId,
+        );
+      } else if (
+        this._threadStore.isCollapsed &&
+        typeof this._threadStore.isCollapsed === "object"
+      ) {
         collapsed = Boolean(this._threadStore.isCollapsed[String(commentId)]);
       }
-      if (typeof ce.toggleCollapse === 'function') {
+      if (typeof ce.toggleCollapse === "function") {
         ce.toggleCollapse(collapsed);
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   /**
@@ -847,15 +982,20 @@ export default class ItemView extends View {
     if (!this._threadStore || !ce || !ce.root) return;
     try {
       let isNew = false;
-      if (this._threadStore.isNew && typeof this._threadStore.isNew === 'object') {
+      if (
+        this._threadStore.isNew &&
+        typeof this._threadStore.isNew === "object"
+      ) {
         isNew = Boolean(this._threadStore.isNew[String(commentId)]);
       }
       if (isNew) {
-        ce.root.classList.add('comment--new');
+        ce.root.classList.add("comment--new");
       } else {
-        ce.root.classList.remove('comment--new');
+        ce.root.classList.remove("comment--new");
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   /**
@@ -922,17 +1062,23 @@ export default class ItemView extends View {
     this._clearLoadPoll();
 
     const settings = this.stores && this.stores.settingsStore;
-    const autoCollapse = settings && typeof settings.get === 'function'
-      ? settings.get('autoCollapse')
-      : false;
+    const autoCollapse =
+      settings && typeof settings.get === "function"
+        ? settings.get("autoCollapse")
+        : false;
 
     const newCommentCount = this._getNewCommentCount();
 
     if (autoCollapse && newCommentCount > 0 && this._threadStore) {
-      if (typeof this._threadStore.collapseThreadsWithoutNewComments === 'function') {
+      if (
+        typeof this._threadStore.collapseThreadsWithoutNewComments ===
+        "function"
+      ) {
         try {
           this._threadStore.collapseThreadsWithoutNewComments();
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
     }
 
@@ -949,20 +1095,24 @@ export default class ItemView extends View {
   _onThreadStoreChanged(change) {
     const type = change && change.type;
 
-    if (type === 'collapse' || type === 'toggleCollapse' || type === 'autoCollapse') {
+    if (
+      type === "collapse" ||
+      type === "toggleCollapse" ||
+      type === "autoCollapse"
+    ) {
       // Re-apply collapse state to all top-level CommentElements.
       this._reapplyAllCommentStates();
       return;
     }
 
-    if (type === 'markAsRead') {
+    if (type === "markAsRead") {
       // Refresh the controls bar to clear the "new comments" notice.
       this._renderControls();
       this._reapplyAllCommentStates();
       return;
     }
 
-    if (type === 'commentAdded') {
+    if (type === "commentAdded") {
       // A new comment was registered — update slider and controls.
       this._maybeShowSlider();
       return;
@@ -982,10 +1132,14 @@ export default class ItemView extends View {
    */
   _handleAutoCollapse() {
     if (!this._threadStore) return;
-    if (typeof this._threadStore.collapseThreadsWithoutNewComments === 'function') {
+    if (
+      typeof this._threadStore.collapseThreadsWithoutNewComments === "function"
+    ) {
       try {
         this._threadStore.collapseThreadsWithoutNewComments();
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
     }
     this._reapplyAllCommentStates();
   }
@@ -1002,14 +1156,25 @@ export default class ItemView extends View {
     if (!storyId) return;
 
     // Mark in the per-story thread store.
-    if (this._threadStore && typeof this._threadStore.markAsRead === 'function') {
-      try { this._threadStore.markAsRead(storyId); } catch (e) { /* ignore */ }
+    if (
+      this._threadStore &&
+      typeof this._threadStore.markAsRead === "function"
+    ) {
+      try {
+        this._threadStore.markAsRead(storyId);
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     // Mark in the global read-stories store.
     const readStore = this.stores && this.stores.readStoriesStore;
-    if (readStore && typeof readStore.markAsRead === 'function') {
-      try { readStore.markAsRead(storyId); } catch (e) { /* ignore */ }
+    if (readStore && typeof readStore.markAsRead === "function") {
+      try {
+        readStore.markAsRead(storyId);
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     // Refresh the controls bar — it should now hide (no more new comments).
@@ -1028,7 +1193,7 @@ export default class ItemView extends View {
   _showError(msg) {
     if (this._loadingEl) {
       this._loadingEl.textContent = `Error: ${msg}`;
-      this._loadingEl.classList.add('item-loading--error');
+      this._loadingEl.classList.add("item-loading--error");
     }
   }
 
@@ -1043,16 +1208,16 @@ export default class ItemView extends View {
     if (this._threadStore) {
       // vanilla store: check entry via getState
       const storyId = this._item && this._item.id;
-      if (storyId && typeof this._threadStore.getState === 'function') {
+      if (storyId && typeof this._threadStore.getState === "function") {
         const s = this._threadStore.getState(storyId);
-        if (s && typeof s.commentCount === 'number') return s.commentCount;
+        if (s && typeof s.commentCount === "number") return s.commentCount;
       }
       // React-style store
-      if (typeof this._threadStore.commentCount === 'number') {
+      if (typeof this._threadStore.commentCount === "number") {
         return this._threadStore.commentCount;
       }
     }
-    return (this._item && this._item.descendants) ? this._item.descendants : 0;
+    return this._item && this._item.descendants ? this._item.descendants : 0;
   }
 
   /**
@@ -1063,23 +1228,25 @@ export default class ItemView extends View {
     if (!this._threadStore) return 0;
 
     // React-style store exposes newCommentCount directly
-    if (typeof this._threadStore.newCommentCount === 'number') {
+    if (typeof this._threadStore.newCommentCount === "number") {
       return this._threadStore.newCommentCount;
     }
 
     // Vanilla store: derive from getState + maxCommentId heuristic
     const storyId = this._item && this._item.id;
-    if (storyId && typeof this._threadStore.getState === 'function') {
+    if (storyId && typeof this._threadStore.getState === "function") {
       const s = this._threadStore.getState(storyId);
       if (s) {
         // If lastVisit is 0/null this is a first visit → no "new" banner
         if (!s.lastVisit) return 0;
         // getChildCounts provides a `new` count if getItemById is wired up
-        if (typeof this._threadStore.getChildCounts === 'function') {
+        if (typeof this._threadStore.getChildCounts === "function") {
           try {
             const counts = this._threadStore.getChildCounts(storyId, null);
-            if (counts && typeof counts.new === 'number') return counts.new;
-          } catch (e) { /* ignore */ }
+            if (counts && typeof counts.new === "number") return counts.new;
+          } catch (e) {
+            /* ignore */
+          }
         }
       }
     }
