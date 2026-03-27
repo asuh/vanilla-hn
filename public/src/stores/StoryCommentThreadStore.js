@@ -653,8 +653,16 @@ export default class StoryCommentThreadStore {
    *
    * @param {number} commentId
    */
-  toggleCollapse(commentId) {
-    this.isCollapsed[commentId] = !this.isCollapsed[commentId];
+  toggleCollapse(commentId, explicitState) {
+    const newState =
+      explicitState !== undefined
+        ? Boolean(explicitState)
+        : !this.isCollapsed[commentId];
+    const oldState = Boolean(this.isCollapsed[commentId]);
+
+    if (newState === oldState) return;
+
+    this.isCollapsed[commentId] = newState;
     this.notify({ type: "collapse" });
   }
 

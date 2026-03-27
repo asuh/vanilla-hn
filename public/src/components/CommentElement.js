@@ -215,7 +215,7 @@ export class CommentElement {
    * Toggle collapse state.
    * If explicitState is provided (true = collapsed, false = expanded) it will be applied.
    */
-  toggleCollapse(explicitState) {
+  toggleCollapse(explicitState, notifyStore = true) {
     const newState =
       explicitState === undefined ? !this._collapsed : Boolean(explicitState);
     this._collapsed = newState;
@@ -236,7 +236,10 @@ export class CommentElement {
     }
 
     // persist collapse state in a store if available
+    // (skip when the caller is already syncing state FROM the store to avoid
+    // an infinite notify → reapply → notify loop)
     if (
+      notifyStore &&
       this.stores &&
       this.stores.threadStore &&
       typeof this.stores.threadStore.toggleCollapse === "function"

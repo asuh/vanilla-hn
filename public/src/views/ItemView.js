@@ -966,7 +966,7 @@ export default class ItemView extends View {
         collapsed = Boolean(this._threadStore.isCollapsed[String(commentId)]);
       }
       if (typeof ce.toggleCollapse === "function") {
-        ce.toggleCollapse(collapsed);
+        ce.toggleCollapse(collapsed, false);
       }
     } catch (e) {
       /* ignore */
