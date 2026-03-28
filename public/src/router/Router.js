@@ -28,12 +28,12 @@
  */
 
 function isRegex(val) {
-  return Object.prototype.toString.call(val) === '[object RegExp]';
+  return Object.prototype.toString.call(val) === "[object RegExp]";
 }
 
 function ensureLeadingHash(hash) {
-  if (!hash) return '#/';
-  return hash.startsWith('#') ? hash : `#${hash}`;
+  if (!hash) return "#/";
+  return hash.startsWith("#") ? hash : `#${hash}`;
 }
 
 export class Router {
@@ -43,7 +43,7 @@ export class Router {
    * @param {boolean} [options.useHashChange] Whether to listen to hashchange (default true).
    */
   constructor(options = {}) {
-    this.mountPointSelector = options.mountPoint || '#app';
+    this.mountPointSelector = options.mountPoint || "#app";
     this.useHashChange = options.useHashChange !== false;
     this.routes = [];
     this.notFoundHandler = null;
@@ -65,8 +65,8 @@ export class Router {
    * @param {Function|Object|HTMLElement} handler
    */
   register(pattern, handler) {
-    if (!pattern) throw new Error('Router.register: pattern is required');
-    if (!handler) throw new Error('Router.register: handler is required');
+    if (!pattern) throw new Error("Router.register: pattern is required");
+    if (!handler) throw new Error("Router.register: handler is required");
 
     this.routes.push({ pattern, handler });
     return this;
@@ -103,7 +103,7 @@ export class Router {
   start() {
     if (this._running) return;
     if (this.useHashChange) {
-      window.addEventListener('hashchange', this._onHashChange, false);
+      window.addEventListener("hashchange", this._onHashChange, false);
     }
     // Handle current route synchronously (but view may load asynchronously).
     this.handleRoute();
@@ -116,7 +116,7 @@ export class Router {
   stop() {
     if (!this._running) return;
     if (this.useHashChange) {
-      window.removeEventListener('hashchange', this._onHashChange, false);
+      window.removeEventListener("hashchange", this._onHashChange, false);
     }
     this._running = false;
   }
@@ -132,19 +132,26 @@ export class Router {
    */
   async handleRoute() {
     const requestId = ++this._routeRequestId;
-    const rawHash = ensureLeadingHash(location.hash || '#/');
+    const rawHash = ensureLeadingHash(location.hash || "#/");
     // Find first matching route
     for (const route of this.routes) {
       if (isRegex(route.pattern)) {
         const match = rawHash.match(route.pattern);
         if (match) {
           try {
-            const viewOrPromise = await this._invokeHandler(route.handler, match);
+            const viewOrPromise = await this._invokeHandler(
+              route.handler,
+              match,
+            );
             if (this._isStaleRequest(requestId)) return;
-            await this._mountView(viewOrPromise, { route, match, hash: rawHash });
+            await this._mountView(viewOrPromise, {
+              route,
+              match,
+              hash: rawHash,
+            });
             return;
           } catch (err) {
-            console.error('Error loading route handler:', err);
+            console.error("Error loading route handler:", err);
             // continue to not-found fallback
             break;
           }
@@ -155,12 +162,19 @@ export class Router {
         const patHash = ensureLeadingHash(String(pat));
         if (rawHash === patHash) {
           try {
-            const viewOrPromise = await this._invokeHandler(route.handler, rawHash);
+            const viewOrPromise = await this._invokeHandler(
+              route.handler,
+              rawHash,
+            );
             if (this._isStaleRequest(requestId)) return;
-            await this._mountView(viewOrPromise, { route, match: rawHash, hash: rawHash });
+            await this._mountView(viewOrPromise, {
+              route,
+              match: rawHash,
+              hash: rawHash,
+            });
             return;
           } catch (err) {
-            console.error('Error loading route handler:', err);
+            console.error("Error loading route handler:", err);
             break;
           }
         }
@@ -170,12 +184,20 @@ export class Router {
     // No route matched -> not-found
     if (this.notFoundHandler) {
       try {
-        const viewOrPromise = await this._invokeHandler(this.notFoundHandler, rawHash);
+        const viewOrPromise = await this._invokeHandler(
+          this.notFoundHandler,
+          rawHash,
+        );
         if (this._isStaleRequest(requestId)) return;
-        await this._mountView(viewOrPromise, { route: null, match: null, hash: rawHash, notFound: true });
+        await this._mountView(viewOrPromise, {
+          route: null,
+          match: null,
+          hash: rawHash,
+          notFound: true,
+        });
         return;
       } catch (err) {
-        console.error('Error loading notFound handler:', err);
+        console.error("Error loading notFound handler:", err);
       }
     }
 
@@ -194,7 +216,7 @@ export class Router {
    *  - an HTMLElement
    */
   async _invokeHandler(handler, matchOrHash) {
-    if (typeof handler === 'function') {
+    if (typeof handler === "function") {
       // Handler may return a view or a Promise resolving to a view.
       return await handler(matchOrHash);
     }
@@ -215,16 +237,18 @@ export class Router {
     // If the view is a function (factory), call it. But we handled factories in register.
     // Cleanup previous view if present
     try {
-      if (this.currentView && typeof this.currentView.cleanup === 'function') {
+      if (this.currentView && typeof this.currentView.cleanup === "function") {
         try {
           // Allow cleanup to be async but don't await long-running operations
           const cleanupResult = this.currentView.cleanup();
-          if (cleanupResult && typeof cleanupResult.then === 'function') {
+          if (cleanupResult && typeof cleanupResult.then === "function") {
             // don't await — but swallow errors
-            cleanupResult.catch(err => console.warn('cleanup() error (async):', err));
+            cleanupResult.catch((err) =>
+              console.warn("cleanup() error (async):", err),
+            );
           }
         } catch (err) {
-          console.warn('Error while running previous view.cleanup():', err);
+          console.warn("Error while running previous view.cleanup():", err);
         }
       }
     } finally {
@@ -241,13 +265,13 @@ export class Router {
     if (view instanceof HTMLElement) {
       el = view;
       viewObj = null;
-    } else if (view && typeof view === 'object') {
+    } else if (view && typeof view === "object") {
       // If view has render()
-      if (typeof view.render === 'function') {
+      if (typeof view.render === "function") {
         try {
           el = view.render();
         } catch (err) {
-          console.error('View.render() threw an error:', err);
+          console.error("View.render() threw an error:", err);
           throw err;
         }
         viewObj = view;
@@ -256,46 +280,71 @@ export class Router {
         viewObj = view;
       } else {
         // Unknown shape: attempt to treat as plain node (string) or fail
-        throw new Error('Router: mounted view must be an HTMLElement or an object with render()/element.');
+        throw new Error(
+          "Router: mounted view must be an HTMLElement or an object with render()/element.",
+        );
       }
     } else {
-      throw new Error('Router: invalid view returned from handler');
+      throw new Error("Router: invalid view returned from handler");
     }
 
     // Append to mount point
-    const mountEl = document.querySelector(this.mountPointSelector) || document.body;
+    const mountEl =
+      document.querySelector(this.mountPointSelector) || document.body;
     // sanitize: ensure el is an HTMLElement
     if (!(el instanceof HTMLElement)) {
-      throw new Error('Router: view.render() must return an HTMLElement');
+      throw new Error("Router: view.render() must return an HTMLElement");
     }
     // Attach identifying attribute for debugging
-    el.setAttribute('data-router-mounted', 'true');
-    mountEl.appendChild(el);
+    el.setAttribute("data-router-mounted", "true");
+
+    // The DOM swap — clear old nodes, append new view. Wrapped in a View
+    // Transition when the API is available so the browser can cross-fade
+    // between the outgoing and incoming views.
+    const applyDOM = () => {
+      this._clearMount();
+      mountEl.appendChild(el);
+    };
+
+    if (document.startViewTransition) {
+      const transition = document.startViewTransition(applyDOM);
+      // Wait for the new state to be captured before running post-mount
+      // hooks so the transition snapshot includes the mounted view.
+      transition.updateCallbackDone.catch(() => {
+        /* ignore */
+      });
+    } else {
+      applyDOM();
+    }
 
     // Save current view reference so it can be cleaned up later
     this.currentView = viewObj || el;
     this.currentRouteInfo = routeInfo;
 
     // Call attachEventListeners or mounted hooks if provided on the view object
-    if (viewObj && typeof viewObj.attachEventListeners === 'function') {
+    if (viewObj && typeof viewObj.attachEventListeners === "function") {
       try {
         viewObj.attachEventListeners();
       } catch (err) {
-        console.warn('Error in view.attachEventListeners():', err);
+        console.warn("Error in view.attachEventListeners():", err);
       }
     }
 
     // After mount, a small focus/announcement step for accessibility
     try {
       // if the view exposes a focus() method, call it
-      if (viewObj && typeof viewObj.focus === 'function') {
+      if (viewObj && typeof viewObj.focus === "function") {
         viewObj.focus();
       } else {
         // otherwise move focus to the mount point for keyboard users
         const appEl = document.querySelector(this.mountPointSelector);
         if (appEl) {
-          appEl.setAttribute('tabindex', '-1');
-          try { appEl.focus(); } catch (e) { /* ignore */ }
+          appEl.setAttribute("tabindex", "-1");
+          try {
+            appEl.focus();
+          } catch (e) {
+            /* ignore */
+          }
         }
       }
     } catch (err) {
@@ -306,7 +355,8 @@ export class Router {
   }
 
   _clearMount() {
-    const mountEl = document.querySelector(this.mountPointSelector) || document.body;
+    const mountEl =
+      document.querySelector(this.mountPointSelector) || document.body;
     if (!mountEl) return;
     // Remove all children that were mounted previously. We avoid removing elements
     // that don't have the data attribute in case the mount point contains other content.
@@ -314,7 +364,10 @@ export class Router {
     for (const child of children) {
       try {
         // If it was mounted by this router, it will have the attribute
-        if (child.getAttribute && child.getAttribute('data-router-mounted') === 'true') {
+        if (
+          child.getAttribute &&
+          child.getAttribute("data-router-mounted") === "true"
+        ) {
           mountEl.removeChild(child);
         } else {
           // If the mount point only holds router content, remove everything
@@ -322,7 +375,7 @@ export class Router {
           // We be conservative: only remove if mount point contains no other mounted children.
         }
       } catch (e) {
-        console.warn('Error while clearing mount point:', e);
+        console.warn("Error while clearing mount point:", e);
       }
     }
   }

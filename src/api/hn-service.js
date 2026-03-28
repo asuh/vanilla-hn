@@ -1,6 +1,8 @@
 import { initializeApp, deleteApp } from "firebase/app";
 import { getDatabase, ref, child, onValue, get } from "firebase/database";
 
+import { debounce } from "../utils/helpers.js";
+
 /**
  * hn-service.js
  *
@@ -44,27 +46,6 @@ function nowSeconds() {
 
 function noop() {}
 
-/**
- * Simple cancellable debounce (mirrors react-hn's cancellableDebounce).
- */
-function debounce(fn, wait) {
-  let t = null;
-  const debounced = (...args) => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => {
-      t = null;
-      fn(...args);
-    }, wait);
-  };
-  debounced.cancel = () => {
-    if (t) {
-      clearTimeout(t);
-      t = null;
-    }
-  };
-  return debounced;
-}
-
 // ---------------------------------------------------------------------------
 // MockBackend
 // ---------------------------------------------------------------------------
@@ -92,6 +73,14 @@ function createMockItem(id, opts = {}) {
   };
 }
 
+/**
+ * In-memory mock backend that simulates HN data for development and testing.
+ *
+ * Produces synthetic stories, comments, and users without any network calls.
+ * Periodically mutates data to mimic realtime updates.
+ *
+ * @class MockBackend
+ */
 class MockBackend {
   constructor() {
     this._items = new Map();
@@ -174,6 +163,12 @@ class MockBackend {
 
   // -- public surface --------------------------------------------------------
 
+  /**
+   * Subscribe to a story list by type.
+   * @param {string} listType - One of 'top', 'newest', 'ask', 'show', 'jobs'.
+   * @param {Function} cb - Callback receiving an array of item objects.
+   * @returns {Function} Unsubscribe function.
+   */
   onStoriesValue(listType, cb) {
     const type = listType || "top";
     const set = this._storyListeners.get(type) || new Set();
@@ -193,6 +188,12 @@ class MockBackend {
     return () => set.delete(cb);
   }
 
+  /**
+   * Subscribe to realtime updates for a single item.
+   * @param {number|string} itemId
+   * @param {Function} cb - Callback receiving the item object.
+   * @returns {Function} Unsubscribe function.
+   */
   onItemValue(itemId, cb) {
     const id = String(itemId);
     const set = this._itemListeners.get(id) || new Set();
@@ -211,6 +212,11 @@ class MockBackend {
     return () => set.delete(cb);
   }
 
+  /**
+   * One-off fetch of a single item (async).
+   * @param {number|string} itemId
+   * @returns {Promise<Object|null>} The item object.
+   */
   async fetchItem(itemId) {
     await new Promise((r) => setTimeout(r, 80 + Math.random() * 120));
     const id = String(itemId);
@@ -222,6 +228,12 @@ class MockBackend {
     return { ...item };
   }
 
+  /**
+   * Subscribe to realtime updates for a user profile.
+   * @param {string} userId
+   * @param {Function} cb - Callback receiving the user object.
+   * @returns {Function} Unsubscribe function.
+   */
   onUserValue(userId, cb) {
     const id = String(userId);
     const set = this._userListeners.get(id) || new Set();
@@ -242,6 +254,11 @@ class MockBackend {
     return () => set.delete(cb);
   }
 
+  /**
+   * Subscribe to the global updates feed.
+   * @param {Function} cb - Callback receiving `{ items, profiles }`.
+   * @returns {Function} Unsubscribe function.
+   */
   onUpdatesValue(cb) {
     this._updatesListeners.add(cb);
     setTimeout(() => {
@@ -252,6 +269,9 @@ class MockBackend {
     return () => this._updatesListeners.delete(cb);
   }
 
+  /**
+   * Tear down the mock backend, clearing all intervals and listeners.
+   */
   destroy() {
     clearInterval(this._tickInterval);
     this._storyListeners.clear();
@@ -265,7 +285,17 @@ class MockBackend {
 // FirebaseBackend
 // ---------------------------------------------------------------------------
 
+/**
+ * Firebase Realtime Database backend connecting to the official HN API.
+ *
+ * Wraps the Firebase SDK to expose a callback-based subscription interface
+ * consistent with {@link MockBackend}. Handles initialisation, listener
+ * attachment, one-off reads, and teardown.
+ *
+ * @class FirebaseBackend
+ */
 class FirebaseBackend {
+  /** @constructor */
   constructor() {
     this._app = null;
     this._db = null;
@@ -307,6 +337,10 @@ class FirebaseBackend {
   /**
    * Attach a realtime listener. Returns an unsubscribe function.
    * If Firebase isn't ready yet, queues the attachment.
+   * @param {string} path - Database path (e.g. '/v0/topstories').
+   * @param {Function} cb - Callback invoked with snapshot data.
+   * @param {Function} [transform] - Optional transform applied to snapshot value before cb.
+   * @returns {Function} Unsubscribe function.
    */
   _subscribe(path, cb, transform) {
     let realUnsub = null;
@@ -355,6 +389,13 @@ class FirebaseBackend {
     return this._subscribe(`${API_ROOT}/item/${itemId}`, cb);
   }
 
+  /**
+   * One-off fetch of a single item. Supports `AbortSignal` via `opts.signal`.
+   * @param {number|string} itemId
+   * @param {Object} [opts]
+   * @param {AbortSignal} [opts.signal] - Optional abort signal.
+   * @returns {Promise<Object|null>} The item object or null.
+   */
   async fetchItem(itemId, opts = {}) {
     const signal = opts && opts.signal;
     if (signal && signal.aborted)
@@ -391,6 +432,10 @@ class FirebaseBackend {
     return this._subscribe(`${API_ROOT}/updates`, cb);
   }
 
+  /**
+   * Destroy the Firebase backend, deleting the Firebase app instance
+   * and releasing all resources.
+   */
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
@@ -421,6 +466,13 @@ class FirebaseBackend {
  * All methods return an unsubscribe function (or Promise for fetchItem).
  */
 export default class HNService {
+  /**
+   * Create an HNService instance.
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.mock] - When `true`, force the use of {@link MockBackend}
+   *   instead of Firebase. Defaults to `false`.
+   */
   constructor(options = {}) {
     this._destroyed = false;
     this._forceMock = Boolean(options && options.mock);
@@ -449,36 +501,52 @@ export default class HNService {
     }
   }
 
+  /**
+   * Whether the service is currently backed by the mock backend.
+   * @returns {boolean}
+   */
   get isUsingMock() {
     return this._usingMock;
   }
 
   /**
    * Subscribe to a story list.
-   * cb receives:
-   *   - MockBackend: array of full item objects
-   *   - FirebaseBackend: array of id strings (views should fetch each via onItemValue)
    *
-   * Returns unsubscribe function.
+   * The callback receives:
+   * - **MockBackend**: an array of full item objects.
+   * - **FirebaseBackend**: an array of id strings (views should fetch each via
+   *   {@link HNService#onItemValue}).
+   *
+   * @param {string} listType - One of `'top'`, `'newest'`, `'ask'`, `'show'`, `'jobs'`.
+   * @param {Function} callback - Called with the stories payload.
+   * @returns {Function} Unsubscribe function.
    */
-  onStoriesValue(listType, cb) {
+  onStoriesValue(listType, callback) {
     if (this._destroyed) return noop;
-    return this._backend.onStoriesValue(listType, cb);
+    return this._backend.onStoriesValue(listType, callback);
   }
 
   /**
    * Subscribe to realtime updates for a single item.
-   * cb receives the full item object whenever it changes.
-   * Returns unsubscribe function.
+   *
+   * The callback receives the full item object whenever it changes.
+   *
+   * @param {number|string} itemId - The HN item id.
+   * @param {Function} callback - Called with the item object on each update.
+   * @returns {Function} Unsubscribe function.
    */
-  onItemValue(itemId, cb) {
+  onItemValue(itemId, callback) {
     if (this._destroyed) return noop;
-    return this._backend.onItemValue(itemId, cb);
+    return this._backend.onItemValue(itemId, callback);
   }
 
   /**
-   * One-off fetch of a single item. Respects AbortSignal.
-   * Returns Promise<item>.
+   * One-off fetch of a single item. Respects `AbortSignal` via `opts.signal`.
+   *
+   * @param {number|string} itemId - The HN item id.
+   * @param {Object} [opts]
+   * @param {AbortSignal} [opts.signal] - Optional abort signal.
+   * @returns {Promise<Object|null>} Resolves with the item object, or `null`.
    */
   async fetchItem(itemId, opts = {}) {
     if (this._destroyed) throw new Error("HNService destroyed");
@@ -488,25 +556,33 @@ export default class HNService {
   }
 
   /**
-   * Subscribe to realtime updates for a user.
-   * Returns unsubscribe function.
+   * Subscribe to realtime updates for a user profile.
+   *
+   * @param {string} userId - The HN username.
+   * @param {Function} callback - Called with the user object on each update.
+   * @returns {Function} Unsubscribe function.
    */
-  onUserValue(userId, cb) {
+  onUserValue(userId, callback) {
     if (this._destroyed) return noop;
-    return this._backend.onUserValue(userId, cb);
+    return this._backend.onUserValue(userId, callback);
   }
 
   /**
-   * Subscribe to the HN updates feed.
-   * Returns unsubscribe function.
+   * Subscribe to the HN updates feed (recently changed items and profiles).
+   *
+   * @param {Function} callback - Called with the updates payload.
+   * @returns {Function} Unsubscribe function.
    */
-  onUpdatesValue(cb) {
+  onUpdatesValue(callback) {
     if (this._destroyed) return noop;
-    return this._backend.onUpdatesValue(cb);
+    return this._backend.onUpdatesValue(callback);
   }
 
   /**
-   * Tear down the service and release all resources.
+   * Tear down the service and release all backend resources.
+   *
+   * After calling `destroy()` all subscription and fetch methods will no-op
+   * or throw.
    */
   destroy() {
     if (this._destroyed) return;

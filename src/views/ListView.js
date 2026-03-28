@@ -4,12 +4,11 @@
  * Full story-list view for vanilla-hn (no frameworks, no React).
  *
  * Exports:
- *  - default:     ListView  — paginated story list with read-state, new-comment badges, spinners
- *  - named:       UserView  — user profile view (karma, created, about, HN link)
+ *  - default: ListView — paginated story list with read-state, new-comment badges, spinners
  *
- * Context shape expected by both views:
+ * Context shape expected by this view:
  *  {
- *    params:   { page?: string|number, id?: string },
+ *    params:   { page?: string|number },
  *    stores:   { settingsStore, readStoriesStore, threadStore },
  *    services: { hnService },
  *    options:  { listType? },   // may also live directly on context as context.listType
@@ -19,6 +18,7 @@
 import View from "./View.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 import { create, timeAgoFromUnix, delegate } from "../utils/dom.js";
+import { parseHost, pluralise } from "../utils/helpers.js";
 
 /* ─────────────────────────────────────────────
    Constants
@@ -33,27 +33,12 @@ const LIST_TITLES = {
   ask: "Ask HN",
   show: "Show HN",
   jobs: "Jobs",
+  read: "Read Stories",
 };
 
 /* ─────────────────────────────────────────────
    Small helpers (module-private)
 ───────────────────────────────────────────── */
-
-/**
- * Extract hostname from a URL string, stripping the leading "www." if present.
- * Returns null when the URL is falsy or cannot be parsed.
- *
- * @param {string|null|undefined} url
- * @returns {string|null}
- */
-function extractHost(url) {
-  if (!url) return null;
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch (_) {
-    return null;
-  }
-}
 
 /**
  * Build the hash fragment used for pagination links.
@@ -146,7 +131,19 @@ function renderSkeletons(listEl, startRank = 1) {
 
 export default class ListView extends View {
   /**
+   * Create a new ListView instance.
+   *
    * @param {Object} context
+   * @param {Object} [context.params]          - Route parameters (e.g. page number).
+   * @param {string|number} [context.params.page] - 1-based page number (default 1).
+   * @param {Object} [context.stores]          - Application stores.
+   * @param {Object} [context.stores.readStoriesStore] - Store tracking read stories.
+   * @param {Object} [context.stores.threadStore]      - Store tracking comment thread state.
+   * @param {Object} [context.services]        - Application services.
+   * @param {Object} [context.services.hnService]      - Hacker News data service.
+   * @param {Object} [context.options]         - Additional options (e.g. listType).
+   * @param {string} [context.options.listType] - The list type to display (top, newest, ask, show, jobs, read).
+   * @param {string} [context.listType]        - Alternative location for list type.
    */
   constructor(context = {}) {
     super(context);
@@ -192,7 +189,7 @@ export default class ListView extends View {
    * Returns the root HTMLElement synchronously so the Router can mount it
    * right away; the list content is filled in once data arrives.
    *
-   * @returns {HTMLElement}
+   * @returns {HTMLElement} The root element for this view.
    */
   render() {
     const titleText = LIST_TITLES[this.listType] || this.listType;
@@ -258,6 +255,8 @@ export default class ListView extends View {
    * as read when their title links are clicked.
    *
    * Called by the Router after the element is in the DOM.
+   *
+   * @returns {void}
    */
   attachEventListeners() {
     if (!this._listEl) return;
@@ -289,6 +288,8 @@ export default class ListView extends View {
    * Unsubscribe from hnService and tear down delegated event listeners.
    * The base class cleanup() handles the AbortController and any extra
    * unsubscribers registered via watchEvent().
+   *
+   * @returns {void}
    */
   cleanup() {
     if (typeof this._unsub === "function") {
@@ -336,8 +337,63 @@ export default class ListView extends View {
    *
    * Only items on the *current page* get individual subscriptions, which avoids
    * opening hundreds of Firebase connections for the full 500-item top-stories list.
+   *
+   * When `this.listType === 'read'`, we skip Firebase entirely and instead pull
+   * from `readStoriesStore.getReadStories()`, sorted by most-recently-read first.
    */
   _subscribe() {
+    // ── Read stories mode ────────────────────────────────────────────────
+    if (this.listType === "read") {
+      if (
+        !this._readStore ||
+        typeof this._readStore.getReadStories !== "function"
+      ) {
+        this._renderError("Read stories store unavailable.");
+        return;
+      }
+
+      // Initialise the per-item unsub array
+      if (!Array.isArray(this._itemUnsubs)) {
+        this._itemUnsubs = [];
+      }
+
+      const reads = this._readStore.getReadStories(); // { storyId: timestamp }
+      const sortedIds = Object.keys(reads).sort((a, b) => reads[b] - reads[a]);
+
+      if (sortedIds.length === 0) {
+        this._allItems = [];
+        this._loaded = true;
+        this._renderPage();
+        return;
+      }
+
+      // Seed _allItems with lightweight placeholder objects
+      this._allItems = sortedIds.map((id) => ({ id: String(id) }));
+      this._loaded = true;
+      this._renderPage();
+
+      // Subscribe to full item data only for items on the current page
+      const start = (this.page - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      const pageIds = sortedIds.slice(start, end);
+
+      if (this._hn && typeof this._hn.onItemValue === "function") {
+        pageIds.forEach((id, pageIdx) => {
+          const allIdx = start + pageIdx;
+          const unsub = this._hn.onItemValue(id, (item) => {
+            if (item && typeof item === "object") {
+              this._allItems[allIdx] = item;
+              this._patchItem(item, start + pageIdx + 1);
+            }
+          });
+          this._itemUnsubs.push(unsub);
+        });
+      }
+
+      return;
+    }
+
+    // ── Normal (Firebase / Mock) mode ────────────────────────────────────
     if (!this._hn || typeof this._hn.onStoriesValue !== "function") {
       this._renderError("Data service unavailable.");
       return;
@@ -574,7 +630,7 @@ export default class ListView extends View {
           ? item.kids.length
           : 0;
     const url = item.url || null;
-    const host = extractHost(url);
+    const host = parseHost(url);
     const isRead = this._readStore ? this._readStore.isRead(id) : false;
     const timeAgo = timeAgoFromUnix(item.time);
 
@@ -651,7 +707,7 @@ export default class ListView extends View {
       create(
         "span",
         { attrs: { class: "item__score" } },
-        `${score} point${score !== 1 ? "s" : ""}`,
+        `${score} point${pluralise(score)}`,
       ),
     );
     meta.appendChild(document.createTextNode(" by "));
@@ -680,7 +736,7 @@ export default class ListView extends View {
           "data-id": id, // also needed here so clicking "N comments" marks as read
         },
       },
-      `${descendants} comment${descendants !== 1 ? "s" : ""}`,
+      `${descendants} comment${pluralise(descendants)}`,
     );
     meta.appendChild(commentsLink);
 
@@ -738,204 +794,10 @@ export default class ListView extends View {
         attrs: {
           class: "badge badge--new",
           role: "status",
-          "aria-label": `${newCount} new comment${newCount !== 1 ? "s" : ""}`,
+          "aria-label": `${newCount} new comment${pluralise(newCount)}`,
         },
       },
       `+${newCount} new`,
-    );
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   UserView
-   ─────────────────────────────────────────────────────────────────────────
-   Renders a Hacker News user profile page.
-
-   Context:
-     params.id  — the username (string)
-     services.hnService.onUserValue(userId, cb) — realtime subscription
-                  callback receives { id, karma, created, about }
-
-   DOM structure:
-     <div class="view user-view">
-       <div class="container user-view__content">
-         <h2 class="user-view__name">username</h2>
-         <dl class="user-view__stats">
-           <dt>karma</dt>  <dd>NNN</dd>
-           <dt>joined</dt> <dd>X years ago</dd>
-         </dl>
-         <div class="user-view__about">…HTML from HN…</div>   ← set via innerHTML
-         <p class="user-view__hn-link">
-           <a href="https://news.ycombinator.com/user?id=username">profile on HN ↗</a>
-         </p>
-       </div>
-     </div>
-═══════════════════════════════════════════════════════════════════════════ */
-
-export class UserView extends View {
-  /**
-   * @param {Object} context
-   */
-  constructor(context = {}) {
-    super(context);
-
-    this.userId =
-      (context.params && context.params.id) ||
-      (context.options && context.options.id) ||
-      null;
-
-    this._unsub = null;
-    this._contentEl = null;
-  }
-
-  /* ─────────────────────────────────────
-     Lifecycle
-  ───────────────────────────────────── */
-
-  /**
-   * Build the initial shell and subscribe to user data.
-   * @returns {HTMLElement}
-   */
-  render() {
-    document.title = `${this.userId || "User"} | vanilla-hn`;
-
-    const wrapper = create("div", { attrs: { class: "view user-view" } });
-
-    this._contentEl = create("div", {
-      attrs: { class: "container user-view__content" },
-    });
-
-    // Show a loading indicator immediately
-    this._contentEl.appendChild(
-      create(
-        "p",
-        { attrs: { class: "user-view__loading" } },
-        create("span", {
-          attrs: {
-            class: "spinner",
-            role: "status",
-            "aria-label": "Loading user profile…",
-          },
-        }),
-      ),
-    );
-
-    wrapper.appendChild(this._contentEl);
-    this.root = wrapper;
-
-    this._subscribe();
-    return wrapper;
-  }
-
-  cleanup() {
-    if (typeof this._unsub === "function") {
-      try {
-        this._unsub();
-      } catch (_) {}
-      this._unsub = null;
-    }
-    try {
-      super.cleanup();
-    } catch (_) {}
-  }
-
-  /* ─────────────────────────────────────
-     Private
-  ───────────────────────────────────── */
-
-  _subscribe() {
-    const hn = this.services && this.services.hnService;
-
-    if (!hn || typeof hn.onUserValue !== "function" || !this.userId) {
-      this._renderError(
-        "User data service unavailable or no user id provided.",
-      );
-      return;
-    }
-
-    this._unsub = hn.onUserValue(this.userId, (user) => {
-      try {
-        if (!user) {
-          this._renderError(`User "${this.userId}" not found.`);
-        } else {
-          document.title = `${user.id || this.userId} | vanilla-hn`;
-          this._renderUser(user);
-        }
-      } catch (err) {
-        console.warn("UserView: error rendering user", err);
-      }
-    });
-  }
-
-  /**
-   * Replace the content element's children with the fully rendered user profile.
-   *
-   * @param {Object} user  — { id, karma, created (unix seconds), about (HTML string) }
-   */
-  _renderUser(user) {
-    if (!this._contentEl) return;
-
-    const id = user.id || this.userId || "Unknown";
-    const karma = user.karma != null ? user.karma : 0;
-    const created =
-      user.created != null ? timeAgoFromUnix(user.created) : "unknown";
-    const about = user.about || ""; // may contain HTML (HN returns <a>, <p>, etc.)
-    const hnUrl = `https://news.ycombinator.com/user?id=${encodeURIComponent(id)}`;
-
-    // ── Name heading ───────────────────────────────────────────────────────
-    const heading = create("h2", { attrs: { class: "user-view__name" } }, id);
-
-    // ── Stats table (karma + joined date) ──────────────────────────────────
-    const stats = create(
-      "dl",
-      { attrs: { class: "user-view__stats" } },
-      create("dt", {}, "karma"),
-      create("dd", { attrs: { class: "user-view__karma" } }, String(karma)),
-      create("dt", {}, "joined"),
-      create("dd", { attrs: { class: "user-view__joined" } }, created),
-    );
-
-    // ── About section ──────────────────────────────────────────────────────
-    // HN returns the `about` field as pre-rendered HTML (links, paragraphs, etc.)
-    // so we must use innerHTML here. This is fine because the content originates
-    // directly from HN's API and is the user's own self-description.
-    const aboutSection = create("div", {
-      attrs: { class: "user-view__about" },
-    });
-    if (about) {
-      aboutSection.innerHTML = about;
-    }
-
-    // ── External HN profile link ───────────────────────────────────────────
-    const hnLink = create(
-      "p",
-      { attrs: { class: "user-view__hn-link" } },
-      create(
-        "a",
-        {
-          attrs: {
-            href: hnUrl,
-            target: "_blank",
-            rel: "noopener noreferrer",
-            class: "user-view__hn-link-anchor",
-          },
-        },
-        `View ${id}'s profile on Hacker News ↗`,
-      ),
-    );
-
-    // ── Replace content ────────────────────────────────────────────────────
-    this._contentEl.replaceChildren(heading, stats, aboutSection, hnLink);
-  }
-
-  /**
-   * Show a plain-text error message in the content area.
-   * @param {string} msg
-   */
-  _renderError(msg) {
-    if (!this._contentEl) return;
-    this._contentEl.replaceChildren(
-      create("p", { attrs: { class: "user-view__error" } }, msg),
     );
   }
 }

@@ -33,16 +33,27 @@
 export function create(tag, options = {}, ...children) {
   const el = document.createElement(tag);
 
-  const { attrs = {}, props = {}, dataset = {}, style = {}, events = {}, html } = options;
+  const {
+    attrs = {},
+    props = {},
+    dataset = {},
+    style = {},
+    events = {},
+    html,
+  } = options;
 
   // attributes
   for (const [name, value] of Object.entries(attrs)) {
     if (value === false || value == null) {
       // remove falsy/explicit false attributes
-      try { el.removeAttribute(name); } catch (e) { /* ignore */ }
+      try {
+        el.removeAttribute(name);
+      } catch (e) {
+        /* ignore */
+      }
     } else if (value === true) {
       // boolean attribute (present)
-      el.setAttribute(name, '');
+      el.setAttribute(name, "");
     } else {
       el.setAttribute(name, String(value));
     }
@@ -75,15 +86,15 @@ export function create(tag, options = {}, ...children) {
 
   // events
   for (const [evt, handler] of Object.entries(events)) {
-    if (typeof handler === 'function') {
+    if (typeof handler === "function") {
       el.addEventListener(evt, handler);
     }
   }
 
   // html shortcut (use with care -- caller should sanitize if needed)
-  if (typeof html === 'string') {
+  if (typeof html === "string") {
     // Use a template to avoid parsing into the document prematurely
-    const tpl = document.createElement('template');
+    const tpl = document.createElement("template");
     tpl.innerHTML = html;
     el.appendChild(tpl.content);
   } else {
@@ -104,7 +115,7 @@ export function appendChildren(parent, children) {
     if (child == null) continue;
     if (child instanceof Node) {
       parent.appendChild(child);
-    } else if (typeof child === 'string' || typeof child === 'number') {
+    } else if (typeof child === "string" || typeof child === "number") {
       parent.appendChild(document.createTextNode(String(child)));
     } else if (Array.isArray(child)) {
       appendChildren(parent, child);
@@ -116,37 +127,67 @@ export function appendChildren(parent, children) {
 }
 
 /**
- * Query helpers
+ * Query a single element matching the given CSS selector.
+ *
+ * @param {string} selector  CSS selector string.
+ * @param {Element|Document} [root=document]  Root element to search within.
+ * @returns {Element|null}
  */
 export const qs = (selector, root = document) => {
   return root.querySelector(selector);
 };
+
+/**
+ * Query all elements matching the given CSS selector, returned as an Array.
+ *
+ * @param {string} selector  CSS selector string.
+ * @param {Element|Document} [root=document]  Root element to search within.
+ * @returns {Element[]}
+ */
 export const qsa = (selector, root = document) => {
   return Array.from(root.querySelectorAll(selector));
 };
 
 /**
- * Add/remove event listeners helpers
+ * Attach an event listener and return an unsubscribe function that removes it.
+ *
+ * @param {EventTarget} el
+ * @param {string} eventName
+ * @param {Function} handler
+ * @param {AddEventListenerOptions|boolean} [options]
+ * @returns {Function} unsubscribe – call to remove the listener.
  */
 export function on(el, eventName, handler, options) {
   el.addEventListener(eventName, handler, options);
   return () => el.removeEventListener(eventName, handler, options);
 }
 
+/**
+ * Remove an event listener (thin wrapper around `removeEventListener`).
+ *
+ * @param {EventTarget} el
+ * @param {string} eventName
+ * @param {Function} handler
+ * @param {EventListenerOptions|boolean} [options]
+ */
 export function off(el, eventName, handler, options) {
   el.removeEventListener(eventName, handler, options);
 }
 
 /**
- * Delegate event (useful for lists and dynamic children)
+ * Delegate an event from a root element to descendants matching a CSS selector.
+ *
+ * Walks up the DOM from `event.target` to `root` looking for an element that
+ * matches `selector`. When found, `handler` is invoked with `(event, matchedEl)`.
+ *
  * Example:
  *   delegate(listEl, 'click', 'a.item-link', ev => { ... })
  *
- * @param {Element} root
- * @param {string} eventName
- * @param {string} selector
- * @param {Function} handler (receives event and matched target)
- * @returns {Function} unsubscribe
+ * @param {HTMLElement} root      The element on which the listener is attached.
+ * @param {string}      eventName The DOM event name (e.g. `'click'`).
+ * @param {string}      selector  A CSS selector to match against descendant elements.
+ * @param {Function}    handler   Callback invoked with `(event, matchedElement)`.
+ * @returns {Function}  unsubscribe – call to remove the delegated listener.
  */
 export function delegate(root, eventName, selector, handler) {
   if (!root) return () => {};
@@ -158,7 +199,7 @@ export function delegate(root, eventName, selector, handler) {
           handler.call(el, ev, el);
         } catch (err) {
           // swallow errors from handlers to avoid breaking other delegated listeners
-          console.error('delegate handler error', err);
+          console.error("delegate handler error", err);
         }
         return;
       }
@@ -176,7 +217,7 @@ export function delegate(root, eventName, selector, handler) {
  * @param {...(Node|string|number)} nodes
  */
 export function replaceChildren(el, ...nodes) {
-  if (typeof el.replaceChildren === 'function') {
+  if (typeof el.replaceChildren === "function") {
     el.replaceChildren(...nodes);
   } else {
     // fallback
@@ -205,7 +246,7 @@ export function empty(el) {
  * @returns {DocumentFragment}
  */
 export function fragmentFromHTML(html) {
-  const tpl = document.createElement('template');
+  const tpl = document.createElement("template");
   tpl.innerHTML = html;
   return tpl.content;
 }
@@ -216,28 +257,45 @@ export function fragmentFromHTML(html) {
  * @returns {string}
  */
 export function escapeHTML(str) {
-  if (str == null) return '';
+  if (str == null) return "";
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
- * Class helpers
+ * Add one or more CSS class names to an element.
+ *
+ * @param {Element} el
+ * @param {...string} classes
  */
 export function addClass(el, ...classes) {
   if (!el || !el.classList) return;
   el.classList.add(...classes.filter(Boolean));
 }
 
+/**
+ * Remove one or more CSS class names from an element.
+ *
+ * @param {Element} el
+ * @param {...string} classes
+ */
 export function removeClass(el, ...classes) {
   if (!el || !el.classList) return;
   el.classList.remove(...classes.filter(Boolean));
 }
 
+/**
+ * Toggle a CSS class on an element.
+ *
+ * @param {Element} el
+ * @param {string} className
+ * @param {boolean} [force]
+ * @returns {boolean} `true` if the class is now present, `false` otherwise.
+ */
 export function toggleClass(el, className, force) {
   if (!el || !el.classList) return;
   return el.classList.toggle(className, force);
@@ -251,7 +309,11 @@ export function toggleClass(el, className, force) {
  */
 export function button(label, opts = {}) {
   const { attrs = {}, events = {}, style = {}, props = {} } = opts;
-  return create('button', { attrs: { type: 'button', ...attrs }, events, style, props }, label);
+  return create(
+    "button",
+    { attrs: { type: "button", ...attrs }, events, style, props },
+    label,
+  );
 }
 
 /**
@@ -264,9 +326,13 @@ export function button(label, opts = {}) {
 export function setAttrs(el, attrs = {}) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === false || v == null) {
-      try { el.removeAttribute(k); } catch (e) { /* ignore */ }
+      try {
+        el.removeAttribute(k);
+      } catch (e) {
+        /* ignore */
+      }
     } else if (v === true) {
-      el.setAttribute(k, '');
+      el.setAttribute(k, "");
     } else {
       el.setAttribute(k, String(v));
     }
@@ -281,15 +347,21 @@ export function setAttrs(el, attrs = {}) {
  * Given a Date | timestamp (ms | seconds) returns a human-friendly relative
  * time string like "3h ago", "2 days ago", or "just now".
  *
- * Uses Intl.RelativeTimeFormat when available; falls back to simple strings.
+ * Uses `Intl.RelativeTimeFormat` when available; falls back to simple
+ * English strings such as `"5 minutes ago"` or `"in 2 hours"`.
  *
- * @param {Date|number|string} when
+ * @param {Date|number|string} when  The point in time to describe. Accepts a
+ *   `Date`, a numeric timestamp in milliseconds or seconds (auto-detected via
+ *   heuristic), or a date-parseable string.
  * @param {Object} [opts]
- * @param {number} [opts.now] current timestamp in ms override
+ * @param {number} [opts.now]  Current timestamp in milliseconds (override for
+ *   testing or server time).
+ * @returns {string}  A human-readable relative time description, or an empty
+ *   string when `when` is nullish.
  */
 export function formatRelativeTime(when, opts = {}) {
-  if (when == null) return '';
-  const now = typeof opts.now === 'number' ? opts.now : Date.now();
+  if (when == null) return "";
+  const now = typeof opts.now === "number" ? opts.now : Date.now();
 
   let time;
   if (when instanceof Date) time = when.getTime();
@@ -298,7 +370,7 @@ export function formatRelativeTime(when, opts = {}) {
     const n = Number(when);
     if (!Number.isNaN(n)) {
       // heuristics: if value looks like seconds (<= 1e10) treat as seconds
-      time = n > 1e12 ? n : (n > 1e10 ? n : n * 1000);
+      time = n > 1e12 ? n : n > 1e10 ? n : n * 1000;
     } else {
       // attempt Date parse
       const parsed = Date.parse(String(when));
@@ -311,43 +383,52 @@ export function formatRelativeTime(when, opts = {}) {
   const absSeconds = Math.abs(diffSeconds);
 
   const units = [
-    { name: 'year', secs: 60 * 60 * 24 * 365 },
-    { name: 'month', secs: 60 * 60 * 24 * 30 },
-    { name: 'day', secs: 60 * 60 * 24 },
-    { name: 'hour', secs: 60 * 60 },
-    { name: 'minute', secs: 60 },
-    { name: 'second', secs: 1 }
+    { name: "year", secs: 60 * 60 * 24 * 365 },
+    { name: "month", secs: 60 * 60 * 24 * 30 },
+    { name: "day", secs: 60 * 60 * 24 },
+    { name: "hour", secs: 60 * 60 },
+    { name: "minute", secs: 60 },
+    { name: "second", secs: 1 },
   ];
 
   for (const u of units) {
-    if (absSeconds >= u.secs || u.name === 'second') {
+    if (absSeconds >= u.secs || u.name === "second") {
       const val = Math.round(diffSeconds / u.secs);
       // Use Intl.RelativeTimeFormat when available
-      if (typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat === 'function') {
+      if (
+        typeof Intl !== "undefined" &&
+        typeof Intl.RelativeTimeFormat === "function"
+      ) {
         try {
-          const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+          const rtf = new Intl.RelativeTimeFormat(undefined, {
+            numeric: "auto",
+          });
           return rtf.format(val, u.name);
         } catch (e) {
           // fall through
         }
       }
       // Fallback english-style
-      if (val === 0) return 'just now';
+      if (val === 0) return "just now";
       const absVal = Math.abs(val);
       const unitLabel = absVal === 1 ? u.name : `${u.name}s`;
-      return val > 0 ? `in ${absVal} ${unitLabel}` : `${absVal} ${unitLabel} ago`;
+      return val > 0
+        ? `in ${absVal} ${unitLabel}`
+        : `${absVal} ${unitLabel} ago`;
     }
   }
 }
 
 /**
  * Convenience: given a unix timestamp in seconds (common in HN payloads),
- * returns a human-friendly relative time string.
+ * returns a human-friendly relative time string via {@link formatRelativeTime}.
  *
- * @param {number} unixSeconds
+ * @param {number} unixSeconds  Unix epoch timestamp in **seconds**.
+ * @returns {string}  A human-readable relative time description, or an empty
+ *   string when `unixSeconds` is nullish.
  */
 export function timeAgoFromUnix(unixSeconds) {
-  if (unixSeconds == null) return '';
+  if (unixSeconds == null) return "";
   const ms = Number(unixSeconds) * 1000;
   return formatRelativeTime(ms);
 }

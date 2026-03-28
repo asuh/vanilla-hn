@@ -950,6 +950,14 @@
     }
 }
 
+/* ── View Transitions ─────────────────────────────────────────────────── */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: 150ms;
+    animation-timing-function: ease-in-out;
+}
+
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
     *,
@@ -958,5 +966,10 @@
         animation-duration: 0.001ms !important;
         transition-duration: 0.001ms !important;
         scroll-behavior: auto !important;
+    }
+
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none !important;
     }
 }

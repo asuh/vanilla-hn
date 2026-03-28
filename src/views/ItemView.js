@@ -22,6 +22,7 @@
 
 import View from "./View.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { pluralise, parseHost } from "../utils/helpers.js";
 import { CommentElement } from "../components/CommentElement.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 
@@ -38,21 +39,15 @@ const LOAD_POLL_TIMEOUT_MS = 30_000;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Pluralise a word: pluralise(1, 'comment') => 'comment', pluralise(2, 'comment') => 'comments'
- * @param {number} n
- * @param {string} singular
- * @param {string} [plural]
- */
-function pluralise(n, singular, plural) {
-  const p = plural !== undefined ? plural : singular + "s";
-  return n === 1 ? singular : p;
-}
-
-/**
  * Given a unix-seconds timestamp for the last visit, produce a human-readable
- * string like "3 hours" or "2 days".
- * @param {number} lastVisitSeconds  unix seconds
- * @returns {string}
+ * duration string like "3 hours" or "2 days" (without the trailing "ago").
+ *
+ * NOTE: This is intentionally separate from `dom.js`'s `formatRelativeTime` /
+ * `timeAgoFromUnix`, which return strings such as "3 hours ago". Here we need
+ * only the bare duration portion (e.g. for "N new comments in the last 3 hours").
+ *
+ * @param {number} lastVisitSeconds  unix timestamp in seconds
+ * @returns {string} Human-readable duration, e.g. "3 hours", or "" if falsy input
  */
 function sinceLastVisit(lastVisitSeconds) {
   if (!lastVisitSeconds) return "";
@@ -75,29 +70,22 @@ function sinceLastVisit(lastVisitSeconds) {
   return "a moment";
 }
 
-/**
- * Parse the host from a URL string and strip leading "www.".
- * Returns empty string on failure.
- * @param {string} url
- * @returns {string}
- */
-function parseHost(url) {
-  if (!url) return "";
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch (e) {
-    return "";
-  }
-}
-
 // ─── ItemView ────────────────────────────────────────────────────────────────
 
 export default class ItemView extends View {
   /**
-   * @param {Object} context
-   * @param {Object} context.params       - route params, expects { id: string }
-   * @param {Object} context.stores       - { settingsStore, readStoriesStore, threadStore }
-   * @param {Object} context.services     - { hnService }
+   * Create a new ItemView.
+   *
+   * @param {Object}  context
+   * @param {Object}  context.params              - Route params; expects `{ id: string }`.
+   * @param {Object}  context.services            - Shared service instances.
+   * @param {Object}  context.services.hnService  - HNService for Firebase subscriptions.
+   * @param {Object}  context.stores              - Shared store instances.
+   * @param {Object}  context.stores.settingsStore     - User-preference store.
+   * @param {Object}  context.stores.readStoriesStore  - Tracks which stories the user has read.
+   * @param {Object}  [context.stores.threadStore]     - Optional global thread store (used as fallback).
+   * @param {Function} [context.stores.createThreadStore] - Factory for per-story thread stores.
+   * @param {Function} [context.stores.loadThreadState]   - Loader for persisted thread state.
    */
   constructor(context = {}) {
     super(context);
@@ -141,8 +129,13 @@ export default class ItemView extends View {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /**
-   * Build and return the root HTMLElement. Data loading begins here via hnService subscription.
-   * @returns {HTMLElement}
+   * Build and return the root HTMLElement for this view.
+   *
+   * Creates a loading skeleton, kicks off an `hnService.onItemValue` subscription,
+   * and returns the root element immediately. The content is populated
+   * asynchronously once item data arrives.
+   *
+   * @returns {HTMLElement} The root DOM node for this view.
    */
   render() {
     // Root wrapper
@@ -180,7 +173,16 @@ export default class ItemView extends View {
   }
 
   /**
-   * Full cleanup: tear down threadStore, all subscriptions, comment elements.
+   * Full cleanup of this view's resources.
+   *
+   * Tears down:
+   * - The load-completion poll timer.
+   * - The `hnService.onItemValue` subscription for the story.
+   * - The per-story `StoryCommentThreadStore` listener and the store itself.
+   * - Every rendered `CommentElement` (calling `ce.cleanup()`).
+   * - Base-class unsubscribers and DOM removal (via `super.cleanup()`).
+   *
+   * @returns {void}
    */
   cleanup() {
     // Cancel any pending load-completion poll.
@@ -238,7 +240,13 @@ export default class ItemView extends View {
   // ── Data subscription ──────────────────────────────────────────────────────
 
   /**
-   * Subscribe to hnService.onItemValue for this story's id.
+   * Subscribe to `hnService.onItemValue` for this story's id.
+   *
+   * Registers a Firebase real-time listener that fires `_onItemLoaded`
+   * whenever the item data changes. The unsubscribe handle is stored in
+   * `this._itemUnsub` and cleaned up by `cleanup()`.
+   *
+   * @returns {void}
    */
   _subscribeToItem() {
     const hn = this.services && this.services.hnService;
@@ -253,10 +261,18 @@ export default class ItemView extends View {
   }
 
   /**
-   * Called every time the hnService emits an update for this item.
-   * On first load: builds the full content DOM. On subsequent updates: patches mutable fields.
+   * Callback invoked every time `hnService` emits an update for this item.
    *
-   * @param {Object|null} item
+   * On the **first** call: initialises the thread store, builds the full
+   * content DOM (title, meta, controls, slider, body text, comment stubs),
+   * hides the loading skeleton, sets `document.title`, subscribes to child
+   * comments, and starts the load-completion poll.
+   *
+   * On **subsequent** calls: patches mutable meta fields (score, time,
+   * descendants) in place.
+   *
+   * @param {Object|null} item - The HN item payload, or `null` if not found.
+   * @returns {void}
    */
   _onItemLoaded(item) {
     if (!item || !item.id) {
@@ -305,11 +321,15 @@ export default class ItemView extends View {
   // ── ThreadStore initialisation ────────────────────────────────────────────
 
   /**
-   * Construct a StoryCommentThreadStore and initialise it for the loaded item.
-   * The vanilla StoryCommentThreadStore constructor takes an options object
-   * (not item + callback). We call initForItem() if present.
+   * Create and initialise a per-story `StoryCommentThreadStore` for the given item.
    *
-   * @param {Object} item
+   * Builds a `getItemById` helper (used by the store for tree traversal),
+   * instantiates the store scoped to `item.id`, calls `initForItem()` or
+   * seeds state via `_ensureEntry()`, and subscribes to store change
+   * notifications via `_onThreadStoreChanged`.
+   *
+   * @param {Object} item - The HN item payload for the current story.
+   * @returns {void}
    */
   _initThreadStore(item) {
     const globalThreadStore = this.stores && this.stores.threadStore;
@@ -362,8 +382,14 @@ export default class ItemView extends View {
   // ── Content building ───────────────────────────────────────────────────────
 
   /**
-   * Build the full content DOM for the loaded item and append it to this._contentEl.
-   * @param {Object} item
+   * Build the full content DOM for the loaded item and append it to `this._contentEl`.
+   *
+   * Constructs the story header (title + meta bar), controls bar, comment
+   * time-slider, optional body text, and the comments container. Populates
+   * internal DOM-ref fields (`_titleEl`, `_metaEl`, `_controlsEl`, etc.).
+   *
+   * @param {Object} item - The HN item payload.
+   * @returns {void}
    */
   _buildContent(item) {
     const content = this._contentEl;
@@ -419,10 +445,14 @@ export default class ItemView extends View {
   }
 
   /**
-   * Build the title element. External URL gets an <a href>, internal stories
-   * get an <a href="#/item/:id">. Dead stories are prefixed with [dead].
-   * @param {Object} item
-   * @returns {HTMLElement}
+   * Build the title element for the story.
+   *
+   * External URLs get an `<a>` pointing at the URL (with `target="_blank"`)
+   * followed by a hostname badge. Internal / dead stories get an `<a>` that
+   * links to `#/item/:id`. Dead stories are prefixed with `[dead]`.
+   *
+   * @param {Object} item - The HN item payload.
+   * @returns {HTMLElement} A wrapper `<div class="item-title">` containing the link.
    */
   _buildTitle(item) {
     const titleText = item.dead
@@ -477,9 +507,13 @@ export default class ItemView extends View {
   }
 
   /**
-   * Build the metadata bar: score, by, time, comments/discuss link.
-   * @param {Object} item
-   * @returns {HTMLElement}
+   * Build the metadata bar beneath the title.
+   *
+   * Renders score (e.g. "42 points"), author link, relative time, and a
+   * comments/discuss link. Job posts show only the time.
+   *
+   * @param {Object} item - The HN item payload.
+   * @returns {HTMLElement} A `<div class="item-meta">` element.
    */
   _buildMeta(item) {
     const meta = create("div", { attrs: { class: "item-meta" } });
@@ -657,8 +691,14 @@ export default class ItemView extends View {
   // ── Comment slider ────────────────────────────────────────────────────────
 
   /**
-   * Build (or rebuild) the comment time slider section inside this._sliderContainerEl.
-   * The slider is shown only once the thread has at least 2 comments.
+   * Build (or rebuild) the comment time-based slider inside
+   * `this._sliderContainerEl`.
+   *
+   * The slider lets the user choose a position in the chronologically-sorted
+   * comment list; comments after that position are visually highlighted.
+   * It is only rendered once the thread contains at least 2 comments.
+   *
+   * @returns {void}
    */
   _buildSlider() {
     const container = this._sliderContainerEl;
@@ -795,9 +835,17 @@ export default class ItemView extends View {
   // ── Comment rendering ─────────────────────────────────────────────────────
 
   /**
-   * Subscribe to hnService for each top-level kid in item.kids,
-   * render CommentElement stubs, and wire up threadStore.commentAdded.
-   * @param {Object} item
+   * Subscribe to `hnService.onItemValue` for every top-level child id in
+   * `item.kids`.
+   *
+   * For each child a placeholder `<div>` is appended to `this._kidsEl` to
+   * preserve ordering. When a comment's data arrives, `_onCommentLoaded`
+   * replaces the placeholder with a fully-rendered `CommentElement`.
+   * Unsubscribe handles are pushed to `this._unsubscribers` so they are
+   * cleaned up by the base `View.cleanup()`.
+   *
+   * @param {Object} item - The HN item payload (must have a `kids` array).
+   * @returns {void}
    */
   _subscribeToComments(item) {
     if (!item.kids || item.kids.length === 0) return;
@@ -839,12 +887,19 @@ export default class ItemView extends View {
   }
 
   /**
-   * Called when a top-level comment's data arrives from hnService.
-   * Creates/updates a CommentElement and replaces its placeholder.
-   * Also registers the comment with the threadStore.
+   * Handle arrival of a top-level comment's data from `hnService`.
    *
-   * @param {Object} comment
-   * @param {HTMLElement} placeholder
+   * If the comment has already been rendered (i.e. an update), its existing
+   * `CommentElement` is patched in place. Otherwise a new `CommentElement` is
+   * created, rendered, and swapped in for the loading placeholder.
+   *
+   * The comment is also registered with the per-story thread store via
+   * `_notifyThreadStoreComment`, and collapse / new-comment visual states are
+   * applied.
+   *
+   * @param {Object}      comment     - The HN comment payload.
+   * @param {HTMLElement}  placeholder - The placeholder `<div>` to replace.
+   * @returns {void}
    */
   _onCommentLoaded(comment, placeholder) {
     const key = String(comment.id);
@@ -1127,8 +1182,13 @@ export default class ItemView extends View {
   // ── Action handlers ───────────────────────────────────────────────────────
 
   /**
-   * Handle the "auto collapse" button: collapse all threads without new comments
-   * and re-apply the collapsed state to every rendered CommentElement.
+   * Handle the "auto collapse" button.
+   *
+   * Delegates to `threadStore.collapseThreadsWithoutNewComments()` to mark
+   * every thread that contains no new comments as collapsed, then walks all
+   * rendered `CommentElement` instances to apply the updated collapse state.
+   *
+   * @returns {void}
    */
   _handleAutoCollapse() {
     if (!this._threadStore) return;
@@ -1145,11 +1205,18 @@ export default class ItemView extends View {
   }
 
   /**
-   * Handle the "mark as read" button:
-   *  1. Call threadStore.markAsRead(storyId)
-   *  2. Call readStoriesStore.markAsRead(storyId)
-   *  3. Re-render controls bar (will become empty since newCommentCount → 0)
-   *  4. Strip new-comment classes from all comment elements
+   * Handle the "mark as read" button.
+   *
+   * Performs the following steps:
+   *  1. Calls `threadStore.markAsRead(storyId)` to reset the per-story
+   *     new-comment tracking (updates `lastVisit` and `maxCommentId`).
+   *  2. Calls `readStoriesStore.markAsRead(storyId)` to persist the story
+   *     in the global read-stories list.
+   *  3. Re-renders the controls bar (which will hide itself because
+   *     `newCommentCount` drops to 0).
+   *  4. Strips `comment--new` CSS classes from all rendered comment elements.
+   *
+   * @returns {void}
    */
   _handleMarkAsRead() {
     const storyId = this._item && this._item.id;

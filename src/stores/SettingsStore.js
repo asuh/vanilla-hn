@@ -20,40 +20,31 @@
  *  - It is resilient to missing `document`/`localStorage` (useful for SSR or tests).
  */
 
-const STORAGE_KEY = 'vanilla-hn:settings:v1';
+import { debounce } from "../utils/helpers.js";
+
+const STORAGE_KEY = "vanilla-hn:settings:v1";
 const DEFAULTS = {
   autoCollapse: true,
   replyLinks: true,
   showDead: false,
   showDeleted: false,
   titleFontSize: 18, // px
-  listSpacing: 'normal', // 'compact' | 'normal' | 'spacious'
-  theme: 'light' // 'light' | 'dark' | 'system'
+  listSpacing: "normal", // 'compact' | 'normal' | 'spacious'
+  theme: "light", // 'light' | 'dark' | 'system'
 };
 
-function safeParseJSON(value, fallback = null) {
-  try {
-    return JSON.parse(value);
-  } catch (e) {
-    return fallback;
-  }
-}
-
-/**
- * Minimal debounce utility to coalesce frequent saves.
- */
-function debounce(fn, wait = 200) {
-  let timeout = null;
-  return (...args) => {
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      timeout = null;
-      try { fn(...args); } catch (e) { /* swallow */ }
-    }, wait);
-  };
-}
-
 export default class SettingsStore {
+  /**
+   * Create a new SettingsStore instance.
+   *
+   * Merges the provided `initial` overrides into the built-in defaults,
+   * hydrates from localStorage (if available), sets up debounced persistence,
+   * and applies the current theme to the DOM immediately.
+   *
+   * @param {Object} [initial={}] Optional key/value overrides to merge on top
+   *                              of the built-in defaults before localStorage
+   *                              hydration occurs.
+   */
   constructor(initial = {}) {
     // Internal state
     this._state = Object.assign({}, DEFAULTS, initial);
@@ -68,20 +59,38 @@ export default class SettingsStore {
     this._debouncedSave = debounce(() => this._persist(), 150);
 
     // Apply theme immediately
-    try { this.applyTheme(); } catch (e) { /* ignore in non-DOM environments */ }
+    try {
+      this.applyTheme();
+    } catch (e) {
+      /* ignore in non-DOM environments */
+    }
   }
 
   /**
-   * Load settings from localStorage and merge into current state.
-   * If localStorage is unavailable or data is malformed, defaults remain.
+   * Load settings from localStorage and merge into the current in-memory state.
+   *
+   * Only known keys (those present in `DEFAULTS`) are merged so that stale or
+   * invalid keys from an older schema are silently ignored. If localStorage is
+   * unavailable or the stored JSON is malformed the current defaults remain
+   * untouched.
    */
   load() {
-    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+    if (
+      typeof window === "undefined" ||
+      typeof window.localStorage === "undefined"
+    )
+      return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const parsed = safeParseJSON(raw, null);
-      if (parsed && typeof parsed === 'object') {
+      let parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        // Malformed JSON — fall through and keep defaults.
+        return;
+      }
+      if (parsed && typeof parsed === "object") {
         // Merge shallowly; only known keys get assigned to avoid stale/invalid keys
         for (const k of Object.keys(DEFAULTS)) {
           if (k in parsed) this._state[k] = parsed[k];
@@ -89,7 +98,7 @@ export default class SettingsStore {
       }
     } catch (e) {
       // ignore storage errors
-      console.warn('SettingsStore.load(): failed to read localStorage', e);
+      console.warn("SettingsStore.load(): failed to read localStorage", e);
     }
   }
 
@@ -98,31 +107,43 @@ export default class SettingsStore {
    * Internal method; use update() which triggers debounced persistence.
    */
   _persist() {
-    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return;
+    if (
+      typeof window === "undefined" ||
+      typeof window.localStorage === "undefined"
+    )
+      return;
     try {
       const json = JSON.stringify(this._state);
       window.localStorage.setItem(STORAGE_KEY, json);
     } catch (e) {
       // Storage might be full or blocked; don't throw
-      console.warn('SettingsStore._persist(): failed to write localStorage', e);
+      console.warn("SettingsStore._persist(): failed to write localStorage", e);
     }
   }
 
   /**
-   * Save immediately (no debounce). Use sparingly.
+   * Persist the current state to localStorage immediately, bypassing the
+   * debounce delay. Use sparingly — prefer {@link update} for normal writes.
    */
   saveNow() {
     this._persist();
   }
 
   /**
-   * Update settings with a shallow merge and notify listeners.
-   * The write to localStorage is debounced to improve perceived performance.
+   * Update one or more settings with a shallow merge and notify all listeners.
    *
-   * @param {Object} updates
+   * Unknown keys (those not present in `DEFAULTS`) are silently ignored.
+   * The write to localStorage is debounced to improve perceived performance.
+   * If the `theme`, `titleFontSize`, or `listSpacing` keys are included the
+   * DOM theme is re-applied synchronously before listeners are invoked.
+   *
+   * @param {Object} updates An object whose keys are setting names and whose
+   *                         values are the new values to apply. Only keys that
+   *                         actually differ from the current state trigger a
+   *                         change notification.
    */
   update(updates = {}) {
-    if (!updates || typeof updates !== 'object') return;
+    if (!updates || typeof updates !== "object") return;
     let changed = false;
     for (const [k, v] of Object.entries(updates)) {
       if (!(k in DEFAULTS)) continue; // ignore unknown keys
@@ -137,37 +158,58 @@ export default class SettingsStore {
       // persist after a short delay (debounced)
       this._debouncedSave();
       // apply theme immediately if theme changed
-      if ('theme' in updates || 'titleFontSize' in updates || 'listSpacing' in updates) {
-        try { this.applyTheme(); } catch (e) { /* ignore */ }
+      if (
+        "theme" in updates ||
+        "titleFontSize" in updates ||
+        "listSpacing" in updates
+      ) {
+        try {
+          this.applyTheme();
+        } catch (e) {
+          /* ignore */
+        }
       }
       this.notify();
     }
   }
 
   /**
-   * Get the whole state or a single key.
+   * Retrieve the entire settings state or a single setting by key.
    *
-   * @param {string} [key] Optional key to retrieve.
-   * @returns {*}
+   * When called without arguments (or with a non-string value) a shallow clone
+   * of the full state object is returned so that callers cannot accidentally
+   * mutate internal state.
+   *
+   * @param {string} [key] Optional setting name to retrieve.
+   * @returns {*|Object} The value of the requested key, or a shallow copy of
+   *                     the full state object when `key` is omitted.
    */
   get(key) {
-    if (typeof key === 'string') return this._state[key];
+    if (typeof key === "string") return this._state[key];
     // return a shallow clone to avoid accidental external mutation
     return Object.assign({}, this._state);
   }
 
   /**
-   * Add a listener callback which will be invoked with the new state whenever it changes.
-   * Returns an unsubscribe function.
+   * Register a listener callback that will be invoked with a snapshot of the
+   * full settings state whenever it changes.
    *
-   * @param {Function} fn
-   * @returns {Function} unsubscribe
+   * The listener is called immediately upon registration with the current state
+   * so that subscribers can initialise without a separate `get()` call.
+   *
+   * @param {Function} fn Callback invoked as `fn(stateSnapshot)`.
+   * @returns {Function} An unsubscribe function — call it to remove the listener.
    */
   addListener(fn) {
-    if (typeof fn !== 'function') throw new TypeError('SettingsStore.addListener expects a function');
+    if (typeof fn !== "function")
+      throw new TypeError("SettingsStore.addListener expects a function");
     this._listeners.add(fn);
     // Immediately call with current state so subscribers can initialize
-    try { fn(this.get()); } catch (e) { /* swallow subscriber errors */ }
+    try {
+      fn(this.get());
+    } catch (e) {
+      /* swallow subscriber errors */
+    }
 
     return () => {
       this._listeners.delete(fn);
@@ -175,57 +217,70 @@ export default class SettingsStore {
   }
 
   /**
-   * Alias for addListener
+   * Alias for {@link addListener}. Provided for API symmetry with other stores.
+   *
+   * @param {Function} fn Callback invoked as `fn(stateSnapshot)`.
+   * @returns {Function} An unsubscribe function — call it to remove the listener.
    */
   subscribe(fn) {
     return this.addListener(fn);
   }
 
   /**
-   * Notify all listeners of the current state.
+   * Invoke every registered listener with a shallow snapshot of the current
+   * settings state. Listener errors are caught and logged so that a single
+   * misbehaving subscriber cannot break other listeners or the store itself.
    */
   notify() {
     const snapshot = this.get();
     for (const fn of Array.from(this._listeners)) {
-      try { fn(snapshot); } catch (e) { console.warn('SettingsStore listener threw', e); }
+      try {
+        fn(snapshot);
+      } catch (e) {
+        console.warn("SettingsStore listener threw", e);
+      }
     }
   }
 
   /**
-   * Apply theme and other UI-related preferences to the document.
-   * This mutates `document.documentElement` and `document.body` when available.
+   * Apply the current theme and UI-related preferences to the DOM.
    *
-   * Behavior:
-   *  - `theme === 'dark'` => add `body.classList.add('dark')`
-   *  - `theme === 'light'` => remove `body.classList.remove('dark')`
-   *  - `theme === 'system'` => follow prefers-color-scheme
+   * Side effects:
+   *  - Adds or removes the `dark` class on `document.body` depending on the
+   *    `theme` setting (`'light'`, `'dark'`, or `'system'`).
+   *  - Sets the `--font-size-title` CSS custom property on
+   *    `document.documentElement` based on `titleFontSize`.
+   *  - Sets the `data-list-spacing` attribute on `document.documentElement`
+   *    based on `listSpacing`.
    *
-   * Also applies `--font-size-title` based on `titleFontSize` and spacing classes for listSpacing.
+   * This method is a no-op when `document` is not available (e.g. SSR or tests).
    */
   applyTheme() {
-    if (typeof document === 'undefined') return;
+    if (typeof document === "undefined") return;
 
     const body = document.body;
     const root = document.documentElement;
     const theme = this._state.theme || DEFAULTS.theme;
 
     // Theme handling
-    if (theme === 'dark') {
-      body.classList.add('dark');
-    } else if (theme === 'light') {
-      body.classList.remove('dark');
-    } else if (theme === 'system') {
+    if (theme === "dark") {
+      body.classList.add("dark");
+    } else if (theme === "light") {
+      body.classList.remove("dark");
+    } else if (theme === "system") {
       // follow OS: remove explicit class and let CSS media queries handle it,
       // but if you prefer to set class based on current system preference:
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) body.classList.add('dark');
-      else body.classList.remove('dark');
+      const prefersDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (prefersDark) body.classList.add("dark");
+      else body.classList.remove("dark");
     }
 
     // Font size for titles (applied as CSS variable so components can use it)
     try {
       const size = Number(this._state.titleFontSize) || DEFAULTS.titleFontSize;
-      root.style.setProperty('--font-size-title', `${size}px`);
+      root.style.setProperty("--font-size-title", `${size}px`);
     } catch (e) {
       // ignore style errors
     }
@@ -233,21 +288,30 @@ export default class SettingsStore {
     // list spacing: set a data attribute for CSS to scope styles
     try {
       const spacing = String(this._state.listSpacing || DEFAULTS.listSpacing);
-      root.setAttribute('data-list-spacing', spacing);
+      root.setAttribute("data-list-spacing", spacing);
     } catch (e) {
       // ignore
     }
   }
 
   /**
-   * Reset settings to defaults (optionally persist).
+   * Reset all settings to their built-in defaults.
    *
-   * @param {boolean} [persist=true]
+   * Optionally persists the reset state to localStorage (enabled by default).
+   * The theme is re-applied and all listeners are notified after the reset.
+   *
+   * @param {boolean} [persist=true] When `true` (the default) the reset state
+   *                                 is written to localStorage via the normal
+   *                                 debounced save path.
    */
   reset(persist = true) {
     this._state = Object.assign({}, DEFAULTS);
     if (persist) this._debouncedSave();
-    try { this.applyTheme(); } catch (e) { /* ignore */ }
+    try {
+      this.applyTheme();
+    } catch (e) {
+      /* ignore */
+    }
     this.notify();
   }
 }

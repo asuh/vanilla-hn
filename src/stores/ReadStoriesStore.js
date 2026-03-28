@@ -12,33 +12,21 @@
  * - Writes are debounced to avoid thrashing localStorage on rapid navigation.
  */
 
-const STORAGE_KEY = 'vanilla-hn:read:v1';
+import { debounce } from "../utils/helpers.js";
+
+const STORAGE_KEY = "vanilla-hn:read:v1";
 const DEFAULT_MAX_ENTRIES = 500; // safety limit for persisted map
-
-function safeParseJSON(raw, fallback = {}) {
-  try {
-    const v = JSON.parse(raw);
-    return v && typeof v === 'object' ? v : fallback;
-  } catch (e) {
-    return fallback;
-  }
-}
-
-function debounce(fn, wait = 200) {
-  let t = null;
-  return (...args) => {
-    if (t) clearTimeout(t);
-    t = setTimeout(() => {
-      t = null;
-      try { fn(...args); } catch (e) { /* swallow */ }
-    }, wait);
-  };
-}
 
 export default class ReadStoriesStore {
   /**
-   * @param {Object} [opts]
-   * @param {number} [opts.maxEntries=500] maximum number of entries to persist
+   * Create a new ReadStoriesStore.
+   *
+   * Loads any previously persisted read-story entries from localStorage and
+   * sets up a debounced save so rapid `markAsRead` calls don't thrash storage.
+   *
+   * @param {Object} [opts] - Configuration options.
+   * @param {number} [opts.maxEntries=500] - Maximum number of entries to persist.
+   *   When exceeded, the oldest entries are pruned before saving.
    */
   constructor(opts = {}) {
     this._key = STORAGE_KEY;
@@ -59,7 +47,10 @@ export default class ReadStoriesStore {
    * --------------------------- */
 
   _load() {
-    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    if (
+      typeof window === "undefined" ||
+      typeof window.localStorage === "undefined"
+    ) {
       this._reads = {};
       return;
     }
@@ -69,7 +60,13 @@ export default class ReadStoriesStore {
         this._reads = {};
         return;
       }
-      const parsed = safeParseJSON(raw, {});
+      let parsed;
+      try {
+        const v = JSON.parse(raw);
+        parsed = v && typeof v === "object" ? v : {};
+      } catch (e) {
+        parsed = {};
+      }
       // Normalize keys to strings and values to numbers (seconds)
       const normalized = {};
       for (const [k, v] of Object.entries(parsed)) {
@@ -81,12 +78,15 @@ export default class ReadStoriesStore {
     } catch (e) {
       // If reading fails, fall back to empty map
       this._reads = {};
-      console.warn('ReadStoriesStore: failed to load from localStorage', e);
+      console.warn("ReadStoriesStore: failed to load from localStorage", e);
     }
   }
 
   _persist() {
-    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    if (
+      typeof window === "undefined" ||
+      typeof window.localStorage === "undefined"
+    ) {
       return;
     }
     try {
@@ -95,7 +95,7 @@ export default class ReadStoriesStore {
       window.localStorage.setItem(this._key, JSON.stringify(this._reads));
     } catch (e) {
       // Ignore storage errors (quota, blocked storage, etc.)
-      console.warn('ReadStoriesStore: failed to persist to localStorage', e);
+      console.warn("ReadStoriesStore: failed to persist to localStorage", e);
     }
   }
 
@@ -103,7 +103,7 @@ export default class ReadStoriesStore {
     const keys = Object.keys(this._reads);
     if (keys.length <= this._maxEntries) return;
     // Remove oldest entries first
-    const sorted = keys.sort((a, b) => (this._reads[a] - this._reads[b]));
+    const sorted = keys.sort((a, b) => this._reads[a] - this._reads[b]);
     const toRemove = sorted.slice(0, keys.length - this._maxEntries);
     for (const k of toRemove) {
       delete this._reads[k];
@@ -115,11 +115,15 @@ export default class ReadStoriesStore {
    * --------------------------- */
 
   /**
-   * Mark a story as read at the provided timestamp (seconds). If tsSeconds is omitted,
-   * the current time is used.
+   * Mark a story as read at the provided timestamp (seconds).
    *
-   * @param {string|number} storyId
-   * @param {number} [tsSeconds]
+   * If `tsSeconds` is omitted, the current time is used. The write to
+   * localStorage is debounced, and all registered listeners are notified
+   * with an updated snapshot of the reads map.
+   *
+   * @param {string|number} storyId - The ID of the story to mark as read.
+   * @param {number} [tsSeconds] - Unix timestamp in seconds. Defaults to `Date.now() / 1000`.
+   * @returns {string} The normalised string ID of the story that was marked.
    */
   markAsRead(storyId, tsSeconds) {
     if (storyId == null) return;
@@ -133,9 +137,12 @@ export default class ReadStoriesStore {
   }
 
   /**
-   * Unmark a story as read (remove from the persisted store).
-   * @param {string|number} storyId
-   * @returns {boolean} true if removed, false if not present
+   * Remove a story's read mark from the persisted store.
+   *
+   * Triggers a debounced save and notifies listeners if the entry existed.
+   *
+   * @param {string|number} storyId - The ID of the story to unmark.
+   * @returns {boolean} `true` if the entry was present and removed, `false` if it was not found.
    */
   unmarkAsRead(storyId) {
     if (storyId == null) return false;
@@ -149,45 +156,54 @@ export default class ReadStoriesStore {
 
   /**
    * Check whether a story is marked as read.
-   * Optionally pass `withinSeconds` to check if it was read within a time window.
    *
-   * @param {string|number} storyId
-   * @param {number} [withinSeconds] if provided, returns true only if read timestamp is within this many seconds from now.
-   * @returns {boolean}
+   * When `withinSeconds` is provided, the method only returns `true` if the
+   * story was read within that many seconds from the current time.
+   *
+   * @param {string|number} storyId - The ID of the story to check.
+   * @param {number} [withinSeconds] - If provided, returns `true` only when the
+   *   read timestamp is within this many seconds of now.
+   * @returns {boolean} Whether the story is (recently) read.
    */
   isRead(storyId, withinSeconds) {
     if (storyId == null) return false;
     const id = String(storyId);
     const ts = this._reads[id];
     if (!ts) return false;
-    if (typeof withinSeconds === 'number') {
+    if (typeof withinSeconds === "number") {
       const now = Math.floor(Date.now() / 1000);
-      return (now - ts) <= withinSeconds;
+      return now - ts <= withinSeconds;
     }
     return true;
   }
 
   /**
-   * Return a shallow copy of the read stories map: { id: tsSeconds, ... }
-   * @returns {Object}
+   * Return a shallow copy of the read stories map.
+   *
+   * The returned object maps string story IDs to Unix-second timestamps.
+   * Mutations to the returned object do not affect the store.
+   *
+   * @returns {Object.<string, number>} A `{ storyId: timestampSeconds }` snapshot.
    */
   getReadStories() {
     return Object.assign({}, this._reads);
   }
 
   /**
-   * Remove read marks older than the specified age (in seconds).
-   * Useful to prune long-running storage for limited devices.
+   * Remove read marks older than the specified age.
    *
-   * @param {number} maxAgeSeconds
-   * @returns {number} number of entries removed
+   * Useful to prune long-running storage on limited devices. Triggers a
+   * debounced save and listener notification when at least one entry is removed.
+   *
+   * @param {number} maxAgeSeconds - Entries older than this many seconds are removed.
+   * @returns {number} The number of entries that were removed.
    */
   clearOlderThan(maxAgeSeconds) {
-    if (typeof maxAgeSeconds !== 'number' || maxAgeSeconds <= 0) return 0;
+    if (typeof maxAgeSeconds !== "number" || maxAgeSeconds <= 0) return 0;
     const now = Math.floor(Date.now() / 1000);
     let removed = 0;
     for (const [id, ts] of Object.entries(this._reads)) {
-      if ((now - ts) > maxAgeSeconds) {
+      if (now - ts > maxAgeSeconds) {
         delete this._reads[id];
         removed++;
       }
@@ -200,7 +216,9 @@ export default class ReadStoriesStore {
   }
 
   /**
-   * Wipe all persisted read marks
+   * Wipe all persisted read marks and reset the store to an empty state.
+   *
+   * Triggers a debounced save and notifies all listeners.
    */
   clearAll() {
     this._reads = {};
@@ -213,22 +231,33 @@ export default class ReadStoriesStore {
    * --------------------------- */
 
   /**
-   * Add a listener that will be called with the current reads snapshot whenever
-   * the store changes. Returns an unsubscribe function.
+   * Register a listener that is called with a snapshot of the reads map
+   * whenever the store changes.
    *
-   * @param {Function} fn (readsSnapshot) => void
-   * @returns {Function} unsubscribe
+   * The listener is also invoked immediately with the current snapshot so
+   * that subscribers can initialise their state without an extra `getReadStories()` call.
+   *
+   * @param {Function} fn - Callback of the form `(readsSnapshot: Object.<string, number>) => void`.
+   * @returns {Function} An unsubscribe function. Call it to remove the listener.
    */
   addListener(fn) {
-    if (typeof fn !== 'function') throw new TypeError('ReadStoriesStore.addListener expects a function');
+    if (typeof fn !== "function")
+      throw new TypeError("ReadStoriesStore.addListener expects a function");
     this._listeners.add(fn);
     // call immediately with current snapshot so subscribers can initialize
-    try { fn(this.getReadStories()); } catch (e) { /* swallow subscriber errors */ }
+    try {
+      fn(this.getReadStories());
+    } catch (e) {
+      /* swallow subscriber errors */
+    }
     return () => this._listeners.delete(fn);
   }
 
   /**
-   * Alias for addListener
+   * Alias for {@link ReadStoriesStore#addListener}.
+   *
+   * @param {Function} fn - Callback of the form `(readsSnapshot: Object.<string, number>) => void`.
+   * @returns {Function} An unsubscribe function.
    */
   subscribe(fn) {
     return this.addListener(fn);
@@ -237,7 +266,11 @@ export default class ReadStoriesStore {
   _notify() {
     const snapshot = this.getReadStories();
     for (const fn of Array.from(this._listeners)) {
-      try { fn(snapshot); } catch (e) { /* swallow */ }
+      try {
+        fn(snapshot);
+      } catch (e) {
+        /* swallow */
+      }
     }
   }
 
@@ -246,20 +279,28 @@ export default class ReadStoriesStore {
    * --------------------------- */
 
   /**
-   * Return number of stored read entries
-   * @returns {number}
+   * Return the number of stories currently tracked as read.
+   *
+   * @returns {number} The count of stored read entries.
    */
   size() {
     return Object.keys(this._reads).length;
   }
 
   /**
-   * Destroy store: clear listeners and stop any pending debounced saves (by forcing a save).
-   * Use when tearing down an SPA or running tests.
+   * Destroy the store: persist any pending state immediately, then clear all
+   * registered listeners.
+   *
+   * Use this when tearing down an SPA view or during test cleanup to ensure
+   * no debounced callbacks fire after the store is logically dead.
    */
   destroy() {
     // Persist immediately before destroying
-    try { this._persist(); } catch (e) { /* ignore */ }
+    try {
+      this._persist();
+    } catch (e) {
+      /* ignore */
+    }
     this._listeners.clear();
   }
 }

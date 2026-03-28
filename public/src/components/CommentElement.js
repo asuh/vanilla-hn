@@ -243,17 +243,27 @@ export class CommentElement {
     this._collapsed = newState;
 
     if (this.root) {
-      if (this._collapsed) {
-        this.root.classList.add("comment--collapsed");
+      const applyCollapse = () => {
+        if (this._collapsed) {
+          this.root.classList.add("comment--collapsed");
+        } else {
+          this.root.classList.remove("comment--collapsed");
+        }
+        // update aria-expanded on toggle button if present
+        const btn = this.root.querySelector("button.toggle");
+        if (btn) btn.setAttribute("aria-expanded", String(!this._collapsed));
+        if (!this._collapsed) {
+          // when expanding, attempt to load visible (placeholder) children
+          this._loadVisiblePlaceholders();
+        }
+      };
+
+      // Use a View Transition for the visual change when the API is
+      // available so collapse/expand animates smoothly.
+      if (document.startViewTransition) {
+        document.startViewTransition(applyCollapse);
       } else {
-        this.root.classList.remove("comment--collapsed");
-      }
-      // update aria-expanded on toggle button if present
-      const btn = this.root.querySelector("button.toggle");
-      if (btn) btn.setAttribute("aria-expanded", String(!this._collapsed));
-      if (!this._collapsed) {
-        // when expanding, attempt to load visible (placeholder) children
-        this._loadVisiblePlaceholders();
+        applyCollapse();
       }
     }
 

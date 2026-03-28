@@ -57,6 +57,11 @@
      *
      * `loadThreadState(storyId)` is also exposed so list views can read the
      * persisted commentCount / maxCommentId without creating a full store.
+     *
+     * @param {string|number} storyId  - The HN story id to scope the store to.
+     * @param {Object}        [options] - Extra options forwarded to the
+     *                                    StoryCommentThreadStore constructor.
+     * @returns {StoryCommentThreadStore} A new per-story thread store instance.
      */
     function createThreadStore(storyId, options = {}) {
       return new StoryCommentThreadStore(storyId, options);
@@ -82,12 +87,17 @@
     });
 
     /**
-     * Helper that returns a factory which lazy-imports a view module and
-     * returns a view instance. The view module is expected to export a default
-     * class or factory function which accepts an options object:
+     * Returns an async view factory that lazy-imports a view module and
+     * constructs it with the shared application context.
+     *
+     * The view module is expected to export a default class or factory
+     * function which accepts an options object:
      *
      *   new ListView({ params, services, stores })
      *
+     * @param {string} viewPath - Relative path to the view module.
+     * @param {Object} [opts]   - Extra options merged into the view context.
+     * @returns {(params: Object) => Promise<View>} Async factory function.
      */
     function lazyView(viewPath, opts = {}) {
       return async function viewFactory(params) {
@@ -134,6 +144,10 @@
     router.register(
       /^#?\/jobs$/,
       lazyView("./views/ListView.js", { listType: "jobs" }),
+    );
+    router.register(
+      /^#?\/read$/,
+      lazyView("./views/ListView.js", { listType: "read" }),
     );
 
     // Item view: expects param extraction done by the Router (or viewFactory receives raw hash)

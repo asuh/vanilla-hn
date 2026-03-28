@@ -79,7 +79,7 @@ export default class View {
    * @returns {HTMLElement}
    */
   render() {
-    throw new Error('View.render() not implemented by subclass');
+    throw new Error("View.render() not implemented by subclass");
   }
 
   /* ---------------------------
@@ -94,19 +94,19 @@ export default class View {
    * @returns {HTMLElement} the root element returned by render()
    */
   mountTo(container) {
-    if (!container) throw new Error('mountTo requires a container element');
+    if (!container) throw new Error("mountTo requires a container element");
 
     // If a previous root exists, remove it cleanly first
     try {
       this.cleanup();
     } catch (e) {
       // non-fatal
-      console.warn('View.cleanup() during mount threw:', e);
+      console.warn("View.cleanup() during mount threw:", e);
     }
 
     const el = this.render();
     if (!(el instanceof HTMLElement)) {
-      throw new Error('View.render() must return an HTMLElement');
+      throw new Error("View.render() must return an HTMLElement");
     }
 
     this.root = el;
@@ -114,28 +114,34 @@ export default class View {
 
     // Allow derived classes to attach any event listeners now that elements are in the DOM
     try {
-      if (typeof this.attachEventListeners === 'function') {
+      if (typeof this.attachEventListeners === "function") {
         this.attachEventListeners();
         this._listenersAttached = true;
       }
     } catch (err) {
-      console.warn('attachEventListeners threw an error:', err);
+      console.warn("attachEventListeners threw an error:", err);
     }
 
     return el;
   }
 
   /**
-   * A small focus helper. By default focuses the first tabbable element inside the view
-   * or the root container itself.
+   * A small focus helper. By default focuses the first tabbable element inside
+   * the view's root element, falling back to the root element itself.
+   *
+   * The heuristic searches for the first element matching common tabbable
+   * selectors (`a[href]`, `button`, `input`, `textarea`, `select`,
+   * `[tabindex]` excluding `[tabindex="-1"]`). If none is found the root
+   * element receives focus directly.
    */
   focus() {
     if (!this.root) return;
     // Try to find a meaningful focus target
-    const selectors = 'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
+    const selectors =
+      'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
     const target = this.root.querySelector(selectors);
     try {
-      if (target && typeof target.focus === 'function') target.focus();
+      if (target && typeof target.focus === "function") target.focus();
       else this.root.focus && this.root.focus();
     } catch (e) {
       // ignore focus errors
@@ -157,21 +163,32 @@ export default class View {
    *  - events: { eventName: handler } will addEventListener for each event.
    *  - html: string -> innerHTML (use sparingly & only with sanitized content)
    *
-   * @param {string} tag
-   * @param {Object} options
-   * @param {...any} children
-   * @returns {HTMLElement}
+   * @param {string} tag        The HTML tag name (e.g. `'div'`, `'button'`).
+   * @param {Object} [options]  Element configuration (attrs, props, dataset, style, events, html).
+   * @param {...(Node|string)} children  Child nodes or text strings to append.
+   * @returns {HTMLElement} The newly created element.
    */
   createElement(tag, options = {}, ...children) {
     const el = document.createElement(tag);
-    const { attrs = {}, props = {}, dataset = {}, style = {}, events = {}, html } = options;
+    const {
+      attrs = {},
+      props = {},
+      dataset = {},
+      style = {},
+      events = {},
+      html,
+    } = options;
 
     // attrs
     for (const [k, v] of Object.entries(attrs)) {
       if (v === false || v == null) {
-        try { el.removeAttribute(k); } catch (e) { /* ignore */ }
+        try {
+          el.removeAttribute(k);
+        } catch (e) {
+          /* ignore */
+        }
       } else if (v === true) {
-        el.setAttribute(k, '');
+        el.setAttribute(k, "");
       } else {
         el.setAttribute(k, String(v));
       }
@@ -179,7 +196,11 @@ export default class View {
 
     // props
     for (const [k, v] of Object.entries(props)) {
-      try { el[k] = v; } catch (e) { /* ignore */ }
+      try {
+        el[k] = v;
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     // dataset
@@ -190,19 +211,23 @@ export default class View {
 
     // style
     for (const [k, v] of Object.entries(style)) {
-      try { el.style[k] = v; } catch (e) { /* ignore */ }
+      try {
+        el.style[k] = v;
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     // events
     for (const [evt, handler] of Object.entries(events)) {
-      if (typeof handler === 'function') {
+      if (typeof handler === "function") {
         el.addEventListener(evt, handler);
         // store event for cleanup
         this._elementListeners.push({ el, evt, handler });
       }
     }
 
-    if (typeof html === 'string') {
+    if (typeof html === "string") {
       el.innerHTML = html;
     } else {
       for (const child of children) {
@@ -216,9 +241,10 @@ export default class View {
   }
 
   /**
-   * Shortcut for creating a fragment from array of nodes/strings
-   * @param {Array} nodes
-   * @returns {DocumentFragment}
+   * Shortcut for creating a DocumentFragment from an array of nodes and/or strings.
+   *
+   * @param {Array<Node|string>} nodes  Nodes or text strings to include in the fragment.
+   * @returns {DocumentFragment} A new fragment containing the provided nodes.
    */
   createFragment(nodes = []) {
     const frag = document.createDocumentFragment();
@@ -240,41 +266,48 @@ export default class View {
    */
   setState(changes = {}) {
     Object.assign(this.state, changes);
-    if (typeof this.onStateChange === 'function') {
-      try { this.onStateChange(this.state); } catch (e) { console.warn('onStateChange error', e); }
+    if (typeof this.onStateChange === "function") {
+      try {
+        this.onStateChange(this.state);
+      } catch (e) {
+        console.warn("onStateChange error", e);
+      }
     }
   }
 
   /**
-   * Subscribe to a store. The store is expected to expose addListener(fn) -> unsubscribe,
-   * or subscribe(fn) -> unsubscribe. If neither is present the function will throw.
+   * Subscribe to a store. The store is expected to expose
+   * `addListener(fn) → unsubscribe`, `subscribe(fn) → unsubscribe`, or
+   * `on(event, fn)` / `off(event, fn)`. If none of these is present the
+   * method will throw.
    *
-   * The returned unsubscribe function is also recorded and will be invoked during cleanup
-   * if the caller does not unsubscribe manually.
+   * The returned unsubscribe function is also recorded internally and will
+   * be invoked during {@link cleanup} if the caller does not unsubscribe
+   * manually.
    *
-   * @param {Object} store
-   * @param {Function} listener
-   * @returns {Function} unsubscribe
+   * @param {Object}   store    A store-like object with a listener API.
+   * @param {Function} listener Callback invoked when the store value changes.
+   * @returns {Function} An unsubscribe function to stop listening.
    */
   subscribe(store, listener) {
-    if (!store || typeof listener !== 'function') {
-      throw new Error('subscribe requires a store and a listener function');
+    if (!store || typeof listener !== "function") {
+      throw new Error("subscribe requires a store and a listener function");
     }
 
     let unsub;
-    if (typeof store.addListener === 'function') {
+    if (typeof store.addListener === "function") {
       unsub = store.addListener(listener);
-    } else if (typeof store.subscribe === 'function') {
+    } else if (typeof store.subscribe === "function") {
       unsub = store.subscribe(listener);
-    } else if (typeof store.on === 'function') {
+    } else if (typeof store.on === "function") {
       // some EventEmitter-like stores
-      store.on('change', listener);
-      unsub = () => store.off('change', listener);
+      store.on("change", listener);
+      unsub = () => store.off("change", listener);
     } else {
-      throw new Error('store does not expose addListener/subscribe/on');
+      throw new Error("store does not expose addListener/subscribe/on");
     }
 
-    if (typeof unsub !== 'function') {
+    if (typeof unsub !== "function") {
       // Some stores return nothing and instead expect us to call a remove method on them.
       // In that case we just no-op the unsubscribe.
       unsub = () => {};
@@ -285,22 +318,27 @@ export default class View {
   }
 
   /**
-   * Attach a DOM-level event listener to a specific element and ensure it is removed on cleanup.
-   * Returns an unsubscribe function.
+   * Attach a DOM-level event listener to a specific element and ensure it is
+   * removed automatically during {@link cleanup}. Returns an unsubscribe
+   * function that can also be called earlier to remove the listener manually.
    *
-   * @param {Element} el
-   * @param {string} eventName
-   * @param {Function} handler
-   * @param {Object|boolean} [options]
-   * @returns {Function}
+   * @param {EventTarget} el         The element (or any EventTarget) to listen on.
+   * @param {string}      eventName  The DOM event name (e.g. `'click'`).
+   * @param {Function}    handler    The event handler callback.
+   * @param {Object|boolean} [options] Options forwarded to `addEventListener`.
+   * @returns {Function} An unsubscribe function that removes the listener.
    */
   watchEvent(el, eventName, handler, options) {
-    if (!el || typeof el.addEventListener !== 'function') {
-      throw new Error('watchEvent: invalid element');
+    if (!el || typeof el.addEventListener !== "function") {
+      throw new Error("watchEvent: invalid element");
     }
     el.addEventListener(eventName, handler, options);
     const unsub = () => {
-      try { el.removeEventListener(eventName, handler, options); } catch (e) { /* ignore */ }
+      try {
+        el.removeEventListener(eventName, handler, options);
+      } catch (e) {
+        /* ignore */
+      }
     };
     this._unsubscribers.push(unsub);
     // Also keep record so we can remove if needed earlier
@@ -313,10 +351,13 @@ export default class View {
    * --------------------------- */
 
   /**
-   * Convenience wrapper around fetch that respects this view's AbortSignal.
-   * @param {string} input
-   * @param {Object} init
-   * @returns {Promise<Response>}
+   * Convenience wrapper around the global `fetch()` that automatically
+   * wires in this view's {@link AbortSignal}. When the view is cleaned up
+   * the signal is aborted, cancelling any in-flight requests.
+   *
+   * @param {string|Request} input  The resource URL or Request object.
+   * @param {Object}         [init] Optional fetch init options (headers, method, etc.).
+   * @returns {Promise<Response>} The fetch response promise.
    */
   fetch(input, init = {}) {
     const merged = Object.assign({}, init, { signal: this.signal });
@@ -328,11 +369,16 @@ export default class View {
    * --------------------------- */
 
   /**
-   * Cleanup the view:
-   *  - abort pending async work
-   *  - call all recorded unsubscribe functions
-   *  - remove DOM event listeners recorded via createElement/watchEvent
-   *  - remove root element from DOM (if present and previously mounted)
+   * Tear down the view and release all resources:
+   *
+   * 1. Aborts the view's {@link AbortController}, cancelling any in-flight
+   *    fetches or other signal-aware async work.
+   * 2. Invokes every unsubscribe function recorded via {@link subscribe} and
+   *    {@link watchEvent}.
+   * 3. Removes DOM event listeners attached through {@link createElement}.
+   * 4. Detaches the root element from the DOM if it is still mounted.
+   *
+   * After cleanup the view should be considered disposed and not reused.
    */
   cleanup() {
     // Abort outstanding operations
@@ -344,17 +390,29 @@ export default class View {
 
     // Run recorded unsubscribers
     for (const unsub of this._unsubscribers.splice(0)) {
-      try { unsub(); } catch (e) { console.warn('unsub error', e); }
+      try {
+        unsub();
+      } catch (e) {
+        console.warn("unsub error", e);
+      }
     }
 
     // Remove element listeners attached via createElement or watchEvent
     for (const { el, evt, handler } of this._elementListeners.splice(0)) {
-      try { el.removeEventListener(evt, handler); } catch (e) { /* ignore */ }
+      try {
+        el.removeEventListener(evt, handler);
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     // If root is present and mounted, remove it from DOM.
     if (this.root && this.root.parentNode) {
-      try { this.root.parentNode.removeChild(this.root); } catch (e) { /* ignore */ }
+      try {
+        this.root.parentNode.removeChild(this.root);
+      } catch (e) {
+        /* ignore */
+      }
     }
     this.root = null;
     this._listenersAttached = false;
@@ -365,25 +423,27 @@ export default class View {
    * --------------------------- */
 
   /**
-   * Returns a minimal view-like object (not a subclass instance) that can be used
-   * as a quick fallback when a full view implementation isn't yet available.
+   * Returns a minimal view-like object (not a full `View` subclass instance)
+   * that can be used as a quick fallback when a full view implementation
+   * isn't yet available. The returned object satisfies the Router's view
+   * contract (`render()`, `cleanup()`, `focus()`).
    *
    * Example:
    *   const NotFound = View.createPlaceholderView('Not Found', 'The requested page was not found.');
    *   router.setNotFound(() => NotFound);
    *
-   * @param {string} title
-   * @param {string} message
-   * @returns {{ render: function(): HTMLElement, cleanup: function(): void, focus: function(): void }}
+   * @param {string} [title='Placeholder']  Heading text rendered inside the placeholder.
+   * @param {string} [message='']           Body text rendered below the heading.
+   * @returns {Object} A view-like object with `render()`, `cleanup()`, and `focus()` methods.
    */
-  static createPlaceholderView(title = 'Placeholder', message = '') {
+  static createPlaceholderView(title = "Placeholder", message = "") {
     return {
       render() {
-        const container = document.createElement('div');
-        container.className = 'view-placeholder';
-        const h = document.createElement('h2');
+        const container = document.createElement("div");
+        container.className = "view-placeholder";
+        const h = document.createElement("h2");
         h.textContent = title;
-        const p = document.createElement('p');
+        const p = document.createElement("p");
         p.textContent = message;
         container.appendChild(h);
         container.appendChild(p);
@@ -395,7 +455,7 @@ export default class View {
       focus() {
         // focus the root element if mounted
         // router will call focus() only if it is present; this is optional
-      }
+      },
     };
   }
 }

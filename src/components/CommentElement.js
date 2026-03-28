@@ -2,11 +2,10 @@
  * CommentElement.js
  *
  * A lightweight, framework-free component for rendering a single comment node
- * in the threaded Hacker News style UI and a small factory for story list items.
+ * in the threaded Hacker News style UI.
  *
  * Exports:
  *  - CommentElement (class)       : construct with new CommentElement({ comment, stores, services, depth })
- *  - createStoryListItem (function): factory returning an <li> for a story row
  *
  * Notes:
  *  - This component uses the small DOM helpers in `src/utils/dom.js`.
@@ -27,11 +26,13 @@ import {
 
 export class CommentElement {
   /**
-   * @param {Object} opts
-   * @param {Object} opts.comment - comment payload (id, by, time, text, kids[])
-   * @param {Object} [opts.services] - application services (hnService)
-   * @param {Object} [opts.stores] - application stores (threadStore, settingsStore)
-   * @param {number} [opts.depth] - comment nesting depth (for styling/logic)
+   * Create a new CommentElement.
+   *
+   * @param {Object} opts - Configuration object.
+   * @param {Object} opts.comment - Comment payload from the HN API (id, by, time, text, kids[]).
+   * @param {Object} [opts.services={}] - Application services (e.g. hnService).
+   * @param {Object} [opts.stores={}] - Application stores (e.g. threadStore, settingsStore).
+   * @param {number} [opts.depth=0] - Comment nesting depth (for styling/logic).
    */
   constructor({ comment, services = {}, stores = {}, depth = 0 } = {}) {
     if (!comment || !comment.id)
@@ -54,6 +55,8 @@ export class CommentElement {
   /**
    * Render the comment to an HTMLElement. Idempotent: repeated calls will return
    * the same root unless cleanup() has been called.
+   *
+   * @returns {HTMLElement} The root article element representing this comment.
    */
   render() {
     if (this.root) return this.root;
@@ -77,7 +80,12 @@ export class CommentElement {
     wrapper.appendChild(text);
 
     // Kids container (initially empty)
-    this._kidsContainer = create("div", { attrs: { class: "comment-kids" } });
+    this._kidsContainer = create("div", {
+      attrs: {
+        class: "comment-kids",
+        id: `comment-kids-${this.comment.id}`,
+      },
+    });
     wrapper.appendChild(this._kidsContainer);
 
     // If there are declared kids, add lightweight placeholders so layout is predictable.
@@ -124,6 +132,7 @@ export class CommentElement {
           class: "toggle",
           type: "button",
           "aria-expanded": String(!this._collapsed),
+          "aria-controls": `comment-body-${this.comment.id}`,
         },
         events: {
           click: (ev) => {
@@ -170,8 +179,8 @@ export class CommentElement {
     ) {
       try {
         const countsObj = this.stores.threadStore.getChildCounts(this.comment);
-        // getChildCounts may return { total: n, new: m }
-        if (countsObj && countsObj.new && countsObj.new > 0) {
+        // getChildCounts returns { children, newComments }
+        if (countsObj && countsObj.newComments && countsObj.newComments > 0) {
           const newBadge = create(
             "span",
             {
@@ -181,7 +190,7 @@ export class CommentElement {
                 "aria-live": "polite",
               },
             },
-            String(countsObj.new),
+            String(countsObj.newComments),
           );
           counts.appendChild(newBadge);
           // highlight the comment element visually
@@ -205,7 +214,10 @@ export class CommentElement {
     // HN comment text is pre-sanitized HTML from the Firebase API (e.g. <p>, <a>, <i>).
     // Render it as HTML directly rather than escaping it.
     const textEl = create("div", {
-      attrs: { class: "comment-text" },
+      attrs: {
+        class: "comment-text",
+        id: `comment-body-${this.comment.id}`,
+      },
       html: this.comment.text || "",
     });
     return textEl;
@@ -236,6 +248,10 @@ export class CommentElement {
   /**
    * Toggle collapse state.
    * If explicitState is provided (true = collapsed, false = expanded) it will be applied.
+   *
+   * @param {boolean} [explicitState] - If provided, forces collapsed (true) or expanded (false).
+   * @param {boolean} [notifyStore=true] - Whether to notify the store of the state change.
+   * @returns {boolean} The new collapsed state.
    */
   toggleCollapse(explicitState, notifyStore = true) {
     const newState =
@@ -243,17 +259,27 @@ export class CommentElement {
     this._collapsed = newState;
 
     if (this.root) {
-      if (this._collapsed) {
-        this.root.classList.add("comment--collapsed");
+      const applyCollapse = () => {
+        if (this._collapsed) {
+          this.root.classList.add("comment--collapsed");
+        } else {
+          this.root.classList.remove("comment--collapsed");
+        }
+        // update aria-expanded on toggle button if present
+        const btn = this.root.querySelector("button.toggle");
+        if (btn) btn.setAttribute("aria-expanded", String(!this._collapsed));
+        if (!this._collapsed) {
+          // when expanding, attempt to load visible (placeholder) children
+          this._loadVisiblePlaceholders();
+        }
+      };
+
+      // Use a View Transition for the visual change when the API is
+      // available so collapse/expand animates smoothly.
+      if (document.startViewTransition) {
+        document.startViewTransition(applyCollapse);
       } else {
-        this.root.classList.remove("comment--collapsed");
-      }
-      // update aria-expanded on toggle button if present
-      const btn = this.root.querySelector("button.toggle");
-      if (btn) btn.setAttribute("aria-expanded", String(!this._collapsed));
-      if (!this._collapsed) {
-        // when expanding, attempt to load visible (placeholder) children
-        this._loadVisiblePlaceholders();
+        applyCollapse();
       }
     }
 
@@ -388,7 +414,9 @@ export class CommentElement {
   }
 
   /**
-   * Update visual representation of the comment (e.g., after comment data changed)
+   * Update visual representation of the comment (e.g., after comment data changed).
+   *
+   * @returns {void}
    */
   update() {
     if (!this.root) return;
@@ -424,7 +452,7 @@ export class CommentElement {
       try {
         const countsObj = this.stores.threadStore.getChildCounts(this.comment);
         const existingBadge = this.root.querySelector(".badge--new");
-        if (countsObj && countsObj.new && countsObj.new > 0) {
+        if (countsObj && countsObj.newComments && countsObj.newComments > 0) {
           if (!existingBadge) {
             const newBadge = create(
               "span",
@@ -435,7 +463,7 @@ export class CommentElement {
                   "aria-live": "polite",
                 },
               },
-              String(countsObj.new),
+              String(countsObj.newComments),
             );
             const countsContainer = this.root.querySelector(
               ".comment-meta .counts",
@@ -443,7 +471,7 @@ export class CommentElement {
             if (countsContainer) countsContainer.appendChild(newBadge);
             this.root.classList.add("comment--has-new");
           } else {
-            existingBadge.textContent = String(countsObj.new);
+            existingBadge.textContent = String(countsObj.newComments);
             this.root.classList.add("comment--has-new");
           }
         } else if (existingBadge) {
@@ -458,6 +486,8 @@ export class CommentElement {
 
   /**
    * Remove listeners and free references. Should be called when the comment is unmounted.
+   *
+   * @returns {void}
    */
   cleanup() {
     // Disconnect the IntersectionObserver so it stops firing for this tree.
@@ -502,77 +532,6 @@ export class CommentElement {
     this._kidsContainer = null;
     this._loadingPlaceholders.clear();
   }
-}
-
-/**
- * Factory for a story list item DOM node.
- * Returns an <li> element styled similarly to HN list rows.
- *
- * @param {Object} story - story object (id, title, by, time, score, descendants, url)
- * @param {Object} [opts] - options { showHost: true, showNewBadge: false, onClick: fn }
- * @returns {HTMLElement} li
- */
-export function createStoryListItem(story = {}, opts = {}) {
-  const { showHost = true, showNewBadge = false, onClick } = opts;
-  const id = story.id || String(Math.random()).slice(2, 8);
-  const titleText = story.title || `Story ${id}`;
-  const by = story.by || "unknown";
-  const score = story.score != null ? story.score : 0;
-  const descendants =
-    story.descendants != null
-      ? story.descendants
-      : Array.isArray(story.kids)
-        ? story.kids.length
-        : 0;
-  const url = story.url || null;
-
-  const li = create("li", {
-    attrs: { class: "item", role: "listitem", "data-id": String(id) },
-  });
-
-  const titleDiv = create("div", { attrs: { class: "col" } });
-  const titleEl = create("div", { attrs: { class: "title" } });
-  const a = create("a", { attrs: { href: `#/item/${id}` } }, titleText);
-  titleEl.appendChild(a);
-  titleDiv.appendChild(titleEl);
-
-  const meta = create(
-    "div",
-    { attrs: { class: "meta" } },
-    `${score} points by ${by} · ${timeAgoFromUnix(story.time || Date.now() / 1000)} · ${descendants} comments`,
-  );
-  titleDiv.appendChild(meta);
-  li.appendChild(titleDiv);
-
-  if (showHost && url) {
-    try {
-      const host = new URL(url).host.replace(/^www\./, "");
-      const hostEl = create("div", { attrs: { class: "item-host" } }, host);
-      li.appendChild(hostEl);
-    } catch (e) {
-      // ignore bad URL
-    }
-  }
-
-  if (showNewBadge) {
-    const badge = create(
-      "span",
-      { attrs: { class: "badge badge--new" } },
-      "new",
-    );
-    li.appendChild(badge);
-  }
-
-  if (typeof onClick === "function") {
-    li.addEventListener("click", (ev) => {
-      // If click target is a link, allow default navigation
-      if (ev.target && ev.target.tagName === "A") return;
-      ev.preventDefault();
-      onClick(ev, story);
-    });
-  }
-
-  return li;
 }
 
 export default CommentElement;
