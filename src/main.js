@@ -150,6 +150,12 @@
       lazyView("./views/ListView.js", { listType: "read" }),
     );
 
+    // New comments feed
+    router.register(
+      /^#?\/newcomments$/,
+      lazyView("./views/NewCommentsView.js"),
+    );
+
     // Item view: expects param extraction done by the Router (or viewFactory receives raw hash)
     // Here we register a simple matcher that extracts numeric id from the hash like #/item/12345
     router.register(/^#?\/item\/(\d+)$/, async (hashMatch) => {

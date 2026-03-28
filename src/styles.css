@@ -870,6 +870,96 @@
     }
 }
 
+/* ── New Comments Feed → NewCommentsView ──────────────────────────────── */
+
+.newcomments-view {
+    .view__heading {
+        font-size: 1.1em;
+        font-weight: bold;
+        padding: 8px 0 4px;
+    }
+}
+
+.comment-feed {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.comment-feed__item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--hn-border, #e0e0e0);
+
+    &--dead {
+        opacity: 0.6;
+    }
+
+    &--skeleton {
+        padding: 10px 0;
+    }
+
+    &--empty,
+    &--error {
+        color: var(--hn-meta-color, #828282);
+        font-style: italic;
+        padding: 16px 0;
+    }
+}
+
+.comment-feed__meta {
+    font-size: var(--font-size-meta, 13px);
+    color: var(--hn-meta-color, #828282);
+    margin-bottom: 4px;
+}
+
+.comment-feed__author {
+    color: var(--hn-meta-color, #828282);
+    text-decoration: none;
+    font-weight: 500;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.comment-feed__time {
+    color: var(--hn-meta-color, #828282);
+}
+
+.comment-feed__parent-link {
+    color: var(--hn-meta-color, #828282);
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.comment-feed__text {
+    font-size: 0.93em;
+    line-height: 1.45;
+    overflow-wrap: break-word;
+    word-break: break-word;
+
+    & a {
+        color: var(--hn-link-color, #000);
+        text-decoration: underline;
+    }
+
+    & p {
+        margin-block: 0.5em;
+    }
+
+    & p:first-child {
+        margin-block-start: 0;
+    }
+
+    &--deleted {
+        color: var(--hn-meta-color, #828282);
+        font-style: italic;
+    }
+}
+
 /* =============================================================================
    UTILITIES
    ============================================================================= */
