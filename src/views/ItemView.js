@@ -25,6 +25,8 @@ import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { pluralise, parseHost } from "../utils/helpers.js";
 import { CommentElement } from "../components/CommentElement.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
+import CommentSlider from "../components/CommentSlider.js";
+import ItemControls from "../components/ItemControls.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -35,40 +37,6 @@ const LOAD_POLL_INTERVAL_MS = 200;
 
 /** Max time (ms) we wait for the thread to finish loading before giving up on auto-collapse. */
 const LOAD_POLL_TIMEOUT_MS = 30_000;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Given a unix-seconds timestamp for the last visit, produce a human-readable
- * duration string like "3 hours" or "2 days" (without the trailing "ago").
- *
- * NOTE: This is intentionally separate from `dom.js`'s `formatRelativeTime` /
- * `timeAgoFromUnix`, which return strings such as "3 hours ago". Here we need
- * only the bare duration portion (e.g. for "N new comments in the last 3 hours").
- *
- * @param {number} lastVisitSeconds  unix timestamp in seconds
- * @returns {string} Human-readable duration, e.g. "3 hours", or "" if falsy input
- */
-function sinceLastVisit(lastVisitSeconds) {
-  if (!lastVisitSeconds) return "";
-  const diffMs = Date.now() - lastVisitSeconds * 1000;
-  const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
-
-  const units = [
-    { name: "year", secs: 60 * 60 * 24 * 365 },
-    { name: "month", secs: 60 * 60 * 24 * 30 },
-    { name: "week", secs: 60 * 60 * 24 * 7 },
-    { name: "day", secs: 60 * 60 * 24 },
-    { name: "hour", secs: 60 * 60 },
-    { name: "minute", secs: 60 },
-  ];
-
-  for (const u of units) {
-    const val = Math.floor(diffSeconds / u.secs);
-    if (val >= 1) return `${val} ${pluralise(val, u.name)}`;
-  }
-  return "a moment";
-}
 
 // ─── ItemView ────────────────────────────────────────────────────────────────
 
@@ -98,9 +66,9 @@ export default class ItemView extends View {
     // The loaded HN item object.
     this._item = null;
 
-    // Slider position (1-based index into sorted comment array).
-    // Initialised to null; defaults to commentCount - 1 once we know it.
-    this._sliderValue = null;
+    // Component instances for extracted UI sections.
+    this._controls = null;
+    this._slider = null;
 
     // Map of commentId (string) -> CommentElement instance for top-level comments.
     this._commentElements = new Map();
@@ -196,6 +164,24 @@ export default class ItemView extends View {
         /* ignore */
       }
       this._itemUnsub = null;
+    }
+
+    // Clean up extracted components.
+    if (this._controls) {
+      try {
+        this._controls.cleanup();
+      } catch (e) {
+        /* ignore */
+      }
+      this._controls = null;
+    }
+    if (this._slider) {
+      try {
+        this._slider.cleanup();
+      } catch (e) {
+        /* ignore */
+      }
+      this._slider = null;
     }
 
     // Unsubscribe from threadStore.
@@ -412,21 +398,26 @@ export default class ItemView extends View {
     content.appendChild(header);
 
     // Controls bar (new comments info + auto-collapse + mark-as-read)
-    this._controlsEl = create("div", { attrs: { class: "item-controls" } });
+    this._controls = new ItemControls({
+      item,
+      threadStore: this._threadStore,
+      readStoriesStore: this.stores && this.stores.readStoriesStore,
+      onAutoCollapse: () => this._handleAutoCollapse(),
+      onMarkAsRead: () => this._handleMarkAsRead(),
+      getNewCommentCount: () => this._getNewCommentCount(),
+      getCommentCount: () => this._getCommentCount(),
+    });
+    this._controlsEl = this._controls.render();
     content.appendChild(this._controlsEl);
-    // Render controls immediately (may be empty on first visit)
-    this._renderControls();
 
     // Comment time slider
-    this._sliderContainerEl = create("div", {
-      attrs: {
-        class: "item-slider-container",
-        "aria-label": "Highlight comments by position",
-      },
-      style: { opacity: "0", transition: "opacity .33s ease-out" },
+    this._slider = new CommentSlider({
+      threadStore: this._threadStore,
+      onHighlight: () => this._reapplyAllCommentStates(),
+      getCommentCount: () => this._getCommentCount(),
     });
+    this._sliderContainerEl = this._slider.render();
     content.appendChild(this._sliderContainerEl);
-    this._buildSlider();
 
     // Item body text (ask HN, job posts, etc.)
     if (item.text) {
@@ -595,240 +586,6 @@ export default class ItemView extends View {
         commentsCount > 0
           ? `${commentsCount} ${pluralise(commentsCount, "comment")}`
           : "discuss";
-    }
-  }
-
-  // ── Controls bar ──────────────────────────────────────────────────────────
-
-  /**
-   * Render (or re-render) the controls bar. Shows nothing on first visit.
-   * On revisits: "N new comments in the last X | auto collapse | mark as read"
-   */
-  _renderControls() {
-    const el = this._controlsEl;
-    if (!el) return;
-
-    // Clear
-    while (el.firstChild) el.removeChild(el.firstChild);
-
-    if (!this._threadStore) return;
-
-    const storyId = this._item && this._item.id;
-    const state =
-      storyId && typeof this._threadStore.getState === "function"
-        ? this._threadStore.getState(storyId)
-        : null;
-
-    const lastVisit = state
-      ? state.lastVisit
-      : this._threadStore.lastVisit || null;
-    const newCommentCount = this._getNewCommentCount();
-
-    // Only show the controls bar when we've been here before and have new comments.
-    if (!lastVisit || newCommentCount <= 0) return;
-
-    el.setAttribute("class", "item-controls item-controls--visible");
-
-    const since = sinceLastVisit(lastVisit);
-
-    // "N new comments in the last X"
-    const newInfo = create(
-      "span",
-      { attrs: { class: "item-controls__new-info" } },
-      create(
-        "em",
-        {},
-        `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`,
-      ),
-      ` in the last ${since}`,
-    );
-    el.appendChild(newInfo);
-
-    el.appendChild(document.createTextNode(" | "));
-
-    // "auto collapse" button
-    const autoCollapseBtn = create(
-      "button",
-      {
-        attrs: {
-          type: "button",
-          class: "item-controls__btn item-controls__btn--collapse",
-          title: "Collapse threads without new comments",
-        },
-        events: {
-          click: (e) => {
-            e.preventDefault();
-            this._handleAutoCollapse();
-          },
-        },
-      },
-      "auto collapse",
-    );
-    el.appendChild(autoCollapseBtn);
-
-    el.appendChild(document.createTextNode(" | "));
-
-    // "mark as read" button
-    const markReadBtn = create(
-      "button",
-      {
-        attrs: {
-          type: "button",
-          class: "item-controls__btn item-controls__btn--read",
-        },
-        events: {
-          click: (e) => {
-            e.preventDefault();
-            this._handleMarkAsRead();
-          },
-        },
-      },
-      "mark as read",
-    );
-    el.appendChild(markReadBtn);
-  }
-
-  // ── Comment slider ────────────────────────────────────────────────────────
-
-  /**
-   * Build (or rebuild) the comment time-based slider inside
-   * `this._sliderContainerEl`.
-   *
-   * The slider lets the user choose a position in the chronologically-sorted
-   * comment list; comments after that position are visually highlighted.
-   * It is only rendered once the thread contains at least 2 comments.
-   *
-   * @returns {void}
-   */
-  _buildSlider() {
-    const container = this._sliderContainerEl;
-    if (!container) return;
-
-    while (container.firstChild) container.removeChild(container.firstChild);
-
-    if (!this._threadStore) return;
-
-    const commentCount = this._getCommentCount();
-    if (commentCount < 2) return;
-
-    // Show the slider section
-    container.style.opacity = "1";
-    container.setAttribute("aria-hidden", "false");
-
-    // Default slider to the second-to-last comment (highlight most recent)
-    if (this._sliderValue === null || this._sliderValue > commentCount - 1) {
-      this._sliderValue = commentCount - 1;
-    }
-
-    const slider = create("input", {
-      attrs: {
-        type: "range",
-        class: "item-slider",
-        min: "1",
-        max: String(commentCount - 1),
-        value: String(this._sliderValue),
-        "aria-label": "Highlight comments after this position",
-      },
-      style: { margin: "0", verticalAlign: "middle" },
-    });
-
-    // Label showing "highlight N comments from <time>"
-    const label = create("span", { attrs: { class: "item-slider__label" } });
-    this._updateSliderLabel(label, this._sliderValue);
-
-    // Button to apply the slider selection
-    const applyBtn = create(
-      "button",
-      {
-        attrs: {
-          type: "button",
-          class: "item-slider__btn",
-        },
-        events: {
-          click: () => {
-            const val = parseInt(slider.value, 10);
-            this._sliderValue = val;
-            if (
-              this._threadStore &&
-              typeof this._threadStore.highlightNewCommentsSince === "function"
-            ) {
-              try {
-                this._threadStore.highlightNewCommentsSince(val);
-              } catch (e) {
-                /* ignore */
-              }
-            }
-            this._updateSliderLabel(label, val);
-          },
-        },
-      },
-      label,
-    );
-
-    slider.addEventListener("input", () => {
-      const val = parseInt(slider.value, 10);
-      this._sliderValue = val;
-      this._updateSliderLabel(label, val);
-    });
-
-    container.appendChild(slider);
-    container.appendChild(applyBtn);
-  }
-
-  /**
-   * Update the slider label to reflect how many comments would be highlighted
-   * and from when.
-   * @param {HTMLElement} labelEl
-   * @param {number} sliderVal  1-based index
-   */
-  _updateSliderLabel(labelEl, sliderVal) {
-    if (!labelEl) return;
-    while (labelEl.firstChild) labelEl.removeChild(labelEl.firstChild);
-
-    const commentCount = this._getCommentCount();
-    const howMany = Math.max(0, commentCount - sliderVal);
-
-    let timeStr = "";
-    if (
-      this._threadStore &&
-      typeof this._threadStore.getCommentByTimeIndex === "function"
-    ) {
-      try {
-        const refComment = this._threadStore.getCommentByTimeIndex(
-          sliderVal + 1,
-        );
-        if (refComment && refComment.time) {
-          timeStr = timeAgoFromUnix(refComment.time);
-        }
-      } catch (e) {
-        /* ignore */
-      }
-    }
-
-    labelEl.appendChild(
-      document.createTextNode(
-        `highlight ${howMany} ${pluralise(howMany, "comment")}${timeStr ? " from " : ""}`,
-      ),
-    );
-
-    if (timeStr) {
-      labelEl.appendChild(
-        create("span", { attrs: { class: "item-slider__time" } }, timeStr),
-      );
-    }
-  }
-
-  /**
-   * Reveal the slider once enough comments are loaded.
-   */
-  _maybeShowSlider() {
-    const commentCount = this._getCommentCount();
-    if (!this._sliderContainerEl) return;
-
-    if (commentCount >= 2) {
-      this._buildSlider();
-    } else {
-      this._sliderContainerEl.style.opacity = "0";
     }
   }
 
@@ -1138,7 +895,7 @@ export default class ItemView extends View {
     }
 
     // Show the slider now that loading is complete.
-    this._maybeShowSlider();
+    if (this._slider) this._slider.show();
   }
 
   // ── Store change handler ──────────────────────────────────────────────────
@@ -1162,20 +919,20 @@ export default class ItemView extends View {
 
     if (type === "markAsRead") {
       // Refresh the controls bar to clear the "new comments" notice.
-      this._renderControls();
+      if (this._controls) this._controls.update();
       this._reapplyAllCommentStates();
       return;
     }
 
     if (type === "commentAdded") {
       // A new comment was registered — update slider and controls.
-      this._maybeShowSlider();
+      if (this._slider) this._slider.show();
       return;
     }
 
     // Generic / unknown change: refresh reactive sections.
-    this._renderControls();
-    this._maybeShowSlider();
+    if (this._controls) this._controls.update();
+    if (this._slider) this._slider.show();
     this._reapplyAllCommentStates();
   }
 
@@ -1245,7 +1002,7 @@ export default class ItemView extends View {
     }
 
     // Refresh the controls bar — it should now hide (no more new comments).
-    this._renderControls();
+    if (this._controls) this._controls.update();
 
     // Remove new-comment highlights from rendered comment elements.
     this._reapplyAllCommentStates();

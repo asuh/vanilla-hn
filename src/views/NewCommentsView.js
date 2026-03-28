@@ -10,6 +10,7 @@
  */
 
 import View from "./View.js";
+import { Paginator } from "../components/Paginator.js";
 import { create, timeAgoFromUnix, escapeHTML } from "../utils/dom.js";
 
 const PAGE_SIZE = 30;
@@ -56,6 +57,8 @@ export default class NewCommentsView extends View {
     this._listEl = null;
     /** @type {HTMLElement|null} */
     this._paginationEl = null;
+    /** @type {Paginator|null} */
+    this._paginator = null;
   }
 
   /**
@@ -69,7 +72,11 @@ export default class NewCommentsView extends View {
       attrs: { class: "view newcomments-view" },
     });
 
-    const heading = create("h1", { attrs: { class: "view__heading" } }, "New Comments");
+    const heading = create(
+      "h1",
+      { attrs: { class: "view__heading" } },
+      "New Comments",
+    );
     wrapper.appendChild(heading);
 
     const container = create("div", { attrs: { class: "container" } });
@@ -86,9 +93,12 @@ export default class NewCommentsView extends View {
     // Show loading skeletons
     this._renderSkeletons();
 
-    this._paginationEl = create("nav", {
-      attrs: { class: "list-view__pagination", "aria-label": "Pagination" },
+    this._paginator = new Paginator({
+      page: this.page,
+      hasMore: false,
+      buildHref: (p) => (p <= 1 ? "#/newcomments" : `#/newcomments?page=${p}`),
     });
+    this._paginationEl = this._paginator.render();
 
     container.appendChild(this._listEl);
     container.appendChild(this._paginationEl);
@@ -104,14 +114,26 @@ export default class NewCommentsView extends View {
    */
   cleanup() {
     if (this._unsub) {
-      try { this._unsub(); } catch (_) { /* ignore */ }
+      try {
+        this._unsub();
+      } catch (_) {
+        /* ignore */
+      }
       this._unsub = null;
     }
     for (const unsub of this._itemUnsubs) {
-      try { unsub(); } catch (_) { /* ignore */ }
+      try {
+        unsub();
+      } catch (_) {
+        /* ignore */
+      }
     }
     this._itemUnsubs = [];
     this._comments.clear();
+    if (this._paginator) {
+      this._paginator.cleanup();
+      this._paginator = null;
+    }
     super.cleanup();
   }
 
@@ -157,7 +179,11 @@ export default class NewCommentsView extends View {
   _fetchAndFilterComments(itemIds) {
     // Cancel previous per-item subscriptions
     for (const unsub of this._itemUnsubs) {
-      try { unsub(); } catch (_) { /* ignore */ }
+      try {
+        unsub();
+      } catch (_) {
+        /* ignore */
+      }
     }
     this._itemUnsubs = [];
     this._comments.clear();
@@ -191,8 +217,14 @@ export default class NewCommentsView extends View {
           .fetchItem(id)
           .then((item) => {
             if (item && item.type === "comment") {
-              if (item.dead && !showDead) { onItemResolved(); return; }
-              if (item.deleted && !showDeleted) { onItemResolved(); return; }
+              if (item.dead && !showDead) {
+                onItemResolved();
+                return;
+              }
+              if (item.deleted && !showDeleted) {
+                onItemResolved();
+                return;
+              }
               this._comments.set(item.id, item);
               this._allCommentIds.push(item.id);
             }
@@ -203,8 +235,14 @@ export default class NewCommentsView extends View {
         // Fallback: use onItemValue for a single read
         const unsub = this._hn.onItemValue(id, (item) => {
           if (item && item.type === "comment") {
-            if (item.dead && !showDead) { onItemResolved(); return; }
-            if (item.deleted && !showDeleted) { onItemResolved(); return; }
+            if (item.dead && !showDead) {
+              onItemResolved();
+              return;
+            }
+            if (item.deleted && !showDeleted) {
+              onItemResolved();
+              return;
+            }
             this._comments.set(item.id, item);
             this._allCommentIds.push(item.id);
           }
@@ -252,7 +290,9 @@ export default class NewCommentsView extends View {
     }
 
     this._listEl.appendChild(fragment);
-    this._renderPagination(hasMore);
+    if (this._paginator) {
+      this._paginator.update({ page: this.page, hasMore });
+    }
   }
 
   /**
@@ -276,7 +316,12 @@ export default class NewCommentsView extends View {
     if (comment.by) {
       const byLink = create(
         "a",
-        { attrs: { href: `#/user/${comment.by}`, class: "comment-feed__author" } },
+        {
+          attrs: {
+            href: `#/user/${comment.by}`,
+            class: "comment-feed__author",
+          },
+        },
         comment.by,
       );
       meta.appendChild(byLink);
@@ -297,7 +342,12 @@ export default class NewCommentsView extends View {
       meta.appendChild(document.createTextNode(" | "));
       const parentLink = create(
         "a",
-        { attrs: { href: `#/item/${comment.parent}`, class: "comment-feed__parent-link" } },
+        {
+          attrs: {
+            href: `#/item/${comment.parent}`,
+            class: "comment-feed__parent-link",
+          },
+        },
         "parent",
       );
       meta.appendChild(parentLink);
@@ -324,49 +374,6 @@ export default class NewCommentsView extends View {
     return li;
   }
 
-  /**
-   * Render pagination controls.
-   * @param {boolean} hasMore - Whether there are more pages.
-   * @private
-   */
-  _renderPagination(hasMore) {
-    if (!this._paginationEl) return;
-    this._paginationEl.innerHTML = "";
-
-    const fragment = document.createDocumentFragment();
-
-    if (this.page > 1) {
-      const prevPage = this.page - 1;
-      const prevHref = prevPage === 1 ? "#/newcomments" : `#/newcomments?page=${prevPage}`;
-      const prev = create(
-        "a",
-        { attrs: { href: prevHref, class: "pagination__link", rel: "prev" } },
-        "\u2190 prev",
-      );
-      fragment.appendChild(prev);
-    }
-
-    if (hasMore) {
-      if (this.page > 1) {
-        fragment.appendChild(document.createTextNode(" | "));
-      }
-      const next = create(
-        "a",
-        {
-          attrs: {
-            href: `#/newcomments?page=${this.page + 1}`,
-            class: "pagination__link",
-            rel: "next",
-          },
-        },
-        "more \u2192",
-      );
-      fragment.appendChild(next);
-    }
-
-    this._paginationEl.appendChild(fragment);
-  }
-
   // ── Placeholder states ───────────────────────────────────────────────
 
   /**
@@ -377,11 +384,18 @@ export default class NewCommentsView extends View {
     this._listEl.innerHTML = "";
     for (let i = 0; i < PAGE_SIZE; i++) {
       const li = create("li", {
-        attrs: { class: "comment-feed__item comment-feed__item--skeleton", "aria-hidden": "true" },
+        attrs: {
+          class: "comment-feed__item comment-feed__item--skeleton",
+          "aria-hidden": "true",
+        },
       });
-      const metaSkel = create("div", { attrs: { class: "skeleton skeleton--meta" } });
+      const metaSkel = create("div", {
+        attrs: { class: "skeleton skeleton--meta" },
+      });
       metaSkel.innerHTML = "&nbsp;";
-      const textSkel = create("div", { attrs: { class: "skeleton skeleton--text" } });
+      const textSkel = create("div", {
+        attrs: { class: "skeleton skeleton--text" },
+      });
       textSkel.innerHTML = "&nbsp;<br>&nbsp;";
       li.appendChild(metaSkel);
       li.appendChild(textSkel);

@@ -1,9 +1,9 @@
 /**
  * StoryCommentThreadStore.js
  *
- * A single-class ES module that merges the behaviour of react-hn's
- * CommentThreadStore (base) and StoryCommentThreadStore (derived) into one
- * clean, dependency-light implementation.
+ * Derived class that extends CommentThreadStore with story-specific behaviour:
+ * persistence, loading tracking, settings integration, and HN-specific
+ * new-comment detection.
  *
  * Responsibilities
  * ----------------
@@ -20,12 +20,12 @@
  *
  * Data structures (all per-instance, keyed by comment id)
  * -------------------------------------------------------
- *  comments        {id → comment object}          full payloads
- *  children        {id → id[]}                    story root + every comment
- *  parents         {commentId → parentId}         excludes story root
- *  isNew           {commentId → true}             comments newer than last visit
- *  isCollapsed     {commentId → true}             collapsed comment roots
- *  deadComments    {commentId → true}             dead comments
+ *  comments        {id → comment object}          full payloads       (base class)
+ *  children        {id → id[]}                    story root + every comment (base class)
+ *  parents         {commentId → parentId}         excludes story root (base class)
+ *  isNew           {commentId → true}             comments newer than last visit (base class)
+ *  isCollapsed     {commentId → true}             collapsed comment roots (base class)
+ *  deadComments    {commentId → true}             dead comments       (base class)
  *
  * Scalar state
  * ------------
@@ -48,6 +48,7 @@
  *  // … feed comments via store.commentAdded(comment) as they stream in …
  */
 
+import CommentThreadStore from "./CommentThreadStore.js";
 import SettingsStoreClass from "./SettingsStore.js";
 import { cancellableDebounce, pluralise } from "../utils/helpers.js";
 
@@ -159,7 +160,7 @@ export function loadState(storyId, storage = defaultStorage) {
 // Main class
 // ---------------------------------------------------------------------------
 
-export default class StoryCommentThreadStore {
+export default class StoryCommentThreadStore extends CommentThreadStore {
   /**
    * Create a new StoryCommentThreadStore for a single story thread.
    *
@@ -182,6 +183,8 @@ export default class StoryCommentThreadStore {
    *                                              properties.
    */
   constructor(storyId, options = {}) {
+    super();
+
     this.storyId = storyId;
     this._storageKey =
       options.storageKey != null ? options.storageKey : String(storyId);
@@ -205,48 +208,6 @@ export default class StoryCommentThreadStore {
     } else {
       this._settings = getDefaultSettings();
     }
-
-    // -----------------------------------------------------------------
-    // Core comment-graph maps  (CommentThreadStore layer in react-hn)
-    // -----------------------------------------------------------------
-
-    /**
-     * Full comment payloads keyed by id.
-     * @type {Object.<number, object>}
-     */
-    this.comments = {};
-
-    /**
-     * Child id arrays keyed by parent id.
-     * The story root is pre-seeded as an empty array so BFS can start there.
-     * @type {Object.<number, number[]>}
-     */
-    this.children = {};
-    // Root entry is created in initForItem once the story id is confirmed.
-
-    /**
-     * Parent id keyed by comment id (story root excluded).
-     * @type {Object.<number, number>}
-     */
-    this.parents = {};
-
-    /**
-     * Truthy flags for comments that are newer than the last visit.
-     * @type {Object.<number, true>}
-     */
-    this.isNew = {};
-
-    /**
-     * Truthy flags for comment roots that are collapsed.
-     * @type {Object.<number, true>}
-     */
-    this.isCollapsed = {};
-
-    /**
-     * Truthy flags for dead comments.
-     * @type {Object.<number, true>}
-     */
-    this.deadComments = {};
 
     // -----------------------------------------------------------------
     // Scalar state  (StoryCommentThreadStore layer in react-hn)
@@ -302,9 +263,6 @@ export default class StoryCommentThreadStore {
     /** Unix-ms time this instance was created, for load-time logging. */
     this._startedLoading = Date.now();
 
-    /** Observer list. */
-    this._listeners = [];
-
     /**
      * Debounced version of _notifyCountChanged so we don't spam the view
      * with re-renders while hundreds of comments are streaming in.
@@ -319,54 +277,6 @@ export default class StoryCommentThreadStore {
      * Debounced persistence.  Also fires at 123 ms to match react-hn.
      */
     this._debouncedSave = cancellableDebounce(() => this._persistState(), 123);
-  }
-
-  // -------------------------------------------------------------------------
-  // Observer API
-  // -------------------------------------------------------------------------
-
-  /**
-   * Register a listener function that will be called with a change descriptor
-   * object whenever the store's state changes.
-   *
-   * The change descriptor always contains a `type` string (e.g. `'number'`,
-   * `'collapse'`, `'first_load_complete'`) so listeners can decide whether to
-   * re-render.
-   *
-   * @param {Function} fn  Callback invoked as `fn({ type: string, ... })`.
-   * @returns {Function} An unsubscribe function — call it to remove the listener.
-   */
-  addListener(fn) {
-    if (typeof fn !== "function")
-      throw new TypeError("addListener: expected a function");
-    this._listeners.push(fn);
-    return () => {
-      const idx = this._listeners.indexOf(fn);
-      if (idx !== -1) this._listeners.splice(idx, 1);
-    };
-  }
-
-  /**
-   * Notify all registered listeners with a change descriptor.
-   *
-   * A snapshot of the listener array is taken before iteration so that
-   * listeners which unsubscribe during notification do not affect the
-   * current dispatch cycle. Errors thrown by individual listeners are
-   * caught and swallowed to prevent one bad subscriber from breaking others.
-   *
-   * @param {Object} [change]      The change descriptor forwarded to each listener.
-   * @param {string} change.type   A short label identifying what changed
-   *                                (e.g. `'number'`, `'collapse'`, `'first_load_complete'`).
-   */
-  notify(change) {
-    const snapshot = this._listeners.slice();
-    for (let i = 0; i < snapshot.length; i++) {
-      try {
-        snapshot[i](change);
-      } catch (e) {
-        /* never let a bad listener break the store */
-      }
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -409,7 +319,7 @@ export default class StoryCommentThreadStore {
    * Processing steps:
    *  1. **Deleted comments** — decrement `expectedComments` and return early
    *     (no payload is stored).
-   *  2. **Graph wiring** — store the payload, wire `children` / `parents` maps.
+   *  2. **Graph wiring** — delegate to base class `CommentThreadStore.commentAdded`.
    *  3. **Dead handling** — flag dead comments; when `showDead` is off they do
    *     not contribute to `commentCount` or `expectedComments`.
    *  4. **New-comment detection** — comments whose `id` exceeds
@@ -433,20 +343,9 @@ export default class StoryCommentThreadStore {
     }
 
     // ------------------------------------------------------------------
-    // Wire into the comment graph (CommentThreadStore layer).
+    // Wire into the comment graph (CommentThreadStore base class).
     // ------------------------------------------------------------------
-    this.comments[comment.id] = comment;
-    this.children[comment.id] = this.children[comment.id] || [];
-
-    // Guard against an orphaned comment whose parent entry doesn't exist yet.
-    if (!this.children[comment.parent]) {
-      this.children[comment.parent] = [];
-    }
-    this.children[comment.parent].push(comment.id);
-
-    if (comment.dead) {
-      this.deadComments[comment.id] = true;
-    }
+    super.commentAdded(comment);
 
     // ------------------------------------------------------------------
     // Count and "new" detection  (StoryCommentThreadStore layer).
@@ -497,9 +396,9 @@ export default class StoryCommentThreadStore {
   /**
    * Remove a comment that was previously registered but has since been deleted.
    *
-   * Undoes the graph wiring performed by {@link commentAdded}: removes the
-   * payload from `comments`, splices the id out of its parent's `children`
-   * array, and decrements `commentCount` / `newCommentCount` as appropriate.
+   * Undoes the graph wiring performed by {@link commentAdded}: delegates to
+   * the base class for graph cleanup, then decrements `commentCount` /
+   * `newCommentCount` as appropriate.
    *
    * @param {Object|null} comment  The comment object to remove. May be `null`
    *   for comments that never fully loaded before being deleted — in which
@@ -508,18 +407,8 @@ export default class StoryCommentThreadStore {
   commentDeleted(comment) {
     if (!comment) return;
 
-    // --- CommentThreadStore layer ---
-    delete this.comments[comment.id];
-
-    const siblings = this.children[comment.parent];
-    if (siblings) {
-      const idx = siblings.indexOf(comment.id);
-      if (idx !== -1) siblings.splice(idx, 1);
-    }
-
-    if (comment.dead) {
-      delete this.deadComments[comment.id];
-    }
+    // --- CommentThreadStore base class (graph wiring) ---
+    super.commentDeleted(comment);
 
     // --- StoryCommentThreadStore layer ---
     this.commentCount--;
@@ -631,30 +520,6 @@ export default class StoryCommentThreadStore {
   // -------------------------------------------------------------------------
   // Collapse management
   // -------------------------------------------------------------------------
-
-  /**
-   * Toggle the collapsed state of a single comment thread.
-   *
-   * When `explicitState` is provided the collapsed state is set to that value
-   * rather than toggled. Notifies listeners with `{ type: 'collapse' }` only
-   * when the state actually changes.
-   *
-   * @param {number|string} commentId      The id of the comment to collapse / expand.
-   * @param {boolean}       [explicitState] If provided, forces the collapsed
-   *                                        state to this value instead of toggling.
-   */
-  toggleCollapse(commentId, explicitState) {
-    const newState =
-      explicitState !== undefined
-        ? Boolean(explicitState)
-        : !this.isCollapsed[commentId];
-    const oldState = Boolean(this.isCollapsed[commentId]);
-
-    if (newState === oldState) return;
-
-    this.isCollapsed[commentId] = newState;
-    this.notify({ type: "collapse" });
-  }
 
   /**
    * Collapse every comment thread that contains no new comments.
@@ -792,51 +657,6 @@ export default class StoryCommentThreadStore {
 
     this.isNew = isNew;
     this.collapseThreadsWithoutNewComments();
-  }
-
-  // -------------------------------------------------------------------------
-  // Counts
-  // -------------------------------------------------------------------------
-
-  /**
-   * Count the total descendants and new-comment descendants of a comment.
-   *
-   * Uses an iterative BFS over the in-memory `children` map so that deeply
-   * nested threads do not risk a stack overflow. The comment itself is not
-   * included in either count — only its descendants.
-   *
-   * @param {Object} comment  A comment object with a numeric `.id` property.
-   * @returns {{ children: number, newComments: number }} An object with:
-   *   - `children` — total number of descendants (all levels).
-   *   - `newComments` — how many of those descendants are flagged as new.
-   */
-  getChildCounts(comment) {
-    let childCount = 0;
-    let newCommentCount = 0;
-
-    // Each iteration of the while-loop processes one "generation".
-    let nodes = [comment.id];
-
-    while (nodes.length) {
-      const nextNodes = [];
-
-      for (let i = 0; i < nodes.length; i++) {
-        const nodeChildren = this.children[nodes[i]];
-        if (nodeChildren && nodeChildren.length) {
-          nextNodes.push(...nodeChildren);
-        }
-      }
-
-      // Count new comments in the next generation.
-      for (let i = 0; i < nextNodes.length; i++) {
-        if (this.isNew[nextNodes[i]]) newCommentCount++;
-      }
-
-      childCount += nextNodes.length;
-      nodes = nextNodes;
-    }
-
-    return { children: childCount, newComments: newCommentCount };
   }
 
   // -------------------------------------------------------------------------

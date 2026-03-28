@@ -16,7 +16,8 @@
  */
 
 import View from "./View.js";
-import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
+import { Paginator } from "../components/Paginator.js";
+import StoryStore from "../stores/StoryStore.js";
 import { create, timeAgoFromUnix, delegate } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
 
@@ -174,6 +175,12 @@ export default class ListView extends View {
     // Whether the initial data has arrived yet
     this._loaded = false;
 
+    // Paginator component instance
+    this._paginator = null;
+
+    // StoryStore instance (used for Firebase/mock modes, not "read" mode)
+    this._storyStore = null;
+
     // Convenience references to commonly used stores / service
     this._hn = this.services.hnService || null;
     this._readStore = this.stores.readStoriesStore || null;
@@ -229,12 +236,14 @@ export default class ListView extends View {
     main.appendChild(this._listEl);
 
     // Pagination nav (empty until data arrives)
-    this._paginationEl = create("nav", {
-      attrs: {
-        class: "list-view__pagination",
-        "aria-label": "Pagination",
-      },
+    this._paginator = new Paginator({
+      page: this.page,
+      hasMore: false,
+      buildHref: (p) => paginationHref(this.listType, p),
+      className: "list-view__pagination",
+      linkClassName: "list-view__pagination-link",
     });
+    this._paginationEl = this._paginator.render();
     main.appendChild(this._paginationEl);
 
     wrapper.appendChild(main);
@@ -299,13 +308,26 @@ export default class ListView extends View {
       this._unsub = null;
     }
 
+    // Tear down StoryStore (handles its own item subs internally)
+    if (this._storyStore) {
+      this._storyStore.dispose();
+      this._storyStore = null;
+    }
+
     // Tear down per-item subscriptions opened in Firebase (ID-list) mode
+    // (used by "read" mode which doesn't go through StoryStore)
     if (Array.isArray(this._itemUnsubs)) {
       this._itemUnsubs.forEach((fn) => typeof fn === "function" && fn());
       this._itemUnsubs = [];
     }
 
     this._itemNodes.clear();
+
+    // Tear down Paginator component
+    if (this._paginator) {
+      this._paginator.cleanup();
+      this._paginator = null;
+    }
 
     if (typeof this._undelegateClick === "function") {
       try {
@@ -393,68 +415,53 @@ export default class ListView extends View {
       return;
     }
 
-    // ── Normal (Firebase / Mock) mode ────────────────────────────────────
+    // ── Normal (Firebase / Mock) mode via StoryStore ─────────────────────
     if (!this._hn || typeof this._hn.onStoriesValue !== "function") {
       this._renderError("Data service unavailable.");
       return;
     }
 
-    // Initialise the per-item unsub array (used when backend returns IDs)
-    if (!Array.isArray(this._itemUnsubs)) {
-      this._itemUnsubs = [];
-    }
+    this._storyStore = new StoryStore(this.listType, this._hn, {
+      pageSize: PAGE_SIZE,
+    });
 
-    this._unsub = this._hn.onStoriesValue(this.listType, (items) => {
+    this._storyStore.addListener((store) => {
       try {
-        const rawItems = Array.isArray(items) ? items : [];
+        // Rebuild _allItems from the store's full ID list, using full item
+        // objects where available and { id } placeholders elsewhere.
+        this._allItems = store.ids.map((id) => store.getItem(id) || { id });
 
-        // Detect whether the backend gave us full item objects or bare ID strings/numbers.
-        // FirebaseBackend maps the Firebase snapshot to val.map(String), so the first
-        // element will be a string like "40000001" rather than an object.
-        const firstItem = rawItems[0];
-        const isIdList = firstItem != null && typeof firstItem !== "object";
+        const pageItems = store.getPageItems(this.page);
+        const start = (this.page - 1) * PAGE_SIZE;
 
-        if (isIdList) {
-          // ── Firebase mode: we received IDs, not full items ──────────────
-
-          // Cancel any per-item subscriptions from a previous list update
-          this._itemUnsubs.forEach((fn) => typeof fn === "function" && fn());
-          this._itemUnsubs = [];
-
-          // Seed _allItems with lightweight placeholder objects so _createItemEl
-          // has a valid `id` to work with while real data is in flight.
-          this._allItems = rawItems.map((id) => ({ id: String(id) }));
+        if (!this._loaded) {
+          // First notification — do a full page render
           this._loaded = true;
-
-          // Build the initial keyed list, replacing skeletons in one pass.
           this._renderPage();
 
-          // Subscribe to full item data only for the items on the current page.
-          // Each callback patches only its own <li> node via _patchItem.
-          const start = (this.page - 1) * PAGE_SIZE;
-          const end = start + PAGE_SIZE;
-          const pageIds = rawItems.slice(start, end);
-
-          pageIds.forEach((id, pageIdx) => {
-            const allIdx = start + pageIdx;
-            const unsub = this._hn.onItemValue(id, (item) => {
-              if (item && typeof item === "object") {
-                this._allItems[allIdx] = item;
-                this._patchItem(item, start + pageIdx + 1);
-              }
-            });
-            this._itemUnsubs.push(unsub);
-          });
+          // Subscribe to individual items on the current page that lack data
+          const needsData = pageItems.filter((item) => !item.title);
+          if (needsData.length > 0) {
+            store.subscribeToItems(needsData.map((item) => item.id));
+          }
         } else {
-          // ── Mock / full-object mode ──────────────────────────────────────
-          this._allItems = rawItems;
-          this._loaded = true;
-          this._renderPage();
+          // Subsequent notifications — patch individual items that changed
+          pageItems.forEach((item, pageIdx) => {
+            if (item && item.title) {
+              this._patchItem(item, start + pageIdx + 1);
+            }
+          });
+
+          // Update pagination in case total count changed
+          const hasMore = store.hasNextPage(this.page);
+          this._paginator.update({ page: this.page, hasMore });
         }
       } catch (err) {
         console.warn("ListView: error rendering story list", err);
       }
     });
+
+    this._storyStore.subscribe();
   }
 
   /* ─────────────────────────────────────
@@ -491,7 +498,9 @@ export default class ListView extends View {
     this._listEl.setAttribute("aria-busy", "false");
 
     // ── Pagination ─────────────────────────────────────────────────────────
-    this._renderPagination(hasMore);
+    if (this._paginator) {
+      this._paginator.update({ page: this.page, hasMore });
+    }
   }
 
   /**
@@ -545,53 +554,6 @@ export default class ListView extends View {
       ),
     );
     this._listEl.setAttribute("aria-busy", "false");
-  }
-
-  /**
-   * Build and inject the prev / next navigation links.
-   *
-   * @param {boolean} hasMore  true when there is at least one more page after this one
-   */
-  _renderPagination(hasMore) {
-    if (!this._paginationEl) return;
-
-    const children = [];
-
-    if (this.page > 1) {
-      children.push(
-        create(
-          "a",
-          {
-            attrs: {
-              href: paginationHref(this.listType, this.page - 1),
-              class:
-                "list-view__pagination-link list-view__pagination-link--prev",
-              rel: "prev",
-            },
-          },
-          "← prev",
-        ),
-      );
-    }
-
-    if (hasMore) {
-      children.push(
-        create(
-          "a",
-          {
-            attrs: {
-              href: paginationHref(this.listType, this.page + 1),
-              class:
-                "list-view__pagination-link list-view__pagination-link--next",
-              rel: "next",
-            },
-          },
-          "more →",
-        ),
-      );
-    }
-
-    this._paginationEl.replaceChildren(...children);
   }
 
   /**
@@ -767,9 +729,8 @@ export default class ListView extends View {
 
     let threadState = null;
     try {
-      // StoryCommentThreadStore.loadState is called as an instance method.
-      // The store's loadState() (no args) re-reads from storage into this._map;
-      // the useful per-story data is retrieved via getState(id).
+      // The thread store's getState(id) retrieves persisted per-story data
+      // (e.g. last-seen comment count) used to compute the "new" badge.
       if (
         this._threadStore &&
         typeof this._threadStore.getState === "function"
