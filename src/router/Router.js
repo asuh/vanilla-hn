@@ -334,16 +334,7 @@ export class Router {
       mountEl.appendChild(el);
     };
 
-    if (document.startViewTransition) {
-      const transition = document.startViewTransition(applyDOM);
-      // Wait for the new state to be captured before running post-mount
-      // hooks so the transition snapshot includes the mounted view.
-      transition.updateCallbackDone.catch(() => {
-        /* ignore */
-      });
-    } else {
-      applyDOM();
-    }
+    applyDOM();
 
     // Save current view reference so it can be cleaned up later
     this.currentView = viewObj || el;

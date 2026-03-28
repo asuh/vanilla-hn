@@ -274,13 +274,7 @@ export class CommentElement {
         }
       };
 
-      // Use a View Transition for the visual change when the API is
-      // available so collapse/expand animates smoothly.
-      if (document.startViewTransition) {
-        document.startViewTransition(applyCollapse);
-      } else {
-        applyCollapse();
-      }
+      applyCollapse();
     }
 
     // persist collapse state in a store if available
