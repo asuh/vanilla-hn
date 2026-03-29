@@ -9,8 +9,8 @@ This README explains how to run the scaffold locally, where to find important fi
 ## Quick start
 
 Requirements
+- Node.js >= 24 to run the included dev server (see `.nvmrc`).
 - A modern browser that supports ES modules (Chrome, Firefox, Safari, Edge).
-- Node.js (optional) to run the tiny dev server via `npx` (no build step / bundler is required).
 
 1. Serve the project root (so `/src` is reachable by the browser):
    - From the repository root run:
@@ -88,7 +88,7 @@ Mock mode
 
 `package.json` includes lightweight scripts:
 
-- `npm run dev` — Start a simple static server using `npx http-server . -p 5000 -c-1`.
+- `npm run dev` — Start the included dev server (requires Node >= 24). This runs `node serve.js`.
 - `npm start` — Alias to `dev`.
 - `npm run preview` — Alias to `dev`.
 - `npm run lint` / `npm test` — Placeholders.
