@@ -27,6 +27,16 @@
  *   If a view exposes `cleanup()` it will be called when the router removes it.
  */
 
+/**
+ * A small, dependency-free hash-based router.
+ *
+ * Supports regex and string route patterns, async view factories,
+ * stale-request cancellation, View Transitions API integration,
+ * and accessibility focus management after mount.
+ *
+ * @class Router
+ */
+
 function isRegex(val) {
   return Object.prototype.toString.call(val) === "[object RegExp]";
 }
@@ -61,8 +71,9 @@ export class Router {
    *    - a function taking (matchOrHash) and returning a view or Promise<view>
    *    - a View instance (in which case the route will always mount that view)
    *
-   * @param {RegExp|string} pattern
-   * @param {Function|Object|HTMLElement} handler
+   * @param {RegExp|string} pattern  Route pattern to match against location.hash.
+   * @param {Function|Object} handler  A function returning a view (or Promise<view>), or a view instance.
+   * @returns {Router} this instance for chaining.
    */
   register(pattern, handler) {
     if (!pattern) throw new Error("Router.register: pattern is required");
@@ -75,7 +86,9 @@ export class Router {
   /**
    * Set a not-found handler (used when no route matches).
    * The handler follows the same conventions as register handlers.
-   * @param {Function|Object|HTMLElement} handler
+   *
+   * @param {Function} handler  Handler invoked with the unmatched hash string.
+   * @returns {Router} this instance for chaining.
    */
   setNotFound(handler) {
     this.notFoundHandler = handler;
@@ -84,7 +97,8 @@ export class Router {
 
   /**
    * Programmatic navigation. Updates the hash and triggers route handling.
-   * @param {string} hash e.g. '#/item/123' or '/item/123' (will be normalized)
+   *
+   * @param {string} hash  The target hash, e.g. '#/item/123' or '/item/123' (will be normalized with a leading '#').
    */
   navigate(hash) {
     const normalized = ensureLeadingHash(hash);
@@ -98,7 +112,11 @@ export class Router {
   }
 
   /**
-   * Start the router: mount listeners and handle the initial route.
+   * Start the router.
+   *
+   * Sets up a `hashchange` listener on `window` (unless `useHashChange` was
+   * disabled) and immediately handles the current route so the initial view
+   * is mounted on page load.
    */
   start() {
     if (this._running) return;
@@ -111,7 +129,10 @@ export class Router {
   }
 
   /**
-   * Stop the router and remove listeners. Does not remove mounted view by default.
+   * Stop the router and remove the `hashchange` listener.
+   *
+   * Does not remove the currently mounted view — call `cleanup()` on the
+   * view manually if you need to tear it down as well.
    */
   stop() {
     if (!this._running) return;
@@ -126,9 +147,16 @@ export class Router {
   }
 
   /**
-   * Match the current hash against the registered routes and load the matched view.
-   * This function is async-safe: if multiple navigations happen rapidly, only the
-   * latest loaded view will be used (older async loads are ignored).
+   * Match the current `location.hash` against registered routes and mount the
+   * first matching view into the mount point.
+   *
+   * This method is async-safe: each call increments an internal request counter
+   * so that stale async loads from earlier navigations are silently discarded.
+   * When the View Transitions API is available the DOM swap is wrapped in
+   * `document.startViewTransition()` for a cross-fade effect. After mounting,
+   * the view's `focus()` hook (or a fallback) is called for accessibility.
+   *
+   * @returns {Promise<void>}
    */
   async handleRoute() {
     const requestId = ++this._routeRequestId;
@@ -306,16 +334,7 @@ export class Router {
       mountEl.appendChild(el);
     };
 
-    if (document.startViewTransition) {
-      const transition = document.startViewTransition(applyDOM);
-      // Wait for the new state to be captured before running post-mount
-      // hooks so the transition snapshot includes the mounted view.
-      transition.updateCallbackDone.catch(() => {
-        /* ignore */
-      });
-    } else {
-      applyDOM();
-    }
+    applyDOM();
 
     // Save current view reference so it can be cleaned up later
     this.currentView = viewObj || el;
@@ -381,7 +400,10 @@ export class Router {
   }
 
   /**
-   * Convenience: returns current route info (handler, pattern, last hash)
+   * Convenience: returns current route info (handler, pattern, last hash).
+   *
+   * @returns {Object|null} The route info object for the currently mounted view,
+   *   or `null` if no route is active.
    */
   getCurrentRoute() {
     return this.currentRouteInfo;

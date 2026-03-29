@@ -56,22 +56,32 @@
 @layer base {
     /* ── Exact react-hn colour palette ────────────────────────────────────── */
     :root {
-        --hn-primary: #00d8ff; /* cyan accent / homelink */
+        color-scheme: light dark;
+
+        --hn-bg: light-dark(#ffffff, #0b0b0b);
+        --hn-text: light-dark(#111111, #e6e6e6);
+        --hn-muted: light-dark(#666666, #9a9a9a);
+        --hn-accent: light-dark(#ff6600, #ffb366);
+
+        --hn-primary: #00d8ff; /* cyan accent / homelink (unchanged) */
         --hn-header-bg: #222222;
         --hn-header-text: #ffffff;
-        --hn-bg: #f5f5f5; /* .app-wrap background — matches App__wrap */
-        --hn-text: #000000;
-        --hn-muted: #666666;
         --hn-border: #e7e7e7;
-        --hn-new-comment-bg: #ffffde; /* exact react-hn value — was wrong (#fffacd) */
+        --hn-new-comment-bg: #ffffde;
         --hn-dead: #dddddd;
         --hn-error: #ff3333;
         --hn-footer-text: #333333;
 
-        /* Dark-mode extensions */
+        /* Legacy dark-mode tokens (kept for components that reference them) */
         --hn-bg-dark: #242424;
         --hn-text-dark: #e0e0e0;
         --hn-muted-dark: #9aa4ad;
+
+        /* Override variables — empty by default. When set they take precedence. */
+        --override-hn-bg: ;
+        --override-hn-text: ;
+        --override-hn-muted: ;
+        --override-hn-accent: ;
 
         /* Typography — exact react-hn values */
         --font-sans: Verdana, Geneva, sans-serif;
@@ -88,22 +98,35 @@
         color-scheme: light dark;
     }
 
+    /* Fallback for browsers that don't support light-dark(): use prefers-color-scheme */
+    @supports not (color-scheme: light dark) {
+        :root {
+            --hn-bg: #ffffff;
+            --hn-text: #111111;
+            --hn-muted: #666666;
+            --hn-accent: #ff6600;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --hn-bg: #0b0b0b;
+                --hn-text: #e6e6e6;
+                --hn-muted: #9a9a9a;
+                --hn-accent: #ffb366;
+            }
+        }
+    }
+
     /* react-hn: body { background-color: #fff; margin: 0; } */
     body {
-        background-color: #fff;
-        color: var(--hn-text);
+        /* Use override variables if set, otherwise fall back to light-dark() tokens */
+        background-color: var(--override-hn-bg, var(--hn-bg));
+        color: var(--override-hn-text, var(--hn-text));
         font-family: var(--font-sans);
         font-size: var(--font-size-base);
         line-height: var(--line-height);
         margin: 0;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-
-        &.dark {
-            color-scheme: dark;
-            background-color: #1a1a1a;
-            color: var(--hn-text-dark);
-        }
     }
 
     pre {
@@ -870,6 +893,96 @@
     }
 }
 
+/* ── New Comments Feed → NewCommentsView ──────────────────────────────── */
+
+.newcomments-view {
+    .view__heading {
+        font-size: 1.1em;
+        font-weight: bold;
+        padding: 8px 0 4px;
+    }
+}
+
+.comment-feed {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.comment-feed__item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--hn-border, #e0e0e0);
+
+    &--dead {
+        opacity: 0.6;
+    }
+
+    &--skeleton {
+        padding: 10px 0;
+    }
+
+    &--empty,
+    &--error {
+        color: var(--hn-meta-color, #828282);
+        font-style: italic;
+        padding: 16px 0;
+    }
+}
+
+.comment-feed__meta {
+    font-size: var(--font-size-meta, 13px);
+    color: var(--hn-meta-color, #828282);
+    margin-bottom: 4px;
+}
+
+.comment-feed__author {
+    color: var(--hn-meta-color, #828282);
+    text-decoration: none;
+    font-weight: 500;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.comment-feed__time {
+    color: var(--hn-meta-color, #828282);
+}
+
+.comment-feed__parent-link {
+    color: var(--hn-meta-color, #828282);
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.comment-feed__text {
+    font-size: 0.93em;
+    line-height: 1.45;
+    overflow-wrap: break-word;
+    word-break: break-word;
+
+    & a {
+        color: var(--hn-link-color, #000);
+        text-decoration: underline;
+    }
+
+    & p {
+        margin-block: 0.5em;
+    }
+
+    & p:first-child {
+        margin-block-start: 0;
+    }
+
+    &--deleted {
+        color: var(--hn-meta-color, #828282);
+        font-style: italic;
+    }
+}
+
 /* =============================================================================
    UTILITIES
    ============================================================================= */
@@ -950,14 +1063,6 @@
     }
 }
 
-/* ── View Transitions ─────────────────────────────────────────────────── */
-
-::view-transition-old(root),
-::view-transition-new(root) {
-    animation-duration: 150ms;
-    animation-timing-function: ease-in-out;
-}
-
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
     *,
@@ -966,10 +1071,5 @@
         animation-duration: 0.001ms !important;
         transition-duration: 0.001ms !important;
         scroll-behavior: auto !important;
-    }
-
-    ::view-transition-old(root),
-    ::view-transition-new(root) {
-        animation: none !important;
     }
 }

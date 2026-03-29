@@ -245,36 +245,60 @@ export default class SettingsStore {
   /**
    * Apply the current theme and UI-related preferences to the DOM.
    *
-   * Side effects:
-   *  - Adds or removes the `dark` class on `document.body` depending on the
-   *    `theme` setting (`'light'`, `'dark'`, or `'system'`).
-   *  - Sets the `--font-size-title` CSS custom property on
-   *    `document.documentElement` based on `titleFontSize`.
-   *  - Sets the `data-list-spacing` attribute on `document.documentElement`
-   *    based on `listSpacing`.
+   * Behavior:
+   *  - For `system` the method removes inline overrides so CSS `light-dark()` or
+   *    `prefers-color-scheme` may decide the active theme.
+   *  - For `light`/`dark` it sets `color-scheme` and a small set of override
+   *    custom properties (so no body class toggling is required).
+   *
+   * Also sets `--font-size-title` and `data-list-spacing` as before.
    *
    * This method is a no-op when `document` is not available (e.g. SSR or tests).
    */
   applyTheme() {
     if (typeof document === "undefined") return;
 
-    const body = document.body;
     const root = document.documentElement;
     const theme = this._state.theme || DEFAULTS.theme;
 
-    // Theme handling
-    if (theme === "dark") {
-      body.classList.add("dark");
-    } else if (theme === "light") {
-      body.classList.remove("dark");
-    } else if (theme === "system") {
-      // follow OS: remove explicit class and let CSS media queries handle it,
-      // but if you prefer to set class based on current system preference:
-      const prefersDark =
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (prefersDark) body.classList.add("dark");
-      else body.classList.remove("dark");
+    // Helper to remove any inline overrides
+    const removeOverrides = () => {
+      try {
+        root.style.removeProperty("color-scheme");
+        root.style.removeProperty("--override-hn-bg");
+        root.style.removeProperty("--override-hn-text");
+        root.style.removeProperty("--override-hn-muted");
+        root.style.removeProperty("--override-hn-accent");
+      } catch (e) {
+        // ignore style errors
+      }
+    };
+
+    if (theme === "system") {
+      // Let the CSS (light-dark() or prefers-color-scheme fallback) decide.
+      removeOverrides();
+    } else if (theme === "dark") {
+      // Force dark: tell UA and set a few override tokens
+      try {
+        root.style.setProperty("color-scheme", "dark");
+        root.style.setProperty("--override-hn-bg", "#0b0b0b");
+        root.style.setProperty("--override-hn-text", "#e6e6e6");
+        root.style.setProperty("--override-hn-muted", "#9a9a9a");
+        root.style.setProperty("--override-hn-accent", "#ffb366");
+      } catch (e) {
+        // ignore style errors
+      }
+    } else {
+      // Force light
+      try {
+        root.style.setProperty("color-scheme", "light");
+        root.style.setProperty("--override-hn-bg", "#ffffff");
+        root.style.setProperty("--override-hn-text", "#111111");
+        root.style.setProperty("--override-hn-muted", "#666666");
+        root.style.setProperty("--override-hn-accent", "#ff6600");
+      } catch (e) {
+        // ignore style errors
+      }
     }
 
     // Font size for titles (applied as CSS variable so components can use it)
