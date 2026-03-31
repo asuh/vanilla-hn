@@ -219,7 +219,7 @@
     // The panel markup lives in index.html; we just toggle visibility and
     // keep the form inputs in sync with the SettingsStore.
     try {
-      const settingsBtn = document.querySelector(".site-header__settings");
+      const settingsBtn = document.querySelector(".site-header .settings");
       const settingsPanel = document.getElementById("settings-panel");
 
       if (settingsBtn && settingsPanel) {

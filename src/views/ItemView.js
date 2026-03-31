@@ -115,7 +115,7 @@ export default class ItemView extends View {
     this._loadingEl = create(
       "div",
       {
-        attrs: { class: "item-loading", role: "status", "aria-live": "polite" },
+        attrs: { class: "loading", role: "status", "aria-live": "polite" },
       },
       create("span", { attrs: { class: "spinner" } }),
       " Loading story…",
@@ -124,7 +124,7 @@ export default class ItemView extends View {
 
     // Content wrapper — hidden until item loads
     this._contentEl = create("div", {
-      attrs: { class: "item-content", hidden: true },
+      attrs: { class: "content", hidden: true },
     });
     root.appendChild(this._contentEl);
 
@@ -385,7 +385,7 @@ export default class ItemView extends View {
     while (content.firstChild) content.removeChild(content.firstChild);
 
     // Story header section
-    const header = create("div", { attrs: { class: "item-header" } });
+    const header = create("div", { attrs: { class: "header" } });
 
     // Title
     this._titleEl = this._buildTitle(item);
@@ -422,7 +422,7 @@ export default class ItemView extends View {
     // Item body text (ask HN, job posts, etc.)
     if (item.text) {
       this._itemTextEl = create("div", {
-        attrs: { class: "item-text" },
+        attrs: { class: "body-text" },
         html: item.text,
       });
       content.appendChild(this._itemTextEl);
@@ -430,7 +430,7 @@ export default class ItemView extends View {
 
     // Comments section
     this._kidsEl = create("div", {
-      attrs: { class: "item-kids", role: "list", "aria-label": "Comments" },
+      attrs: { class: "kids", role: "list", "aria-label": "Comments" },
     });
     content.appendChild(this._kidsEl);
   }
@@ -443,7 +443,7 @@ export default class ItemView extends View {
    * links to `#/item/:id`. Dead stories are prefixed with `[dead]`.
    *
    * @param {Object} item - The HN item payload.
-   * @returns {HTMLElement} A wrapper `<div class="item-title">` containing the link.
+   * @returns {HTMLElement} A wrapper `<div class="title">` containing the link.
    */
   _buildTitle(item) {
     const titleText = item.dead
@@ -456,7 +456,7 @@ export default class ItemView extends View {
         : 18;
 
     const titleWrapper = create("div", {
-      attrs: { class: "item-title" },
+      attrs: { class: "title" },
       style: { fontSize: `${fontSize || 18}px` },
     });
 
@@ -478,7 +478,7 @@ export default class ItemView extends View {
       if (host) {
         const hostEl = create(
           "span",
-          { attrs: { class: "item-host" } },
+          { attrs: { class: "host" } },
           ` (${host})`,
         );
         titleWrapper.appendChild(hostEl);
@@ -504,16 +504,16 @@ export default class ItemView extends View {
    * comments/discuss link. Job posts show only the time.
    *
    * @param {Object} item - The HN item payload.
-   * @returns {HTMLElement} A `<div class="item-meta">` element.
+   * @returns {HTMLElement} A `<div class="meta">` element.
    */
   _buildMeta(item) {
-    const meta = create("div", { attrs: { class: "item-meta" } });
+    const meta = create("div", { attrs: { class: "meta" } });
 
     if (item.type === "job") {
       // Job posts only show time
       const time = create(
         "span",
-        { attrs: { class: "item-time" } },
+        { attrs: { class: "time" } },
         timeAgoFromUnix(item.time),
       );
       meta.appendChild(time);
@@ -523,7 +523,7 @@ export default class ItemView extends View {
     // Score
     const score = create(
       "span",
-      { attrs: { class: "item-score" } },
+      { attrs: { class: "score" } },
       `${item.score || 0} ${pluralise(item.score || 0, "point")}`,
     );
     meta.appendChild(score);
@@ -532,7 +532,7 @@ export default class ItemView extends View {
     // Author link
     const byLink = create(
       "a",
-      { attrs: { href: `#/user/${item.by}`, class: "item-by" } },
+      { attrs: { href: `#/user/${item.by}`, class: "by" } },
       item.by || "unknown",
     );
     meta.appendChild(byLink);
@@ -541,7 +541,7 @@ export default class ItemView extends View {
     // Time
     const timeEl = create(
       "span",
-      { attrs: { class: "item-time" } },
+      { attrs: { class: "time" } },
       timeAgoFromUnix(item.time),
     );
     meta.appendChild(timeEl);
@@ -556,7 +556,7 @@ export default class ItemView extends View {
     const commentsLink = create(
       "a",
       {
-        attrs: { href: `#/item/${item.id}`, class: "item-comments-link" },
+        attrs: { href: `#/item/${item.id}`, class: "comments-link" },
       },
       commentsText,
     );
@@ -572,14 +572,14 @@ export default class ItemView extends View {
   _patchItemMeta(item) {
     if (!this._metaEl) return;
 
-    const scoreEl = this._metaEl.querySelector(".item-score");
+    const scoreEl = this._metaEl.querySelector(".score");
     if (scoreEl)
       scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, "point")}`;
 
-    const timeEl = this._metaEl.querySelector(".item-time");
+    const timeEl = this._metaEl.querySelector(".time");
     if (timeEl) timeEl.textContent = timeAgoFromUnix(item.time);
 
-    const commentsEl = this._metaEl.querySelector(".item-comments-link");
+    const commentsEl = this._metaEl.querySelector(".comments-link");
     if (commentsEl) {
       const commentsCount = item.descendants != null ? item.descendants : 0;
       commentsEl.textContent =
@@ -620,7 +620,7 @@ export default class ItemView extends View {
         "div",
         {
           attrs: {
-            class: "comment-placeholder",
+            class: "placeholder",
             "data-comment-id": childIdStr,
             role: "group",
             "aria-label": `Comment ${childIdStr} loading`,
@@ -801,9 +801,9 @@ export default class ItemView extends View {
         isNew = Boolean(this._threadStore.isNew[String(commentId)]);
       }
       if (isNew) {
-        ce.root.classList.add("comment--new");
+        ce.root.classList.add("new");
       } else {
-        ce.root.classList.remove("comment--new");
+        ce.root.classList.remove("new");
       }
     } catch (e) {
       /* ignore */
@@ -971,7 +971,7 @@ export default class ItemView extends View {
    *     in the global read-stories list.
    *  3. Re-renders the controls bar (which will hide itself because
    *     `newCommentCount` drops to 0).
-   *  4. Strips `comment--new` CSS classes from all rendered comment elements.
+   *  4. Strips `new` CSS classes from all rendered comment elements.
    *
    * @returns {void}
    */
@@ -1017,7 +1017,7 @@ export default class ItemView extends View {
   _showError(msg) {
     if (this._loadingEl) {
       this._loadingEl.textContent = `Error: ${msg}`;
-      this._loadingEl.classList.add("item-loading--error");
+      this._loadingEl.classList.add("loading-error");
     }
   }
 

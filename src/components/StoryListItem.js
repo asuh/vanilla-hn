@@ -58,17 +58,13 @@ export function createStoryListItem(story = {}, opts = {}) {
   if (showHost && url) {
     const host = parseHost(url);
     if (host) {
-      const hostEl = create("div", { attrs: { class: "item-host" } }, host);
+      const hostEl = create("div", { attrs: { class: "host" } }, host);
       li.appendChild(hostEl);
     }
   }
 
   if (showNewBadge) {
-    const badge = create(
-      "span",
-      { attrs: { class: "badge badge--new" } },
-      "new",
-    );
+    const badge = create("span", { attrs: { class: "badge new" } }, "new");
     li.appendChild(badge);
   }
 

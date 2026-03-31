@@ -1,5 +1,5 @@
-import { create, timeAgoFromUnix } from '../utils/dom.js';
-import { pluralise } from '../utils/helpers.js';
+import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { pluralise } from "../utils/helpers.js";
 
 /**
  * CommentSlider — time-based comment highlighting slider.
@@ -33,12 +33,12 @@ export default class CommentSlider {
    * @returns {HTMLElement}
    */
   render() {
-    this.el = create('div', {
+    this.el = create("div", {
       attrs: {
-        class: 'item-slider-container',
-        'aria-label': 'Highlight comments by position',
+        class: "slider-container",
+        "aria-label": "Highlight comments by position",
       },
-      style: { opacity: '0', transition: 'opacity .33s ease-out' },
+      style: { opacity: "0", transition: "opacity .33s ease-out" },
     });
 
     this._build();
@@ -68,37 +68,37 @@ export default class CommentSlider {
     if (commentCount < 2) return;
 
     // Show the slider section
-    container.style.opacity = '1';
-    container.setAttribute('aria-hidden', 'false');
+    container.style.opacity = "1";
+    container.setAttribute("aria-hidden", "false");
 
     // Default slider to the second-to-last comment (highlight most recent)
     if (this._sliderValue === null || this._sliderValue > commentCount - 1) {
       this._sliderValue = commentCount - 1;
     }
 
-    this._sliderEl = create('input', {
+    this._sliderEl = create("input", {
       attrs: {
-        type: 'range',
-        class: 'item-slider',
-        min: '1',
+        type: "range",
+        class: "slider",
+        min: "1",
         max: String(commentCount - 1),
         value: String(this._sliderValue),
-        'aria-label': 'Highlight comments after this position',
+        "aria-label": "Highlight comments after this position",
       },
-      style: { margin: '0', verticalAlign: 'middle' },
+      style: { margin: "0", verticalAlign: "middle" },
     });
 
     // Label showing "highlight N comments from <time>"
-    this._labelEl = create('span', { attrs: { class: 'item-slider__label' } });
+    this._labelEl = create("span", { attrs: { class: "label" } });
     this.updateLabel(this._sliderValue);
 
     // Button to apply the slider selection
     const applyBtn = create(
-      'button',
+      "button",
       {
         attrs: {
-          type: 'button',
-          class: 'item-slider__btn',
+          type: "button",
+          class: "btn",
         },
         events: {
           click: () => {
@@ -106,7 +106,7 @@ export default class CommentSlider {
             this._sliderValue = val;
             if (
               this.threadStore &&
-              typeof this.threadStore.highlightNewCommentsSince === 'function'
+              typeof this.threadStore.highlightNewCommentsSince === "function"
             ) {
               try {
                 this.threadStore.highlightNewCommentsSince(val);
@@ -115,7 +115,7 @@ export default class CommentSlider {
               }
             }
             this.updateLabel(val);
-            if (typeof this.onHighlight === 'function') {
+            if (typeof this.onHighlight === "function") {
               this.onHighlight();
             }
           },
@@ -124,7 +124,7 @@ export default class CommentSlider {
       this._labelEl,
     );
 
-    this._sliderEl.addEventListener('input', () => {
+    this._sliderEl.addEventListener("input", () => {
       const val = parseInt(this._sliderEl.value, 10);
       this._sliderValue = val;
       this.updateLabel(val);
@@ -145,7 +145,7 @@ export default class CommentSlider {
     if (commentCount >= 2) {
       this._build();
     } else {
-      this.el.style.opacity = '0';
+      this.el.style.opacity = "0";
     }
   }
 
@@ -154,7 +154,7 @@ export default class CommentSlider {
    */
   hide() {
     if (this.el) {
-      this.el.style.opacity = '0';
+      this.el.style.opacity = "0";
     }
   }
 
@@ -175,10 +175,10 @@ export default class CommentSlider {
     const commentCount = this.getCommentCount();
     const howMany = Math.max(0, commentCount - sliderVal);
 
-    let timeStr = '';
+    let timeStr = "";
     if (
       this.threadStore &&
-      typeof this.threadStore.getCommentByTimeIndex === 'function'
+      typeof this.threadStore.getCommentByTimeIndex === "function"
     ) {
       try {
         const refComment = this.threadStore.getCommentByTimeIndex(
@@ -194,13 +194,13 @@ export default class CommentSlider {
 
     labelEl.appendChild(
       document.createTextNode(
-        `highlight ${howMany} ${pluralise(howMany, 'comment')}${timeStr ? ' from ' : ''}`,
+        `highlight ${howMany} ${pluralise(howMany, "comment")}${timeStr ? " from " : ""}`,
       ),
     );
 
     if (timeStr) {
       labelEl.appendChild(
-        create('span', { attrs: { class: 'item-slider__time' } }, timeStr),
+        create("span", { attrs: { class: "time" } }, timeStr),
       );
     }
   }

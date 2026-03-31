@@ -14,14 +14,14 @@
  *
  * DOM structure:
  *   <div class="view user-view">
- *     <div class="container user-view__content">
+ *     <div class="container user-profile">
  *       <h2 class="user-view__name">username</h2>
  *       <dl class="user-view__stats">
  *         <dt>karma</dt>  <dd>NNN</dd>
  *         <dt>joined</dt> <dd>X years ago</dd>
  *       </dl>
- *       <div class="user-view__about">…HTML from HN…</div>
- *       <p class="user-view__hn-link">
+ *       <div class="about">…HTML from HN…</div>
+ *       <p class="hn-link">
  *         <a href="https://news.ycombinator.com/user?id=username">profile on HN ↗</a>
  *       </p>
  *     </div>
@@ -73,7 +73,7 @@ export default class UserView extends View {
     const wrapper = create("div", { attrs: { class: "view user-view" } });
 
     this._contentEl = create("div", {
-      attrs: { class: "container user-view__content" },
+      attrs: { class: "container user-profile" },
     });
 
     // Show a loading indicator immediately
@@ -182,7 +182,7 @@ export default class UserView extends View {
     // so we must use innerHTML here. This is fine because the content originates
     // directly from HN's API and is the user's own self-description.
     const aboutSection = create("div", {
-      attrs: { class: "user-view__about" },
+      attrs: { class: "about" },
     });
     if (about) {
       aboutSection.innerHTML = about;
@@ -191,7 +191,7 @@ export default class UserView extends View {
     // ── External HN profile link ───────────────────────────────────────────
     const hnLink = create(
       "p",
-      { attrs: { class: "user-view__hn-link" } },
+      { attrs: { class: "hn-link" } },
       create(
         "a",
         {

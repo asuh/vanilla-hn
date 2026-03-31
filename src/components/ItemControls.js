@@ -1,5 +1,5 @@
-import { create } from '../utils/dom.js';
-import { pluralise } from '../utils/helpers.js';
+import { create } from "../utils/dom.js";
+import { pluralise } from "../utils/helpers.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -15,24 +15,24 @@ import { pluralise } from '../utils/helpers.js';
  * @returns {string} Human-readable duration, e.g. "3 hours", or "" if falsy input
  */
 export function sinceLastVisit(lastVisitSeconds) {
-  if (!lastVisitSeconds) return '';
+  if (!lastVisitSeconds) return "";
   const diffMs = Date.now() - lastVisitSeconds * 1000;
   const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
 
   const units = [
-    { name: 'year', secs: 60 * 60 * 24 * 365 },
-    { name: 'month', secs: 60 * 60 * 24 * 30 },
-    { name: 'week', secs: 60 * 60 * 24 * 7 },
-    { name: 'day', secs: 60 * 60 * 24 },
-    { name: 'hour', secs: 60 * 60 },
-    { name: 'minute', secs: 60 },
+    { name: "year", secs: 60 * 60 * 24 * 365 },
+    { name: "month", secs: 60 * 60 * 24 * 30 },
+    { name: "week", secs: 60 * 60 * 24 * 7 },
+    { name: "day", secs: 60 * 60 * 24 },
+    { name: "hour", secs: 60 * 60 },
+    { name: "minute", secs: 60 },
   ];
 
   for (const u of units) {
     const val = Math.floor(diffSeconds / u.secs);
     if (val >= 1) return `${val} ${pluralise(val, u.name)}`;
   }
-  return 'a moment';
+  return "a moment";
 }
 
 // ─── ItemControls ────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ export default class ItemControls {
    * @returns {HTMLElement}
    */
   render() {
-    this.el = create('div', { attrs: { class: 'item-controls' } });
+    this.el = create("div", { attrs: { class: "controls" } });
     this._buildContents();
     return this.el;
   }
@@ -105,7 +105,7 @@ export default class ItemControls {
 
     const storyId = this.item && this.item.id;
     const state =
-      storyId && typeof this.threadStore.getState === 'function'
+      storyId && typeof this.threadStore.getState === "function"
         ? this.threadStore.getState(storyId)
         : null;
 
@@ -117,67 +117,67 @@ export default class ItemControls {
     // Only show the controls bar when we've been here before and have new comments.
     if (!lastVisit || newCommentCount <= 0) return;
 
-    el.setAttribute('class', 'item-controls item-controls--visible');
+    el.setAttribute("class", "controls visible");
 
     const since = sinceLastVisit(lastVisit);
 
     // "N new comments in the last X"
     const newInfo = create(
-      'span',
-      { attrs: { class: 'item-controls__new-info' } },
+      "span",
+      { attrs: { class: "new-info" } },
       create(
-        'em',
+        "em",
         {},
-        `${newCommentCount} new ${pluralise(newCommentCount, 'comment')}`,
+        `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`,
       ),
       ` in the last ${since}`,
     );
     el.appendChild(newInfo);
 
-    el.appendChild(document.createTextNode(' | '));
+    el.appendChild(document.createTextNode(" | "));
 
     // "auto collapse" button
     const autoCollapseBtn = create(
-      'button',
+      "button",
       {
         attrs: {
-          type: 'button',
-          class: 'item-controls__btn item-controls__btn--collapse',
-          title: 'Collapse threads without new comments',
+          type: "button",
+          class: "btn",
+          title: "Collapse threads without new comments",
         },
         events: {
           click: (e) => {
             e.preventDefault();
-            if (typeof this.onAutoCollapse === 'function') {
+            if (typeof this.onAutoCollapse === "function") {
               this.onAutoCollapse();
             }
           },
         },
       },
-      'auto collapse',
+      "auto collapse",
     );
     el.appendChild(autoCollapseBtn);
 
-    el.appendChild(document.createTextNode(' | '));
+    el.appendChild(document.createTextNode(" | "));
 
     // "mark as read" button
     const markReadBtn = create(
-      'button',
+      "button",
       {
         attrs: {
-          type: 'button',
-          class: 'item-controls__btn item-controls__btn--read',
+          type: "button",
+          class: "btn",
         },
         events: {
           click: (e) => {
             e.preventDefault();
-            if (typeof this.onMarkAsRead === 'function') {
+            if (typeof this.onMarkAsRead === "function") {
               this.onMarkAsRead();
             }
           },
         },
       },
-      'mark as read',
+      "mark as read",
     );
     el.appendChild(markReadBtn);
   }

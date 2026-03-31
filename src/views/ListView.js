@@ -68,27 +68,23 @@ function paginationHref(listType, page) {
 function createSkeletonItem(rank) {
   const li = create("li", {
     attrs: {
-      class: "item item--skeleton",
+      class: "item skeleton",
       role: "listitem",
       "aria-hidden": "true",
     },
   });
 
   // Rank
-  const rankEl = create(
-    "span",
-    { attrs: { class: "item__rank" } },
-    String(rank),
-  );
+  const rankEl = create("span", { attrs: { class: "rank" } }, String(rank));
 
   // Content column
-  const col = create("div", { attrs: { class: "col item__col" } });
+  const col = create("div", { attrs: { class: "col" } });
 
   // Skeleton title bar
-  const titleShimmer = create("div", { attrs: { class: "item__title" } });
+  const titleShimmer = create("div", { attrs: { class: "title" } });
   const titleLink = create("a", {
     attrs: {
-      class: "item__title-link item__title-link--skeleton",
+      class: "title-link shimmer",
       href: "#",
       tabindex: "-1",
       "aria-label": "Loading…",
@@ -102,7 +98,7 @@ function createSkeletonItem(rank) {
 
   // Skeleton meta bar
   const metaShimmer = create("div", {
-    attrs: { class: "meta item__meta--skeleton" },
+    attrs: { class: "meta shimmer" },
   });
   col.appendChild(metaShimmer);
 
@@ -208,14 +204,14 @@ export default class ListView extends View {
     // ── Page heading ───────────────────────────────────────────────────────
     const header = create(
       "header",
-      { attrs: { class: "list-view__header container" } },
-      create("h1", { attrs: { class: "list-view__title" } }, titleText),
+      { attrs: { class: "header container" } },
+      create("h1", { attrs: { class: "list-title" } }, titleText),
     );
     wrapper.appendChild(header);
 
     // ── Main content container ─────────────────────────────────────────────
     const main = create("main", {
-      attrs: { class: "container list-view__main" },
+      attrs: { class: "container" },
     });
 
     // Story list (populated once data arrives or on update)
@@ -240,8 +236,8 @@ export default class ListView extends View {
       page: this.page,
       hasMore: false,
       buildHref: (p) => paginationHref(this.listType, p),
-      className: "list-view__pagination",
-      linkClassName: "list-view__pagination-link",
+      className: "pagination",
+      linkClassName: "link",
     });
     this._paginationEl = this._paginator.render();
     main.appendChild(this._paginationEl);
@@ -271,11 +267,11 @@ export default class ListView extends View {
     if (!this._listEl) return;
 
     // We listen on the list root and let events bubble up, matching
-    // only the internal `#/item/…` title anchors (class item__title-link).
+    // only the internal `#/item/…` title anchors (class title-link).
     this._undelegateClick = delegate(
       this._listEl,
       "click",
-      "a.item__title-link[data-id]",
+      "a.title-link[data-id]",
       (_ev, anchor) => {
         const id = anchor.dataset.id;
         if (id && this._readStore) {
@@ -283,7 +279,7 @@ export default class ListView extends View {
           // Visually mark the row as read immediately without waiting for a
           // full re-render (keeps the UI snappy)
           const li = anchor.closest("li.item");
-          if (li) li.classList.add("item--read");
+          if (li) li.classList.add("read");
         }
       },
     );
@@ -533,7 +529,7 @@ export default class ListView extends View {
     this._listEl.replaceChildren(
       create(
         "li",
-        { attrs: { class: "item item--empty", role: "listitem" } },
+        { attrs: { class: "item empty", role: "listitem" } },
         "No stories found.",
       ),
     );
@@ -547,11 +543,7 @@ export default class ListView extends View {
   _renderError(msg) {
     if (!this._listEl) return;
     this._listEl.replaceChildren(
-      create(
-        "li",
-        { attrs: { class: "item item--error", role: "listitem" } },
-        msg,
-      ),
+      create("li", { attrs: { class: "item error", role: "listitem" } }, msg),
     );
     this._listEl.setAttribute("aria-busy", "false");
   }
@@ -560,18 +552,18 @@ export default class ListView extends View {
    * Create a single `<li class="item">` element for the given story object.
    *
    * Structure:
-   *   <li class="item [item--read]">
-   *     <span class="item__rank">N.</span>
-   *     <div class="col item__col">
-   *       <div class="item__title">
-   *         <a href="[external url or #/item/id]" class="item__title-link" [target="_blank"] [data-id]>Title</a>
-   *         [<span class="item-host">(hostname)</span>]       ← only for external links
+   *   <li class="item [read]">
+   *     <span class="rank">N.</span>
+   *     <div class="col">
+   *       <div class="title">
+   *         <a href="[external url or #/item/id]" class="title-link" [target="_blank"] [data-id]>Title</a>
+   *         [<span class="host">(hostname)</span>]       ← only for external links
    *       </div>
-   *       <div class="meta item__meta">
+   *       <div class="meta">
    *         NNN points |
    *         by <a href="#/user/name">name</a> |
    *         3 hours ago |
-   *         <a href="#/item/id">N comments</a>  [<span class="badge badge--new">+N new</span>]
+   *         <a href="#/item/id">N comments</a>  [<span class="badge new">+N new</span>]
    *       </div>
    *     </div>
    *   </li>
@@ -599,7 +591,7 @@ export default class ListView extends View {
     // ── Root <li> ──────────────────────────────────────────────────────────
     const li = create("li", {
       attrs: {
-        class: `item${isRead ? " item--read" : ""}`,
+        class: `item${isRead ? " read" : ""}`,
         role: "listitem",
         "data-id": id,
       },
@@ -609,16 +601,16 @@ export default class ListView extends View {
     li.appendChild(
       create(
         "span",
-        { attrs: { class: "item__rank", "aria-label": `Rank ${rank}` } },
+        { attrs: { class: "rank", "aria-label": `Rank ${rank}` } },
         `${rank}.`,
       ),
     );
 
     // ── Content column ─────────────────────────────────────────────────────
-    const col = create("div", { attrs: { class: "col item__col" } });
+    const col = create("div", { attrs: { class: "col" } });
 
     // ── Title row ──────────────────────────────────────────────────────────
-    const titleRow = create("div", { attrs: { class: "item__title title" } });
+    const titleRow = create("div", { attrs: { class: "title" } });
 
     if (url) {
       // External link — opens in a new tab; the internal "comments" link is in meta
@@ -627,7 +619,7 @@ export default class ListView extends View {
         {
           attrs: {
             href: url,
-            class: "item__title-link",
+            class: "title-link",
             target: "_blank",
             rel: "noopener noreferrer",
             "aria-label": `${title} (external link, opens in new tab)`,
@@ -640,7 +632,7 @@ export default class ListView extends View {
       // Hostname badge next to the title
       if (host) {
         titleRow.appendChild(
-          create("span", { attrs: { class: "item-host" } }, `(${host})`),
+          create("span", { attrs: { class: "host" } }, `(${host})`),
         );
       }
     } else {
@@ -650,7 +642,7 @@ export default class ListView extends View {
         {
           attrs: {
             href: `#/item/${id}`,
-            class: "item__title-link",
+            class: "title-link",
             "data-id": id, // picked up by delegated click handler
           },
         },
@@ -662,13 +654,13 @@ export default class ListView extends View {
     col.appendChild(titleRow);
 
     // ── Meta row ───────────────────────────────────────────────────────────
-    const meta = create("div", { attrs: { class: "meta item__meta" } });
+    const meta = create("div", { attrs: { class: "meta" } });
 
     // Score
     meta.appendChild(
       create(
         "span",
-        { attrs: { class: "item__score" } },
+        { attrs: { class: "score" } },
         `${score} point${pluralise(score)}`,
       ),
     );
@@ -676,15 +668,13 @@ export default class ListView extends View {
 
     // Author link
     meta.appendChild(
-      create("a", { attrs: { href: `#/user/${by}`, class: "item__by" } }, by),
+      create("a", { attrs: { href: `#/user/${by}`, class: "by" } }, by),
     );
     meta.appendChild(document.createTextNode(" · "));
 
     // Relative time
     if (timeAgo) {
-      meta.appendChild(
-        create("span", { attrs: { class: "item__time" } }, timeAgo),
-      );
+      meta.appendChild(create("span", { attrs: { class: "time" } }, timeAgo));
       meta.appendChild(document.createTextNode(" · "));
     }
 
@@ -694,7 +684,7 @@ export default class ListView extends View {
       {
         attrs: {
           href: `#/item/${id}`,
-          class: "item__comments",
+          class: "comments-link",
           "data-id": id, // also needed here so clicking "N comments" marks as read
         },
       },
@@ -753,7 +743,7 @@ export default class ListView extends View {
       "span",
       {
         attrs: {
-          class: "badge badge--new",
+          class: "badge new",
           role: "status",
           "aria-label": `${newCount} new comment${pluralise(newCount)}`,
         },

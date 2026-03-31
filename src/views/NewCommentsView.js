@@ -74,7 +74,7 @@ export default class NewCommentsView extends View {
 
     const heading = create(
       "h1",
-      { attrs: { class: "view__heading" } },
+      { attrs: { class: "heading" } },
       "New Comments",
     );
     wrapper.appendChild(heading);
@@ -305,13 +305,13 @@ export default class NewCommentsView extends View {
   _createCommentRow(comment) {
     const li = create("li", {
       attrs: {
-        class: `comment-feed__item${comment.dead ? " comment-feed__item--dead" : ""}`,
+        class: `entry${comment.dead ? " dead" : ""}`,
         "data-id": String(comment.id),
       },
     });
 
     // Meta line: author · time · on Story#parent
-    const meta = create("div", { attrs: { class: "comment-feed__meta" } });
+    const meta = create("div", { attrs: { class: "meta" } });
 
     if (comment.by) {
       const byLink = create(
@@ -319,7 +319,7 @@ export default class NewCommentsView extends View {
         {
           attrs: {
             href: `#/user/${comment.by}`,
-            class: "comment-feed__author",
+            class: "author",
           },
         },
         comment.by,
@@ -331,7 +331,7 @@ export default class NewCommentsView extends View {
       meta.appendChild(document.createTextNode(" · "));
       const time = create(
         "span",
-        { attrs: { class: "comment-feed__time" } },
+        { attrs: { class: "time" } },
         timeAgoFromUnix(comment.time),
       );
       meta.appendChild(time);
@@ -345,7 +345,7 @@ export default class NewCommentsView extends View {
         {
           attrs: {
             href: `#/item/${comment.parent}`,
-            class: "comment-feed__parent-link",
+            class: "parent-link",
           },
         },
         "parent",
@@ -358,14 +358,14 @@ export default class NewCommentsView extends View {
     // Comment text
     if (comment.text) {
       const textEl = create("div", {
-        attrs: { class: "comment-feed__text" },
+        attrs: { class: "text" },
         html: comment.text, // HN API returns pre-sanitized HTML
       });
       li.appendChild(textEl);
     } else if (comment.deleted) {
       const deletedEl = create(
         "div",
-        { attrs: { class: "comment-feed__text comment-feed__text--deleted" } },
+        { attrs: { class: "text deleted" } },
         "[deleted]",
       );
       li.appendChild(deletedEl);
@@ -385,7 +385,7 @@ export default class NewCommentsView extends View {
     for (let i = 0; i < PAGE_SIZE; i++) {
       const li = create("li", {
         attrs: {
-          class: "comment-feed__item comment-feed__item--skeleton",
+          class: "entry skeleton",
           "aria-hidden": "true",
         },
       });
@@ -412,7 +412,7 @@ export default class NewCommentsView extends View {
     this._listEl.setAttribute("aria-busy", "false");
     const li = create(
       "li",
-      { attrs: { class: "comment-feed__item comment-feed__item--empty" } },
+      { attrs: { class: "entry empty" } },
       "No new comments found.",
     );
     this._listEl.appendChild(li);
@@ -426,11 +426,7 @@ export default class NewCommentsView extends View {
     if (!this._listEl) return;
     this._listEl.innerHTML = "";
     this._listEl.setAttribute("aria-busy", "false");
-    const li = create(
-      "li",
-      { attrs: { class: "comment-feed__item comment-feed__item--error" } },
-      msg,
-    );
+    const li = create("li", { attrs: { class: "entry error" } }, msg);
     this._listEl.appendChild(li);
   }
 }

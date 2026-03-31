@@ -62,8 +62,8 @@ export class CommentElement {
     if (this.root) return this.root;
 
     const classes = ["comment"];
-    if (this.depth > 0) classes.push("comment--child");
-    if (this._collapsed) classes.push("comment--collapsed");
+    if (this.depth > 0) classes.push("child");
+    if (this._collapsed) classes.push("collapsed");
 
     // Root wrapper
     const wrapper = create("article", {
@@ -82,7 +82,7 @@ export class CommentElement {
     // Kids container (initially empty)
     this._kidsContainer = create("div", {
       attrs: {
-        class: "comment-kids",
+        class: "kids",
         id: `comment-kids-${this.comment.id}`,
       },
     });
@@ -122,7 +122,7 @@ export class CommentElement {
   }
 
   _createMeta() {
-    const meta = create("div", { attrs: { class: "comment-meta" } });
+    const meta = create("div", { attrs: { class: "meta" } });
 
     // Collapse toggle button
     const toggle = create(
@@ -185,7 +185,7 @@ export class CommentElement {
             "span",
             {
               attrs: {
-                class: "badge badge--new",
+                class: "badge new",
                 role: "status",
                 "aria-live": "polite",
               },
@@ -194,7 +194,7 @@ export class CommentElement {
           );
           counts.appendChild(newBadge);
           // highlight the comment element visually
-          meta.classList.add("comment--has-new");
+          meta.classList.add("has-new");
         }
       } catch (e) {
         // ignore store errors; optional enhancement
@@ -215,7 +215,7 @@ export class CommentElement {
     // Render it as HTML directly rather than escaping it.
     const textEl = create("div", {
       attrs: {
-        class: "comment-text",
+        class: "text",
         id: `comment-body-${this.comment.id}`,
       },
       html: this.comment.text || "",
@@ -228,7 +228,7 @@ export class CommentElement {
       "div",
       {
         attrs: {
-          class: "comment-placeholder",
+          class: "placeholder",
           role: "group",
           "aria-label": `Comment ${kidId} (loading)`,
           "data-kid-id": String(kidId),
@@ -261,9 +261,9 @@ export class CommentElement {
     if (this.root) {
       const applyCollapse = () => {
         if (this._collapsed) {
-          this.root.classList.add("comment--collapsed");
+          this.root.classList.add("collapsed");
         } else {
-          this.root.classList.remove("comment--collapsed");
+          this.root.classList.remove("collapsed");
         }
         // update aria-expanded on toggle button if present
         const btn = this.root.querySelector("button.toggle");
@@ -415,19 +415,19 @@ export class CommentElement {
   update() {
     if (!this.root) return;
     // Update text — HN text is pre-sanitized HTML, render it directly.
-    const textEl = this.root.querySelector(".comment-text");
+    const textEl = this.root.querySelector(".text");
     if (textEl) {
       textEl.innerHTML = this.comment.text || "";
     }
     // Update time
-    const timeEl = this.root.querySelector(".comment-meta .time");
+    const timeEl = this.root.querySelector(".meta .time");
     if (timeEl) {
       timeEl.textContent = timeAgoFromUnix(
         this.comment.time || Date.now() / 1000,
       );
     }
     // Update counts
-    const descEl = this.root.querySelector(".comment-meta .desc");
+    const descEl = this.root.querySelector(".meta .desc");
     if (descEl) {
       const descendantCount =
         this.comment.descendants != null
@@ -445,32 +445,30 @@ export class CommentElement {
     ) {
       try {
         const countsObj = this.stores.threadStore.getChildCounts(this.comment);
-        const existingBadge = this.root.querySelector(".badge--new");
+        const existingBadge = this.root.querySelector(".badge.new");
         if (countsObj && countsObj.newComments && countsObj.newComments > 0) {
           if (!existingBadge) {
             const newBadge = create(
               "span",
               {
                 attrs: {
-                  class: "badge badge--new",
+                  class: "badge new",
                   role: "status",
                   "aria-live": "polite",
                 },
               },
               String(countsObj.newComments),
             );
-            const countsContainer = this.root.querySelector(
-              ".comment-meta .counts",
-            );
+            const countsContainer = this.root.querySelector(".meta .counts");
             if (countsContainer) countsContainer.appendChild(newBadge);
-            this.root.classList.add("comment--has-new");
+            this.root.classList.add("has-new");
           } else {
             existingBadge.textContent = String(countsObj.newComments);
-            this.root.classList.add("comment--has-new");
+            this.root.classList.add("has-new");
           }
         } else if (existingBadge) {
           existingBadge.remove();
-          this.root.classList.remove("comment--has-new");
+          this.root.classList.remove("has-new");
         }
       } catch (e) {
         // ignore store errors

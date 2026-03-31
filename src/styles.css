@@ -1,8 +1,7 @@
 /* =============================================================================
    vanilla-hn — styles.css
    Visual match to react-hn, built with modern CSS (@layer, nesting, variables).
-   Class names target the *actual* DOM output of ListView, ItemView, and
-   CommentElement — not the old placeholder names that never matched the JS.
+   Uses @scope for component encapsulation instead of BEM naming conventions.
    ============================================================================= */
 
 @layer reset, base, layout, components, utilities;
@@ -54,7 +53,6 @@
    ============================================================================= */
 
 @layer base {
-    /* ── Exact react-hn colour palette ────────────────────────────────────── */
     :root {
         color-scheme: light dark;
 
@@ -63,7 +61,7 @@
         --hn-muted: light-dark(#666666, #9a9a9a);
         --hn-accent: light-dark(#ff6600, #ffb366);
 
-        --hn-primary: #00d8ff; /* cyan accent / homelink (unchanged) */
+        --hn-primary: #00d8ff;
         --hn-header-bg: #222222;
         --hn-header-text: #ffffff;
         --hn-border: #e7e7e7;
@@ -72,18 +70,15 @@
         --hn-error: #ff3333;
         --hn-footer-text: #333333;
 
-        /* Legacy dark-mode tokens (kept for components that reference them) */
         --hn-bg-dark: #242424;
         --hn-text-dark: #e0e0e0;
         --hn-muted-dark: #9aa4ad;
 
-        /* Override variables — empty by default. When set they take precedence. */
         --override-hn-bg: ;
         --override-hn-text: ;
         --override-hn-muted: ;
         --override-hn-accent: ;
 
-        /* Typography — exact react-hn values */
         --font-sans: Verdana, Geneva, sans-serif;
         --font-mono:
             ui-monospace, "SFMono-Regular", Menlo, Monaco, "Roboto Mono",
@@ -98,7 +93,6 @@
         color-scheme: light dark;
     }
 
-    /* Fallback for browsers that don't support light-dark(): use prefers-color-scheme */
     @supports not (color-scheme: light dark) {
         :root {
             --hn-bg: #ffffff;
@@ -116,9 +110,7 @@
         }
     }
 
-    /* react-hn: body { background-color: #fff; margin: 0; } */
     body {
-        /* Use override variables if set, otherwise fall back to light-dark() tokens */
         background-color: var(--override-hn-bg, var(--hn-bg));
         color: var(--override-hn-text, var(--hn-text));
         font-family: var(--font-sans);
@@ -140,7 +132,6 @@
         vertical-align: text-bottom;
     }
 
-    /* react-hn: links are black, no underline, underline on hover */
     a {
         color: var(--hn-text);
         text-decoration: none;
@@ -155,7 +146,6 @@
         }
     }
 
-    /* Inline collapse toggles / control spans */
     span.control {
         cursor: pointer;
         &:hover {
@@ -173,11 +163,6 @@
    ============================================================================= */
 
 @layer layout {
-    /*
-     * .app-wrap mirrors react-hn's .App__wrap exactly:
-     *   width:90%; max-width:1280px; margin:8px auto;
-     *   background:#f5f5f5; font-size:13.3333px; font-family:Verdana
-     */
     .app-wrap {
         width: 90%;
         max-width: 1280px;
@@ -188,7 +173,6 @@
         font-family: var(--font-sans);
     }
 
-    /* #app mirrors react-hn's .App__content */
     #app {
         overflow-wrap: break-word;
         word-wrap: break-word;
@@ -200,26 +184,26 @@
    ============================================================================= */
 
 @layer components {
-    /* ── Site header → .App__header ─────────────────────────────────────── */
+    /* -- Site header -------------------------------------------------------- */
 
-    .site-header {
-        color: var(--hn-header-text);
-        background-color: var(--hn-header-bg);
-        padding: 6px;
-        line-height: 18px;
-        vertical-align: middle;
-        position: relative;
+    @scope (.site-header) {
+        :scope {
+            color: var(--hn-header-text);
+            background-color: var(--hn-header-bg);
+            padding: 6px;
+            line-height: 18px;
+            vertical-align: middle;
+            position: relative;
+        }
 
-        /* Logo image */
-        & img {
+        img {
             display: inline;
             vertical-align: middle;
             border: 1px solid var(--hn-primary);
             margin-right: 0.25em;
         }
 
-        /* All links inside the header default to white */
-        & a {
+        a {
             color: inherit;
             text-decoration: none;
 
@@ -232,114 +216,110 @@
                 text-decoration: none;
             }
         }
-    }
 
-    /* Logo icon link wrapper — no extra spacing */
-    .site-header__homelinkicon {
-        display: inline;
-        margin-right: 0;
-    }
+        .homelink-icon {
+            display: inline;
+            margin-right: 0;
+        }
 
-    /* Home / brand text link — cyan and bold, same as .App__homelink */
-    .site-header__homelink {
-        font-weight: bold;
-        color: var(--hn-primary) !important;
-        text-decoration: none;
-        margin-right: 0.75em;
-
-        &:visited {
+        .homelink {
+            font-weight: bold;
             color: var(--hn-primary) !important;
-        }
-        &.active {
-            color: #fff !important;
-        }
-    }
-
-    /* "settings" link — top-right, same as .App__settings */
-    .site-header__settings {
-        position: absolute;
-        top: 6px;
-        right: 10px;
-        cursor: pointer;
-    }
-
-    /* ── Main nav — pipe-separated like react-hn ────────────────────────── */
-
-    .main-nav {
-        display: inline;
-
-        & ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: inline;
-        }
-
-        & li {
-            display: inline;
-
-            /* " | " separator before every item except the first */
-            & + li::before {
-                content: " | ";
-                color: var(--hn-header-text);
-            }
-        }
-
-        & a {
-            color: inherit;
             text-decoration: none;
+            margin-right: 0.75em;
 
             &:visited {
-                color: inherit;
+                color: var(--hn-primary) !important;
             }
-            &:hover,
             &.active {
-                color: #fff;
-                text-decoration: underline;
+                color: #fff !important;
+            }
+        }
+
+        .settings {
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            cursor: pointer;
+        }
+
+        .main-nav {
+            display: inline;
+
+            & ul {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+                display: inline;
+            }
+
+            & li {
+                display: inline;
+
+                & + li::before {
+                    content: " | ";
+                    color: var(--hn-header-text);
+                }
+            }
+
+            & a {
+                color: inherit;
+                text-decoration: none;
+
+                &:visited {
+                    color: inherit;
+                }
+                &:hover,
+                &.active {
+                    color: #fff;
+                    text-decoration: underline;
+                }
             }
         }
     }
 
-    /* ── Settings panel → .Settings ─────────────────────────────────────── */
+    /* -- Settings panel ---------------------------------------------------- */
 
-    .settings-panel {
-        box-sizing: border-box;
-        padding: 0.75em;
-        position: absolute;
-        width: 36%;
-        right: 0;
-        background-color: var(--hn-header-bg);
-        border-bottom-left-radius: 1em;
-        border-bottom-right-radius: 1em;
-        z-index: 100;
+    @scope (.settings-panel) {
+        :scope {
+            box-sizing: border-box;
+            padding: 0.75em;
+            position: absolute;
+            width: 36%;
+            right: 0;
+            background-color: var(--hn-header-bg);
+            border-bottom-left-radius: 1em;
+            border-bottom-right-radius: 1em;
+            z-index: 100;
+        }
 
-        & td:first-child {
+        td:first-child {
             text-align: right;
         }
-        & p {
+        p {
             color: #fff;
             margin-bottom: 0.4em;
         }
-        & label {
+        label {
             color: #fff;
             cursor: pointer;
         }
-        & div:last-child > p:last-child {
+        div:last-child > p:last-child {
             margin-bottom: 0;
         }
 
-        & input[type="checkbox"] {
+        input[type="checkbox"] {
             cursor: pointer;
             margin-right: 0.3em;
         }
-        & input[type="number"] {
+        input[type="number"] {
             width: 4em;
         }
-        & select {
+        select {
             font-size: inherit;
         }
 
-        & .settings-section {
+        .section {
             margin-bottom: 0.6em;
             padding-bottom: 0.6em;
             border-bottom: 1px solid #444;
@@ -352,25 +332,175 @@
         }
     }
 
-    /* ── List-view title h1 — visible only to screen readers ────────────── */
-    /*
-     * ListView renders <h1 class="list-view__title"> with text like "News",
-     * "Newest", etc. It is useful for assistive technology but should not
-     * appear visually (react-hn has no equivalent heading in the list view).
-     */
-    .list-view__title {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+    /* -- Story list -------------------------------------------------------- */
+
+    @scope (.story-list) {
+        :scope {
+            list-style: none;
+            padding: 0;
+            padding-left: 3em;
+            padding-right: 1.25em;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+
+        & > p {
+            padding-left: 1.25em;
+        }
     }
 
-    /* ── Footer → .App__footer ──────────────────────────────────────────── */
+    /* -- Story list item --------------------------------------------------- */
+
+    @scope (.item) {
+        :scope {
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        :scope.loading {
+            min-height: 34px;
+        }
+
+        :scope.read {
+            opacity: 0.6;
+        }
+
+        :scope.empty,
+        :scope.error {
+            padding-left: 1.25em;
+            list-style: none;
+        }
+
+        :scope.skeleton .title-link.shimmer {
+            display: block;
+            height: 0.9em;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin-bottom: 0.5rem;
+            animation: shimmer 1.4s infinite ease-in-out both;
+            color: transparent;
+            user-select: none;
+        }
+
+        :scope.skeleton .meta.shimmer {
+            display: block;
+            width: 40%;
+            height: 0.75em;
+            background: #e0e0e0;
+            border-radius: 3px;
+            animation: shimmer 1.4s infinite ease-in-out both;
+        }
+
+        .rank {
+            position: absolute;
+            left: -2.5em;
+            width: 2em;
+            text-align: right;
+            color: var(--hn-muted);
+        }
+
+        .title {
+            color: var(--hn-muted);
+            font-size: var(--font-size-title);
+        }
+
+        .title-link {
+            text-decoration: none;
+            color: var(--hn-text);
+
+            &:hover {
+                text-decoration: underline;
+            }
+            &:visited {
+                color: var(--hn-muted);
+            }
+        }
+
+        .host {
+            color: var(--hn-muted);
+            font-size: 0.85em;
+            margin-left: 0.25em;
+        }
+
+        .meta {
+            color: var(--hn-muted);
+
+            & a {
+                text-decoration: none;
+                color: inherit;
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+        }
+
+        .by {
+            font-weight: bold;
+        }
+    }
+
+    /* -- Badge (shared component) ------------------------------------------ */
+
+    .badge {
+        font-weight: bold;
+        margin-left: 0.25em;
+
+        &::before {
+            content: "(";
+        }
+        &::after {
+            content: ")";
+        }
+    }
+
+    .badge.new {
+        font-weight: bold;
+    }
+
+    /* -- List view --------------------------------------------------------- */
+
+    @scope (.list-view) {
+        .list-title {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .pagination {
+            margin-left: 3em;
+            padding: 0.5em 0;
+
+            & a {
+                font-weight: bold;
+                color: var(--hn-text);
+                text-decoration: none;
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+        }
+    }
+
+    /* -- Pagination (standalone scope for Paginator component) -------------- */
+
+    @scope (.pagination) {
+        .link {
+            font-weight: bold;
+            color: var(--hn-text);
+            text-decoration: none;
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    /* -- Footer ------------------------------------------------------------ */
 
     .site-footer {
         margin-top: 1em;
@@ -385,229 +515,103 @@
         }
     }
 
-    /* ── Story list → .Items__list ──────────────────────────────────────── */
+    /* -- Item detail view -------------------------------------------------- */
 
-    .story-list {
-        list-style: none;
-        padding: 0;
-        padding-left: 3em;
-        padding-right: 1.25em;
-        margin-top: 1em;
-        margin-bottom: 0.5em;
-
-        & > p {
-            padding-left: 1.25em;
-        }
-    }
-
-    /* ── Story list item → .ListItem ────────────────────────────────────── */
-
-    .item {
-        margin-bottom: 16px;
-        position: relative; /* anchors .item__rank */
-    }
-
-    .item--loading {
-        min-height: 34px;
-    }
-
-    /* Read stories are dimmed (prompt requirement) */
-    .item--read {
-        opacity: 0.6;
-    }
-
-    /* Empty / error states */
-    .item--empty,
-    .item--error {
-        padding-left: 1.25em;
-        list-style: none;
-    }
-
-    /* ── Skeleton shimmer (matches .ListItem--loading spinner aesthetic) */
-    .item--skeleton .item__title-link--skeleton {
-        display: block;
-        height: 0.9em;
-        background: #e0e0e0;
-        border-radius: 3px;
-        margin-bottom: 0.5rem;
-        animation: shimmer 1.4s infinite ease-in-out both;
-        color: transparent;
-        user-select: none;
-    }
-
-    .item--skeleton .item__meta--skeleton {
-        display: block;
-        width: 40%;
-        height: 0.75em;
-        background: #e0e0e0;
-        border-radius: 3px;
-        animation: shimmer 1.4s infinite ease-in-out both;
-    }
-
-    @keyframes shimmer {
-        0%,
-        80%,
-        100% {
-            opacity: 0.4;
-        }
-        40% {
-            opacity: 1;
-        }
-    }
-
-    /* Rank number — floated into the 3em left-gutter of .story-list */
-    .item__rank {
-        position: absolute;
-        left: -2.5em;
-        width: 2em;
-        text-align: right;
-        color: var(--hn-muted);
-    }
-
-    /* Title row → .Item__title */
-    .item__title {
-        color: var(--hn-muted);
-        font-size: var(--font-size-title);
-    }
-
-    .item__title-link {
-        text-decoration: none;
-        color: var(--hn-text);
-
-        &:hover {
-            text-decoration: underline;
-        }
-        &:visited {
+    @scope (.item-view) {
+        .loading {
+            padding: 1em 1.25em 0 1.25em;
+            margin-bottom: 1em;
             color: var(--hn-muted);
         }
-    }
 
-    /* Domain badge next to title → .Item__host */
-    .item-host {
-        color: var(--hn-muted);
-        font-size: 0.85em;
-        margin-left: 0.25em;
-    }
+        .content {
+            padding: 1em 1.25em 0 1.25em;
+            margin-bottom: 1em;
+        }
 
-    /* Meta row → .Item__meta */
-    .item__meta {
-        color: var(--hn-muted);
+        .title {
+            color: var(--hn-muted);
 
-        & a {
-            text-decoration: none;
-            color: inherit;
-            &:hover {
-                text-decoration: underline;
+            & a {
+                text-decoration: none;
+                color: var(--hn-text);
+
+                &:hover {
+                    text-decoration: underline;
+                }
+                &:visited {
+                    color: var(--hn-muted);
+                }
             }
         }
-    }
 
-    /* Author — bold, same as .Item__by a, .ListItem__newcomments a */
-    .item__by {
-        font-weight: bold;
-    }
+        .meta {
+            color: var(--hn-muted);
+            margin-bottom: 1em;
 
-    /* New-comment badge → .ListItem__newcomments */
-    .badge--new {
-        font-weight: bold;
-        margin-left: 0.25em;
+            & a {
+                text-decoration: none;
+                color: inherit;
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
 
-        &::before {
-            content: "(";
+            & em {
+                font-style: normal;
+                background-color: var(--hn-new-comment-bg);
+                color: var(--hn-text);
+            }
         }
-        &::after {
-            content: ")";
-        }
-    }
 
-    /* ── Paginator → .Paginator ─────────────────────────────────────────── */
-
-    .list-view__pagination {
-        margin-left: 3em;
-        padding: 0.5em 0;
-
-        & a {
+        .by {
             font-weight: bold;
-            color: var(--hn-text);
-            text-decoration: none;
-            &:hover {
-                text-decoration: underline;
+        }
+
+        .host {
+            color: var(--hn-muted);
+            font-size: 0.85em;
+            margin-left: 0.25em;
+        }
+
+        .body-text {
+            margin-top: 1em;
+
+            & a {
+                color: var(--hn-text);
+                &:visited {
+                    color: var(--hn-muted);
+                }
+            }
+
+            & p:last-child,
+            & pre:last-child {
+                margin-bottom: 0;
             }
         }
     }
 
-    /* ── Item / story detail view → .Item ──────────────────────────────── */
+    /* -- Item controls ----------------------------------------------------- */
 
-    /* Loading indicator shown before item data arrives */
-    .item-loading {
-        padding: 1em 1.25em 0 1.25em;
-        margin-bottom: 1em;
-        color: var(--hn-muted);
-    }
-
-    /* Content wrapper → .Item__content */
-    .item-content {
-        padding: 1em 1.25em 0 1.25em;
-        margin-bottom: 1em;
-    }
-
-    /* Title → .Item__title */
-    .item-title {
-        color: var(--hn-muted);
-        /* font-size set inline by ItemView from SettingsStore.titleFontSize */
-
-        & a {
-            text-decoration: none;
-            color: var(--hn-text);
-
-            &:hover {
-                text-decoration: underline;
-            }
-            &:visited {
-                color: var(--hn-muted);
-            }
-        }
-    }
-
-    /* Meta bar → .Item__meta (note: also has margin-bottom in item view) */
-    .item-meta {
-        color: var(--hn-muted);
-        margin-bottom: 1em;
-
-        & a {
-            text-decoration: none;
-            color: inherit;
-            &:hover {
-                text-decoration: underline;
-            }
+    @scope (.controls) {
+        :scope {
+            display: none;
+            margin-bottom: 0.5em;
+            color: var(--hn-muted);
+            font-size: var(--font-size-meta);
         }
 
-        & em {
-            font-style: normal;
-            background-color: var(--hn-new-comment-bg);
-            color: var(--hn-text);
+        :scope.visible {
+            display: block;
         }
-    }
 
-    /* Author in item-meta — bold */
-    .item-by {
-        font-weight: bold;
-    }
-
-    /* Controls bar (new-count info + auto-collapse + mark-as-read) */
-    .item-controls {
-        display: none; /* hidden until --visible modifier is added */
-        margin-bottom: 0.5em;
-        color: var(--hn-muted);
-        font-size: var(--font-size-meta);
-
-        & em {
+        em {
             font-style: normal;
             background-color: var(--hn-new-comment-bg);
             color: var(--hn-text);
         }
 
-        & .item-controls__btn {
+        .btn {
             background: none;
             border: none;
             padding: 0;
@@ -620,46 +624,28 @@
         }
     }
 
-    .item-controls--visible {
-        display: block;
-    }
+    /* -- Comment slider ---------------------------------------------------- */
 
-    /* Item body text (Ask HN / job self-text) → .Item__text */
-    .item-text {
-        margin-top: 1em;
+    @scope (.slider-container) {
+        :scope {
+            margin-top: 1em;
+        }
 
-        & a {
-            color: var(--hn-text);
-            &:visited {
-                color: var(--hn-muted);
+        .slider {
+            margin: 0;
+            vertical-align: middle;
+        }
+
+        .btn {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            color: var(--hn-muted);
+            font-size: var(--font-size-meta);
+            &:hover {
+                text-decoration: underline;
             }
-        }
-
-        & p:last-child,
-        & pre:last-child {
-            margin-bottom: 0;
-        }
-    }
-
-    /* Comment time-range slider */
-    .item-slider-container {
-        margin-top: 1em;
-    }
-
-    .item-slider {
-        margin: 0;
-        vertical-align: middle;
-    }
-
-    .item-slider__btn {
-        background: none;
-        border: none;
-        padding: 0;
-        cursor: pointer;
-        color: var(--hn-muted);
-        font-size: var(--font-size-meta);
-        &:hover {
-            text-decoration: underline;
         }
     }
 
@@ -671,158 +657,208 @@
         color: var(--hn-muted);
     }
 
-    /* ── Comments → .Comment ────────────────────────────────────────────── */
-    /*
-     * CommentElement generates:
-     *
-     *   <article class="comment [comment--child] [comment--collapsed] [comment--new]">
-     *     <div class="comment-meta">
-     *       <button class="toggle">−</button>
-     *       <span class="by">user</span>
-     *       <span class="sep">·</span>
-     *       <span class="time">N ago</span>
-     *       <span class="counts"><span class="desc">N replies</span></span>
-     *     </div>
-     *     <div class="comment-text">…</div>
-     *     <div class="comment-kids">   ← children recurse here
-     *       <article class="comment comment--child">…</article>
-     *     </div>
-     *   </article>
-     *
-     * INDENTATION  (matches react-hn's per-level padding-left exactly):
-     *   .comment > .comment-meta / .comment-text  get padding-left: 1.25em
-     *   .comment-kids                              adds padding-left: 2.5em
-     *
-     *   Level 0: 1.25em
-     *   Level 1: 2.5 + 1.25 = 3.75em
-     *   Level 2: 5.0 + 1.25 = 6.25em
-     *   Level N: N×2.5 + 1.25em  ← exact react-hn formula
-     */
+    /* -- Comment tree ------------------------------------------------------ */
 
-    /* New comment: highlight background on the meta + text bands */
-    .comment--new > .comment-meta,
-    .comment--new > .comment-text {
-        background-color: var(--hn-new-comment-bg);
+    @scope (.comment) to (.kids) {
+        :scope.new > .meta,
+        :scope.new > .text {
+            background-color: var(--hn-new-comment-bg);
+        }
+
+        :scope.collapsed > .text,
+        :scope.collapsed > .kids {
+            display: none;
+        }
+
+        :scope.dead > .text {
+            color: var(--hn-dead) !important;
+        }
+
+        :scope.error > .meta {
+            color: var(--hn-error);
+        }
+
+        .meta,
+        .text {
+            padding-right: 1.25em;
+            padding-top: 0.65em;
+            padding-bottom: 0.65em;
+            padding-left: 1.25em;
+        }
+
+        .meta {
+            color: var(--hn-muted);
+            margin-bottom: 0.5em;
+
+            & a {
+                text-decoration: none;
+                color: inherit;
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            & em {
+                font-style: normal;
+                background-color: var(--hn-new-comment-bg);
+                color: var(--hn-text);
+            }
+        }
+
+        .meta .by {
+            font-weight: bold;
+        }
+
+        .meta .toggle {
+            cursor: pointer;
+            user-select: none;
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+            color: inherit;
+        }
+
+        .meta .sep {
+            margin: 0 0.2em;
+        }
+
+        .meta .time {
+            color: var(--hn-muted);
+        }
+
+        .meta .badge.new {
+            font-weight: bold;
+        }
+
+        .text {
+            & a {
+                color: var(--hn-text);
+                &:visited {
+                    color: var(--hn-muted);
+                }
+            }
+
+            & p:last-child,
+            & pre:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        .placeholder {
+            padding: 0.65em 1.25em;
+            color: var(--hn-muted);
+            font-size: var(--font-size-meta);
+        }
     }
 
-    /* Collapsed: hide text and children */
-    .comment--collapsed > .comment-text,
-    .comment--collapsed > .comment-kids {
-        display: none;
-    }
-
-    /* Dead comment — dim text */
-    .comment--dead > .comment-text {
-        color: var(--hn-dead) !important;
-    }
-
-    /* Error */
-    .comment--error > .comment-meta {
-        color: var(--hn-error);
-    }
-
-    /* Vertical padding + right padding on content bands */
-    .comment > .comment-meta,
-    .comment > .comment-text {
-        padding-right: 1.25em;
-        padding-top: 0.65em;
-        padding-bottom: 0.65em;
-        padding-left: 1.25em; /* base indent for all levels */
-    }
-
-    /* Each nesting level adds 2.5em of indentation */
-    .comment-kids {
+    .kids {
         padding-left: 2.5em;
     }
 
-    /* Comment meta row → .Comment__meta */
-    .comment-meta {
-        color: var(--hn-muted);
-        margin-bottom: 0.5em;
+    /* -- Comment feed ------------------------------------------------------ */
 
-        & a {
+    @scope (.comment-feed) {
+        :scope {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .entry {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--hn-border, #e0e0e0);
+        }
+
+        .entry.dead {
+            opacity: 0.6;
+        }
+
+        .entry.skeleton {
+            padding: 10px 0;
+        }
+
+        .entry.empty,
+        .entry.error {
+            color: var(--hn-meta-color, #828282);
+            font-style: italic;
+            padding: 16px 0;
+        }
+
+        .meta {
+            font-size: var(--font-size-meta, 13px);
+            color: var(--hn-meta-color, #828282);
+            margin-bottom: 4px;
+        }
+
+        .author {
+            color: var(--hn-meta-color, #828282);
             text-decoration: none;
-            color: inherit;
+            font-weight: 500;
+
             &:hover {
                 text-decoration: underline;
             }
         }
 
-        & em {
-            font-style: normal;
-            background-color: var(--hn-new-comment-bg);
-            color: var(--hn-text);
+        .time {
+            color: var(--hn-meta-color, #828282);
         }
-    }
 
-    /* Author → .Comment__user */
-    .comment-meta .by {
-        font-weight: bold;
-    }
+        .parent-link {
+            color: var(--hn-meta-color, #828282);
+            text-decoration: none;
 
-    /* Collapse toggle → .Comment__collapse */
-    .comment-meta .toggle {
-        cursor: pointer;
-        user-select: none;
-        background: none;
-        border: none;
-        padding: 0;
-        font: inherit;
-        color: inherit;
-    }
-
-    /* Separator and time */
-    .comment-meta .sep {
-        margin: 0 0.2em;
-    }
-    .comment-meta .time {
-        color: var(--hn-muted);
-    }
-
-    /* New-count badge inside comment meta */
-    .comment-meta .badge--new {
-        font-weight: bold;
-    }
-
-    /* Comment body → .Comment__text */
-    .comment-text {
-        & a {
-            color: var(--hn-text);
-            &:visited {
-                color: var(--hn-muted);
+            &:hover {
+                text-decoration: underline;
             }
         }
 
-        & p:last-child,
-        & pre:last-child {
-            margin-bottom: 0;
+        .text {
+            font-size: 0.93em;
+            line-height: 1.45;
+            overflow-wrap: break-word;
+            word-break: break-word;
+
+            & a {
+                color: var(--hn-link-color, #000);
+                text-decoration: underline;
+            }
+
+            & p {
+                margin-block: 0.5em;
+            }
+
+            & p:first-child {
+                margin-block-start: 0;
+            }
+        }
+
+        .text.deleted {
+            color: var(--hn-meta-color, #828282);
+            font-style: italic;
         }
     }
 
-    /* Placeholder shown while a comment is loading */
-    .comment-placeholder {
-        padding: 0.65em 1.25em;
-        color: var(--hn-muted);
-        font-size: var(--font-size-meta);
-    }
+    /* -- User profile ------------------------------------------------------ */
 
-    /* ── User profile → .UserProfile ────────────────────────────────────── */
+    @scope (.user-profile) {
+        :scope {
+            padding-left: 1.25em;
+            padding-top: 1em;
+        }
 
-    .user-profile {
-        padding-left: 1.25em;
-        padding-top: 1em;
-
-        & h4 {
+        h4 {
             margin: 0 0 1em 0;
         }
-        & dl {
+        dl {
             margin-bottom: 1em;
         }
-        & dt {
+        dt {
             font-weight: bold;
             display: inline;
         }
-        & dd {
+        dd {
             display: inline;
             margin-left: 0.5em;
             &::after {
@@ -830,16 +866,26 @@
                 content: "";
             }
         }
+
+        .about a {
+            color: var(--hn-text);
+        }
+        .hn-link {
+            margin-top: 0.75em;
+        }
     }
 
-    .user-profile__about a {
-        color: var(--hn-text);
-    }
-    .user-profile__hn-link {
-        margin-top: 0.75em;
+    /* -- New comments view ------------------------------------------------- */
+
+    @scope (.newcomments-view) {
+        .heading {
+            font-size: 1.1em;
+            font-weight: bold;
+            padding: 8px 0 4px;
+        }
     }
 
-    /* ── Spinner → .Spinner (SpinKit bounce dots) ───────────────────────── */
+    /* -- Spinner (keep as-is) ---------------------------------------------- */
 
     .spinner > div,
     .Spinner > div {
@@ -862,6 +908,19 @@
         }
     }
 
+    /* -- Keyframes --------------------------------------------------------- */
+
+    @keyframes shimmer {
+        0%,
+        80%,
+        100% {
+            opacity: 0.4;
+        }
+        40% {
+            opacity: 1;
+        }
+    }
+
     @keyframes bouncedelay {
         0%,
         80%,
@@ -875,7 +934,7 @@
         }
     }
 
-    /* ── Updates view ───────────────────────────────────────────────────── */
+    /* -- Updates view ------------------------------------------------------ */
 
     .updates {
         & .comment {
@@ -890,96 +949,6 @@
 
     .updates__notice {
         padding: 0 1.25em;
-    }
-}
-
-/* ── New Comments Feed → NewCommentsView ──────────────────────────────── */
-
-.newcomments-view {
-    .view__heading {
-        font-size: 1.1em;
-        font-weight: bold;
-        padding: 8px 0 4px;
-    }
-}
-
-.comment-feed {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.comment-feed__item {
-    padding: 8px 0;
-    border-bottom: 1px solid var(--hn-border, #e0e0e0);
-
-    &--dead {
-        opacity: 0.6;
-    }
-
-    &--skeleton {
-        padding: 10px 0;
-    }
-
-    &--empty,
-    &--error {
-        color: var(--hn-meta-color, #828282);
-        font-style: italic;
-        padding: 16px 0;
-    }
-}
-
-.comment-feed__meta {
-    font-size: var(--font-size-meta, 13px);
-    color: var(--hn-meta-color, #828282);
-    margin-bottom: 4px;
-}
-
-.comment-feed__author {
-    color: var(--hn-meta-color, #828282);
-    text-decoration: none;
-    font-weight: 500;
-
-    &:hover {
-        text-decoration: underline;
-    }
-}
-
-.comment-feed__time {
-    color: var(--hn-meta-color, #828282);
-}
-
-.comment-feed__parent-link {
-    color: var(--hn-meta-color, #828282);
-    text-decoration: none;
-
-    &:hover {
-        text-decoration: underline;
-    }
-}
-
-.comment-feed__text {
-    font-size: 0.93em;
-    line-height: 1.45;
-    overflow-wrap: break-word;
-    word-break: break-word;
-
-    & a {
-        color: var(--hn-link-color, #000);
-        text-decoration: underline;
-    }
-
-    & p {
-        margin-block: 0.5em;
-    }
-
-    & p:first-child {
-        margin-block-start: 0;
-    }
-
-    &--deleted {
-        color: var(--hn-meta-color, #828282);
-        font-style: italic;
     }
 }
 
@@ -1026,15 +995,13 @@
    RESPONSIVE
    ============================================================================= */
 
-/* Narrow viewports: full-width, no margin (react-hn behaviour) */
 @media only screen and (max-width: 750px) and (min-width: 300px) {
     .app-wrap {
         width: 100%;
         margin: 0 auto;
     }
 
-    /* Hide brand name homelink — react-hn hides .App__homelink on mobile */
-    .site-header__homelink {
+    .site-header .homelink {
         display: none;
     }
 
@@ -1043,14 +1010,12 @@
     }
 }
 
-/* iPhone 5: hide settings link */
 @media (device-height: 568px) and (device-width: 320px) and (-webkit-min-device-pixel-ratio: 2) {
-    .site-header__settings {
+    .site-header .settings {
         display: none;
     }
 }
 
-/* Focus ring using brand colour */
 @media (prefers-reduced-motion: no-preference) {
     a:focus-visible,
     button:focus-visible,
@@ -1063,7 +1028,6 @@
     }
 }
 
-/* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

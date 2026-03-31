@@ -38,7 +38,7 @@ export class Paginator {
    * @param {string}   [options.prevText='\u2190 prev'] - Label for the previous link.
    * @param {string}   [options.nextText='more \u2192'] - Label for the next/more link.
    * @param {string}   [options.className='pagination']  - CSS class for the outer `<nav>`.
-   * @param {string}   [options.linkClassName='pagination__link'] - CSS class for each `<a>`.
+   * @param {string}   [options.linkClassName='link'] - CSS class for each `<a>`.
    */
   constructor(options = {}) {
     this.page = options.page ?? 1;
@@ -47,7 +47,7 @@ export class Paginator {
     this.prevText = options.prevText ?? "\u2190 prev";
     this.nextText = options.nextText ?? "more \u2192";
     this.className = options.className ?? "pagination";
-    this.linkClassName = options.linkClassName ?? "pagination__link";
+    this.linkClassName = options.linkClassName ?? "link";
 
     /** @type {HTMLElement|null} */
     this.el = null;
@@ -115,7 +115,7 @@ export class Paginator {
           {
             attrs: {
               href: this.buildHref(this.page - 1),
-              class: `${this.linkClassName} ${this.linkClassName}--prev`,
+              class: this.linkClassName,
               rel: "prev",
             },
           },
@@ -131,7 +131,7 @@ export class Paginator {
           {
             attrs: {
               href: this.buildHref(this.page + 1),
-              class: `${this.linkClassName} ${this.linkClassName}--next`,
+              class: this.linkClassName,
               rel: "next",
             },
           },
