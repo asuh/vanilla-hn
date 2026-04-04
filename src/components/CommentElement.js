@@ -19,8 +19,8 @@
 
 import {
   create,
-  fragmentFromHTML,
   escapeHTML,
+  fragmentFromHTML,
   timeAgoFromUnix,
 } from "../utils/dom.js";
 
@@ -64,6 +64,12 @@ export class CommentElement {
     const classes = ["comment"];
     if (this.depth > 0) classes.push("child");
     if (this._collapsed) classes.push("collapsed");
+    if (
+      this.stores &&
+      this.stores.threadStore &&
+      this.stores.threadStore.isNew &&
+      this.stores.threadStore.isNew[String(this.comment.id)]
+    ) classes.push("new");
 
     // Root wrapper
     const wrapper = create("article", {
@@ -71,15 +77,25 @@ export class CommentElement {
       props: { "data-id": this.comment.id },
     });
 
+    // .content wraps .meta + .text — sibling to .kids (matches react-hn structure)
+    this._contentEl = create("div", { attrs: { class: "content" } });
+
     // Meta row (by, time, toggle)
     const meta = this._createMeta();
-    wrapper.appendChild(meta);
+    this._contentEl.appendChild(meta);
+
+    // If already collapsed at render time, populate child counts immediately
+    if (this._collapsed) {
+      this._updateCollapsedCounts();
+    }
 
     // Body / text
     const text = this._createText();
-    wrapper.appendChild(text);
+    this._contentEl.appendChild(text);
 
-    // Kids container (initially empty)
+    wrapper.appendChild(this._contentEl);
+
+    // Kids container — sibling to .content (not nested inside it)
     this._kidsContainer = create("div", {
       attrs: {
         class: "kids",
@@ -156,58 +172,60 @@ export class CommentElement {
       timeAgoFromUnix(this.comment.time || Date.now() / 1000),
     );
 
-    // New / children count badge (if store provides info, try to show new counts)
-    const counts = create("span", { attrs: { class: "counts" } });
-    const descendantCount =
-      this.comment.descendants != null
-        ? this.comment.descendants
-        : Array.isArray(this.comment.kids)
-          ? this.comment.kids.length
-          : 0;
-    const descText = create(
-      "span",
-      { attrs: { class: "desc" } },
-      `${descendantCount} replies`,
-    );
-    counts.appendChild(descText);
+    // Child counts — only populated when collapsed (matches react-hn behaviour).
+    // Stored on `this` so toggleCollapse() can update it without re-rendering.
+    this._countsEl = create("span", { attrs: { class: "counts" } });
 
-    // New-badge: consult stores.threadStore if available
+    meta.appendChild(toggle);
+    meta.appendChild(by);
+    meta.appendChild(create("span", { attrs: { class: "sep" } }, "·"));
+    meta.appendChild(time);
+    meta.appendChild(this._countsEl);
+
+    return meta;
+  }
+
+  /**
+   * Populate `_countsEl` with child/new-comment counts, matching react-hn's
+   * collapsed comment display: " | (N children[, M new])"
+   * Called when collapsing; cleared when expanding.
+   */
+  _updateCollapsedCounts() {
+    if (!this._countsEl) return;
+
+    let children = 0;
+    let newComments = 0;
+
     if (
       this.stores &&
       this.stores.threadStore &&
       typeof this.stores.threadStore.getChildCounts === "function"
     ) {
       try {
-        const countsObj = this.stores.threadStore.getChildCounts(this.comment);
-        // getChildCounts returns { children, newComments }
-        if (countsObj && countsObj.newComments && countsObj.newComments > 0) {
-          const newBadge = create(
-            "span",
-            {
-              attrs: {
-                class: "badge new",
-                role: "status",
-                "aria-live": "polite",
-              },
-            },
-            String(countsObj.newComments),
-          );
-          counts.appendChild(newBadge);
-          // highlight the comment element visually
-          meta.classList.add("has-new");
+        const c = this.stores.threadStore.getChildCounts(this.comment);
+        if (c) {
+          children = c.children || 0;
+          newComments = c.newComments || 0;
         }
       } catch (e) {
-        // ignore store errors; optional enhancement
+        children = Array.isArray(this.comment.kids) ? this.comment.kids.length : 0;
       }
+    } else {
+      children = Array.isArray(this.comment.kids) ? this.comment.kids.length : 0;
     }
 
-    meta.appendChild(toggle);
-    meta.appendChild(by);
-    meta.appendChild(create("span", { attrs: { class: "sep" } }, "·"));
-    meta.appendChild(time);
-    meta.appendChild(counts);
+    while (this._countsEl.firstChild) this._countsEl.removeChild(this._countsEl.firstChild);
+    if (children === 0) return;
 
-    return meta;
+    const childWord = `${children} child${children !== 1 ? "ren" : ""}`;
+    this._countsEl.appendChild(document.createTextNode(` | (${childWord}`));
+    if (newComments > 0) {
+      this._countsEl.appendChild(document.createTextNode(", "));
+      const em = document.createElement("em");
+      em.textContent = `${newComments} new`;
+      this._countsEl.appendChild(em);
+    }
+    this._countsEl.appendChild(document.createTextNode(")"));
   }
 
   _createText() {
@@ -275,6 +293,13 @@ export class CommentElement {
       };
 
       applyCollapse();
+
+      // Update child-count display in the meta bar (only visible when collapsed)
+      if (this._collapsed) {
+        this._updateCollapsedCounts();
+      } else if (this._countsEl) {
+        while (this._countsEl.firstChild) this._countsEl.removeChild(this._countsEl.firstChild);
+      }
     }
 
     // persist collapse state in a store if available
@@ -384,6 +409,21 @@ export class CommentElement {
       return;
     }
 
+    // Register the comment with the threadStore so isNew / graph wiring is set
+    // before render(). Child comments never flow through ItemView._notifyThreadStoreComment,
+    // so without this call isNew[childId] is never populated.
+    if (
+      this.stores &&
+      this.stores.threadStore &&
+      typeof this.stores.threadStore.commentAdded === "function"
+    ) {
+      try {
+        this.stores.threadStore.commentAdded(payload);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
     // Create a new CommentElement for the child and render it
     const childElement = new CommentElement({
       comment: payload,
@@ -401,9 +441,14 @@ export class CommentElement {
     }
     this._loadedKids.set(key, childElement);
 
-    // If the child payload contains nested kids, create placeholders under its kids container
-    if (Array.isArray(payload.kids) && payload.kids.length > 0) {
-      // The child's own constructor will prepare placeholders when childElement.render() runs.
+    // Apply .new highlight if the threadStore marks this comment as new
+    if (
+      this.stores &&
+      this.stores.threadStore &&
+      this.stores.threadStore.isNew &&
+      this.stores.threadStore.isNew[String(childId)]
+    ) {
+      childNode.classList.add("new");
     }
   }
 
@@ -472,6 +517,26 @@ export class CommentElement {
         }
       } catch (e) {
         // ignore store errors
+      }
+    }
+
+    // Subscribe to any new kids that appeared in the updated comment payload.
+    // This handles real-time updates where a new reply arrives while the user
+    // is on the page — the parent comment's Firebase subscription fires with
+    // an updated kids array containing the new child id.
+    if (Array.isArray(this.comment.kids) && this._kidsContainer) {
+      for (const kidId of this.comment.kids) {
+        const key = String(kidId);
+        if (!this._loadedKids.has(key) && !this._loadingPlaceholders.has(key)) {
+          const placeholder = this._createKidPlaceholder(kidId);
+          this._kidsContainer.appendChild(placeholder);
+          this._loadingPlaceholders.set(key, placeholder);
+          if (this._observer) {
+            this._observer.observe(placeholder);
+          } else {
+            this._loadChildAndReplacePlaceholder(kidId, placeholder).catch(() => {});
+          }
+        }
       }
     }
   }

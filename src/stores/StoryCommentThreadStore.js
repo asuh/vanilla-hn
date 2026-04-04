@@ -48,9 +48,9 @@
  *  // … feed comments via store.commentAdded(comment) as they stream in …
  */
 
+import { cancellableDebounce, pluralise } from "../utils/helpers.js";
 import CommentThreadStore from "./CommentThreadStore.js";
 import SettingsStoreClass from "./SettingsStore.js";
-import { cancellableDebounce, pluralise } from "../utils/helpers.js";
 
 // ---------------------------------------------------------------------------
 // Module-level SettingsStore singleton
@@ -375,9 +375,12 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
       this.isNew[comment.id] = true;
     }
 
-    // Track the high-water mark for comment ids.
+    // Track the high-water mark for comment ids and debounce-persist so that
+    // a reload always sees the latest maxCommentId without depending solely on
+    // beforeunload (which may fire before lazy-loaded comments arrive).
     if (comment.id > this.maxCommentId) {
       this.maxCommentId = comment.id;
+      this._debouncedSave();
     }
 
     // Record parent relationship (the story root itself is excluded).
@@ -499,7 +502,11 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
       this.collapseThreadsWithoutNewComments();
     }
 
-    // Persist the updated state (saves lastVisit, commentCount, maxCommentId).
+    // Persist state, advancing stored maxCommentId to the current session max.
+    // This matches react-hn's _storeState() behaviour: after the initial load
+    // completes the current comments are "seen", so a reload will not re-show
+    // them as new. Only comments that arrive *after* the previous dispose()
+    // (i.e. posted between sessions) will appear highlighted on the next visit.
     this._persistState();
   }
 
@@ -692,9 +699,10 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
    * Schema mirrors react-hn StoryCommentThreadStore#_storeState:
    *   { lastVisit: ms, commentCount: itemDescendantCount, maxCommentId }
    *
-   * We store `itemDescendantCount` (not the loaded commentCount) because the
-   * HN API's descendants field includes deleted comments; it gives a more
-   * accurate "total posts" figure for the list-page new-comment badge heuristic.
+   * Always saves the current maxCommentId so that after load completes the
+   * current comments are considered "seen". A reload will therefore show no
+   * highlights; only comments posted between sessions (id > saved maxCommentId)
+   * will be highlighted on the next visit from the list page.
    */
   _persistState() {
     this._storage.set(

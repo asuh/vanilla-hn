@@ -56,7 +56,7 @@
     :root {
         color-scheme: light dark;
 
-        --hn-bg: light-dark(#ffffff, #0b0b0b);
+        --hn-bg: light-dark(#f5f5f5, #0b0b0b);
         --hn-text: light-dark(#111111, #e6e6e6);
         --hn-muted: light-dark(#666666, #9a9a9a);
         --hn-accent: light-dark(#ff6600, #ffb366);
@@ -525,7 +525,7 @@
         }
 
         .content {
-            padding: 1em 1.25em 0 1.25em;
+            padding: 0.65em 1.25em 0 1.25em;
             margin-bottom: 1em;
         }
 
@@ -596,13 +596,12 @@
     @scope (.controls) {
         :scope {
             display: none;
-            margin-bottom: 0.5em;
             color: var(--hn-muted);
             font-size: var(--font-size-meta);
         }
 
         :scope.visible {
-            display: block;
+            display: inline;
         }
 
         em {
@@ -660,26 +659,24 @@
     /* -- Comment tree ------------------------------------------------------ */
 
     @scope (.comment) to (.kids) {
-        :scope.new > .meta,
-        :scope.new > .text {
+        :scope.new > .content {
             background-color: var(--hn-new-comment-bg);
         }
 
-        :scope.collapsed > .text,
+        :scope.collapsed > .content > .text,
         :scope.collapsed > .kids {
             display: none;
         }
 
-        :scope.dead > .text {
+        :scope.dead > .content > .text {
             color: var(--hn-dead) !important;
         }
 
-        :scope.error > .meta {
+        :scope.error > .content > .meta {
             color: var(--hn-error);
         }
 
-        .meta,
-        .text {
+        .content > .text {
             padding-right: 1.25em;
             padding-top: 0.65em;
             padding-bottom: 0.65em;
@@ -750,10 +747,6 @@
             color: var(--hn-muted);
             font-size: var(--font-size-meta);
         }
-    }
-
-    .kids {
-        padding-left: 2.5em;
     }
 
     /* -- Comment feed ------------------------------------------------------ */

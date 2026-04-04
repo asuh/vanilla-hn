@@ -4,19 +4,19 @@ import { pluralise } from "../utils/helpers.js";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Given a unix-seconds timestamp for the last visit, produce a human-readable
+ * Given a unix-milliseconds timestamp for the last visit, produce a human-readable
  * duration string like "3 hours" or "2 days" (without the trailing "ago").
  *
  * NOTE: This is intentionally separate from `dom.js`'s `formatRelativeTime` /
  * `timeAgoFromUnix`, which return strings such as "3 hours ago". Here we need
  * only the bare duration portion (e.g. for "N new comments in the last 3 hours").
  *
- * @param {number} lastVisitSeconds  unix timestamp in seconds
+ * @param {number} lastVisitMs  unix timestamp in milliseconds (from Date.now())
  * @returns {string} Human-readable duration, e.g. "3 hours", or "" if falsy input
  */
-export function sinceLastVisit(lastVisitSeconds) {
-  if (!lastVisitSeconds) return "";
-  const diffMs = Date.now() - lastVisitSeconds * 1000;
+export function sinceLastVisit(lastVisitMs) {
+  if (!lastVisitMs) return "";
+  const diffMs = Date.now() - lastVisitMs;
   const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
 
   const units = [
@@ -73,7 +73,7 @@ export default class ItemControls {
    * @returns {HTMLElement}
    */
   render() {
-    this.el = create("div", { attrs: { class: "controls" } });
+    this.el = create("span", { attrs: { class: "controls" } });
     this._buildContents();
     return this.el;
   }
@@ -121,7 +121,9 @@ export default class ItemControls {
 
     const since = sinceLastVisit(lastVisit);
 
-    // "N new comments in the last X"
+    // "(N new comments in the last X)"
+    el.appendChild(document.createTextNode(" ("));
+
     const newInfo = create(
       "span",
       { attrs: { class: "new-info" } },
@@ -134,7 +136,7 @@ export default class ItemControls {
     );
     el.appendChild(newInfo);
 
-    el.appendChild(document.createTextNode(" | "));
+    el.appendChild(document.createTextNode(") | "));
 
     // "auto collapse" button
     const autoCollapseBtn = create(

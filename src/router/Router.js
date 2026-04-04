@@ -1,18 +1,23 @@
 /**
  * Router.js
  *
- * A small, dependency-free hash-based router used by vanilla-hn.
+ * A small, dependency-free client-side router used by vanilla-hn.
  *
  * Features:
- * - Register routes with string paths or regular expressions.
+ * - Register routes with string paths or regular expressions matched against
+ *   `pathname + search` (e.g. `/item/123`, `/newest?page=2`, `/`).
+ * - Navigation API (window.navigation) used where available; falls back to
+ *   popstate + delegated click handler.
  * - Support async view factories (handlers that return a View instance or an HTMLElement).
  * - Automatic cleanup of the previous view via a `cleanup()` method if present.
  * - Not-found handler support.
  * - Simple navigate() helper.
+ * - Stale-request cancellation via AbortSignal (Navigation API) or internal
+ *   request-id counter (fallback path).
  *
  * Usage:
  *   const router = new Router({ mountPoint: '#app' });
- *   router.register(/^#?\/item\/(\d+)$/, async (match) => {
+ *   router.register(/^\/item\/(\d+)$/, async (match) => {
  *     // match is RegExpMatchArray
  *     return new ItemView({ id: match[1] });
  *   });
@@ -28,10 +33,11 @@
  */
 
 /**
- * A small, dependency-free hash-based router.
+ * A small, dependency-free client-side router.
  *
- * Supports regex and string route patterns, async view factories,
- * stale-request cancellation, View Transitions API integration,
+ * Supports regex and string route patterns matched against pathname+search,
+ * async view factories, stale-request cancellation, Navigation API integration,
+ * popstate + delegated-click fallback, View Transitions API integration,
  * and accessibility focus management after mount.
  *
  * @class Router
@@ -41,38 +47,48 @@ function isRegex(val) {
   return Object.prototype.toString.call(val) === "[object RegExp]";
 }
 
-function ensureLeadingHash(hash) {
-  if (!hash) return "#/";
-  return hash.startsWith("#") ? hash : `#${hash}`;
-}
-
 export class Router {
   /**
    * @param {Object} [options]
    * @param {string} [options.mountPoint] CSS selector for the container where views are mounted. Defaults to '#app'.
-   * @param {boolean} [options.useHashChange] Whether to listen to hashchange (default true).
    */
   constructor(options = {}) {
     this.mountPointSelector = options.mountPoint || "#app";
-    this.useHashChange = options.useHashChange !== false;
     this.routes = [];
     this.notFoundHandler = null;
     this.currentView = null;
     this.currentRouteInfo = null;
     this._running = false;
-    this._routeRequestId = 0; // used to ignore stale async loads
-    this._onHashChange = this._onHashChange.bind(this);
+
+    // Used in the popstate/click fallback path to discard stale async loads.
+    // When the Navigation API is available its own AbortSignal handles this.
+    this._routeRequestId = 0;
+
+    // Bound listener references stored so they can be removed in stop().
+    this._onPopState = this._onPopState.bind(this);
+    this._onDocClick = this._onDocClick.bind(this);
+    this._onNavigate = this._onNavigate.bind(this);
   }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
 
   /**
    * Register a route.
-   * - pattern may be a RegExp or a string. If string it will be compared to location.hash (exact equality).
-   * - handler may be:
-   *    - a function taking (matchOrHash) and returning a view or Promise<view>
+   *
+   * - `pattern` may be a RegExp or a string.
+   *   - RegExp is matched against `pathname + search`
+   *     (e.g. `/^\/item\/(\d+)$/`). Legacy patterns that begin with `#?`
+   *     (e.g. `/^#?\/item\/(\d+)$/`) continue to work because the `#?`
+   *     group simply never matches when tested against a plain pathname.
+   *   - String is compared with strict equality against `pathname + search`.
+   * - `handler` may be:
+   *    - a function taking (matchOrPath) and returning a view or Promise<view>
    *    - a View instance (in which case the route will always mount that view)
    *
-   * @param {RegExp|string} pattern  Route pattern to match against location.hash.
-   * @param {Function|Object} handler  A function returning a view (or Promise<view>), or a view instance.
+   * @param {RegExp|string} pattern   Route pattern to match against pathname+search.
+   * @param {Function|Object} handler A function returning a view (or Promise<view>), or a view instance.
    * @returns {Router} this instance for chaining.
    */
   register(pattern, handler) {
@@ -87,7 +103,7 @@ export class Router {
    * Set a not-found handler (used when no route matches).
    * The handler follows the same conventions as register handlers.
    *
-   * @param {Function} handler  Handler invoked with the unmatched hash string.
+   * @param {Function} handler  Handler invoked with the unmatched path string.
    * @returns {Router} this instance for chaining.
    */
   setNotFound(handler) {
@@ -96,210 +112,333 @@ export class Router {
   }
 
   /**
-   * Programmatic navigation. Updates the hash and triggers route handling.
+   * Programmatic navigation. Triggers route handling for `path`.
    *
-   * @param {string} hash  The target hash, e.g. '#/item/123' or '/item/123' (will be normalized with a leading '#').
+   * Uses `window.navigation.navigate()` where available so the Navigation API
+   * manages the history entry and fires its `navigate` event. Falls back to
+   * `history.pushState` + `_handleUrl`.
+   *
+   * @param {string} path  The target path, e.g. '/item/123' or '/newest?page=2'.
    */
-  navigate(hash) {
-    const normalized = ensureLeadingHash(hash);
-    if (location.hash === normalized) {
-      // Still handle route in case the view wants to refresh
-      this.handleRoute();
+  navigate(path) {
+    const url = new URL(path, location.href);
+    if (window.navigation) {
+      window.navigation.navigate(url.href);
     } else {
-      location.hash = normalized;
-      // Hashchange event will call handleRoute if router is running
+      if (location.pathname + location.search !== url.pathname + url.search) {
+        history.pushState({}, "", url.pathname + url.search);
+      }
+      this._handleUrl(url);
     }
   }
 
   /**
    * Start the router.
    *
-   * Sets up a `hashchange` listener on `window` (unless `useHashChange` was
-   * disabled) and immediately handles the current route so the initial view
-   * is mounted on page load.
+   * Wires up the Navigation API listener when available; otherwise falls back
+   * to a `popstate` listener on `window` plus a delegated `click` listener on
+   * `document`. Then immediately handles the current URL so the initial view
+   * is mounted on page load (the Navigation API does NOT fire `navigate` for
+   * the first load).
    */
   start() {
     if (this._running) return;
-    if (this.useHashChange) {
-      window.addEventListener("hashchange", this._onHashChange, false);
-    }
-    // Handle current route synchronously (but view may load asynchronously).
-    this.handleRoute();
     this._running = true;
+
+    if (window.navigation) {
+      // Navigation API path ─────────────────────────────────────────────────
+      window.navigation.addEventListener("navigate", this._onNavigate);
+    } else {
+      // Fallback path ────────────────────────────────────────────────────────
+      window.addEventListener("popstate", this._onPopState, false);
+      document.addEventListener("click", this._onDocClick, false);
+    }
+
+    // Handle the current URL immediately for the initial page load.
+    this._handleUrl(new URL(location.href));
   }
 
   /**
-   * Stop the router and remove the `hashchange` listener.
+   * Stop the router and remove all event listeners added in `start()`.
    *
    * Does not remove the currently mounted view — call `cleanup()` on the
-   * view manually if you need to tear it down as well.
+   * view manually if you need to tear it down.
    */
   stop() {
     if (!this._running) return;
-    if (this.useHashChange) {
-      window.removeEventListener("hashchange", this._onHashChange, false);
-    }
     this._running = false;
-  }
 
-  _onHashChange() {
-    this.handleRoute();
+    if (window.navigation) {
+      window.navigation.removeEventListener("navigate", this._onNavigate);
+    } else {
+      window.removeEventListener("popstate", this._onPopState, false);
+      document.removeEventListener("click", this._onDocClick, false);
+    }
   }
 
   /**
-   * Match the current `location.hash` against registered routes and mount the
-   * first matching view into the mount point.
+   * Public compatibility shim.
    *
-   * This method is async-safe: each call increments an internal request counter
-   * so that stale async loads from earlier navigations are silently discarded.
-   * When the View Transitions API is available the DOM swap is wrapped in
-   * `document.startViewTransition()` for a cross-fade effect. After mounting,
-   * the view's `focus()` hook (or a fallback) is called for accessibility.
+   * Any code that previously called `router.handleRoute()` directly will
+   * continue to work. Delegates to `_handleUrl` using the current location.
    *
    * @returns {Promise<void>}
    */
-  async handleRoute() {
+  handleRoute() {
+    return this._handleUrl(new URL(location.href));
+  }
+
+  /**
+   * Convenience: returns current route info (handler, pattern, last path).
+   *
+   * @returns {Object|null} The route info object for the currently mounted view,
+   *   or `null` if no route is active.
+   */
+  getCurrentRoute() {
+    return this.currentRouteInfo;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private event handlers
+  // ---------------------------------------------------------------------------
+
+  /** Navigation API `navigate` event handler. */
+  _onNavigate(evt) {
+    // Let the browser handle cross-origin navigations, hash-only jumps,
+    // and download requests.
+    if (!evt.canIntercept) return;
+    if (evt.hashChange) return;
+    if (evt.downloadRequest !== null) return;
+
+    const signal = evt.signal;
+
+    evt.intercept({
+      handler: async () => {
+        await this._handleUrl(new URL(evt.destination.url), signal);
+      },
+    });
+  }
+
+  /** popstate fallback — fired on back/forward navigation. */
+  _onPopState() {
+    this._handleUrl(new URL(location.href));
+  }
+
+  /**
+   * Delegated click handler fallback.
+   *
+   * Intercepts same-origin link clicks, calls `history.pushState`, and
+   * invokes `_handleUrl`. Fragment-only navigation, downloads, and
+   * `target="_blank"` links are passed through to the browser as normal.
+   *
+   * @param {MouseEvent} evt
+   */
+  _onDocClick(evt) {
+    // Ignore modified clicks (new tab / open in background, etc.)
+    if (evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.altKey) return;
+    if (evt.button !== 0) return;
+
+    const anchor = evt.target.closest("a[href]");
+    if (!anchor) return;
+
+    const url = new URL(anchor.href, location.href);
+
+    // Only intercept same-origin links.
+    if (url.origin !== location.origin) return;
+    if (anchor.hasAttribute("download")) return;
+    if (anchor.target === "_blank") return;
+
+    // Skip fragment-only navigations (pathname + search are identical, only
+    // hash differs) — let the browser handle the scroll/focus naturally.
+    if (
+      url.pathname === location.pathname &&
+      url.search === location.search &&
+      url.hash !== location.hash
+    ) {
+      return;
+    }
+
+    evt.preventDefault();
+
+    if (location.pathname + location.search !== url.pathname + url.search) {
+      history.pushState({}, "", url.pathname + url.search);
+    }
+
+    this._handleUrl(url);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Core routing logic
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Match `url` against registered routes and mount the first matching view
+   * into the mount point.
+   *
+   * This method is async-safe:
+   * - When called from the Navigation API path an `AbortSignal` is passed in;
+   *   stale navigations are detected via `signal.aborted`.
+   * - In the fallback path an internal `_routeRequestId` counter is used.
+   *
+   * After mounting, the view's `focus()` hook (or a fallback) is called for
+   * accessibility. The DOM swap can optionally be wrapped in
+   * `document.startViewTransition()` — see TODO below.
+   *
+   * @param {URL}          url     The URL to route to.
+   * @param {AbortSignal}  [signal] AbortSignal from a NavigateEvent (optional).
+   * @returns {Promise<void>}
+   */
+  async _handleUrl(url, signal) {
+    // Stale-request guard ─────────────────────────────────────────────────────
+    // Navigation API: use the browser-provided signal.
+    // Fallback: increment and capture the counter.
     const requestId = ++this._routeRequestId;
-    const rawHash = ensureLeadingHash(location.hash || "#/");
-    // Find first matching route
+
+    const isStale = () => {
+      if (signal) return signal.aborted;
+      return requestId !== this._routeRequestId;
+    };
+
+    // The string we test patterns against: pathname + search
+    // e.g. "/", "/newest", "/item/123", "/newest?page=2"
+    const target = url.pathname + (url.search || "");
+
+    // Find first matching route ───────────────────────────────────────────────
     for (const route of this.routes) {
       if (isRegex(route.pattern)) {
-        const match = rawHash.match(route.pattern);
+        const match = target.match(route.pattern);
         if (match) {
           try {
-            const viewOrPromise = await this._invokeHandler(
-              route.handler,
-              match,
-            );
-            if (this._isStaleRequest(requestId)) return;
-            await this._mountView(viewOrPromise, {
-              route,
-              match,
-              hash: rawHash,
-            });
+            const view = await this._invokeHandler(route.handler, match);
+            if (isStale()) return;
+            await this._mountView(view, { route, match, path: target });
             return;
           } catch (err) {
-            console.error("Error loading route handler:", err);
-            // continue to not-found fallback
+            if (isStale()) return;
+            console.error("Router: error in route handler:", err);
             break;
           }
         }
       } else {
-        // string match (normalize)
-        const pat = route.pattern;
-        const patHash = ensureLeadingHash(String(pat));
-        if (rawHash === patHash) {
+        // String pattern — exact match against target path.
+        if (target === String(route.pattern)) {
           try {
-            const viewOrPromise = await this._invokeHandler(
-              route.handler,
-              rawHash,
-            );
-            if (this._isStaleRequest(requestId)) return;
-            await this._mountView(viewOrPromise, {
+            const view = await this._invokeHandler(route.handler, target);
+            if (isStale()) return;
+            await this._mountView(view, {
               route,
-              match: rawHash,
-              hash: rawHash,
+              match: target,
+              path: target,
             });
             return;
           } catch (err) {
-            console.error("Error loading route handler:", err);
+            if (isStale()) return;
+            console.error("Router: error in route handler:", err);
             break;
           }
         }
       }
     }
 
-    // No route matched -> not-found
+    if (isStale()) return;
+
+    // No route matched — invoke the not-found handler if registered. ──────────
     if (this.notFoundHandler) {
       try {
-        const viewOrPromise = await this._invokeHandler(
-          this.notFoundHandler,
-          rawHash,
-        );
-        if (this._isStaleRequest(requestId)) return;
-        await this._mountView(viewOrPromise, {
+        const view = await this._invokeHandler(this.notFoundHandler, target);
+        if (isStale()) return;
+        await this._mountView(view, {
           route: null,
           match: null,
-          hash: rawHash,
+          path: target,
           notFound: true,
         });
         return;
       } catch (err) {
-        console.error("Error loading notFound handler:", err);
+        if (isStale()) return;
+        console.error("Router: error in notFound handler:", err);
       }
     }
 
-    // If no not-found handler provided, clear mount point
+    // Nothing to show — clear the mount point.
     this._clearMount();
   }
 
-  _isStaleRequest(requestId) {
-    return requestId !== this._routeRequestId;
-  }
+  // ---------------------------------------------------------------------------
+  // View lifecycle helpers (unchanged from original)
+  // ---------------------------------------------------------------------------
 
   /**
    * Internal: calls a handler which may be:
-   *  - a function (sync/async)
-   *  - a view instance
-   *  - an HTMLElement
+   *  - a function (sync or async) receiving (matchOrPath)
+   *  - a view instance or HTMLElement (returned as-is)
+   *
+   * @param {Function|Object|HTMLElement} handler
+   * @param {RegExpMatchArray|string}     matchOrPath
+   * @returns {Promise<*>}
    */
-  async _invokeHandler(handler, matchOrHash) {
+  async _invokeHandler(handler, matchOrPath) {
     if (typeof handler === "function") {
-      // Handler may return a view or a Promise resolving to a view.
-      return await handler(matchOrHash);
+      return await handler(matchOrPath);
     }
-    // If handler is already a view or element, return it.
+    // Already a view or element — return directly.
     return handler;
   }
 
   /**
-   * Mount the provided view into the mount point. Performs cleanup of previous view.
-   * view may be:
-   *  - HTMLElement
-   *  - object with render() -> HTMLElement
-   *  - object with element property (HTMLElement)
+   * Mount the provided view into the mount point. Performs cleanup of the
+   * previous view first.
    *
-   * routeInfo is an opaque object passed for debugging/possible future hooks.
+   * `view` may be:
+   *  - HTMLElement
+   *  - object with `render()` → HTMLElement
+   *  - object with `element` property (HTMLElement)
+   *
+   * `routeInfo` is stored as `currentRouteInfo` for inspection via
+   * `getCurrentRoute()`.
+   *
+   * TODO: wrap `applyDOM()` in `document.startViewTransition(applyDOM)` when
+   * the View Transitions API is available for a cross-fade between views.
+   *
+   * @param {HTMLElement|Object} view
+   * @param {Object}             [routeInfo]
+   * @returns {Promise<void>}
    */
   async _mountView(view, routeInfo = {}) {
-    // If the view is a function (factory), call it. But we handled factories in register.
-    // Cleanup previous view if present
+    // Cleanup previous view ───────────────────────────────────────────────────
     try {
       if (this.currentView && typeof this.currentView.cleanup === "function") {
         try {
-          // Allow cleanup to be async but don't await long-running operations
           const cleanupResult = this.currentView.cleanup();
           if (cleanupResult && typeof cleanupResult.then === "function") {
-            // don't await — but swallow errors
+            // Don't await — fire-and-forget, but swallow errors.
             cleanupResult.catch((err) =>
-              console.warn("cleanup() error (async):", err),
+              console.warn("Router: async cleanup() error:", err),
             );
           }
         } catch (err) {
-          console.warn("Error while running previous view.cleanup():", err);
+          console.warn("Router: error in previous view.cleanup():", err);
         }
       }
     } finally {
-      // proceed to remove previous DOM
       this._clearMount();
       this.currentView = null;
       this.currentRouteInfo = null;
     }
 
+    // Resolve element from the view value ────────────────────────────────────
     let el = null;
     let viewObj = null;
 
-    // If view is an HTMLElement
     if (view instanceof HTMLElement) {
       el = view;
       viewObj = null;
     } else if (view && typeof view === "object") {
-      // If view has render()
       if (typeof view.render === "function") {
         try {
           el = view.render();
         } catch (err) {
-          console.error("View.render() threw an error:", err);
+          console.error("Router: view.render() threw an error:", err);
           throw err;
         }
         viewObj = view;
@@ -307,7 +446,6 @@ export class Router {
         el = view.element;
         viewObj = view;
       } else {
-        // Unknown shape: attempt to treat as plain node (string) or fail
         throw new Error(
           "Router: mounted view must be an HTMLElement or an object with render()/element.",
         );
@@ -316,19 +454,19 @@ export class Router {
       throw new Error("Router: invalid view returned from handler");
     }
 
-    // Append to mount point
-    const mountEl =
-      document.querySelector(this.mountPointSelector) || document.body;
-    // sanitize: ensure el is an HTMLElement
     if (!(el instanceof HTMLElement)) {
       throw new Error("Router: view.render() must return an HTMLElement");
     }
-    // Attach identifying attribute for debugging
+
+    // Stamp the element so _clearMount() can identify it safely.
     el.setAttribute("data-router-mounted", "true");
 
-    // The DOM swap — clear old nodes, append new view. Wrapped in a View
-    // Transition when the API is available so the browser can cross-fade
-    // between the outgoing and incoming views.
+    // DOM swap ────────────────────────────────────────────────────────────────
+    // TODO: when document.startViewTransition is available, wrap applyDOM in
+    // it for a declarative cross-fade: document.startViewTransition(applyDOM)
+    const mountEl =
+      document.querySelector(this.mountPointSelector) || document.body;
+
     const applyDOM = () => {
       this._clearMount();
       mountEl.appendChild(el);
@@ -336,77 +474,63 @@ export class Router {
 
     applyDOM();
 
-    // Save current view reference so it can be cleaned up later
+    // Persist references for the next navigation cycle.
     this.currentView = viewObj || el;
     this.currentRouteInfo = routeInfo;
 
-    // Call attachEventListeners or mounted hooks if provided on the view object
+    // Post-mount hook ─────────────────────────────────────────────────────────
     if (viewObj && typeof viewObj.attachEventListeners === "function") {
       try {
         viewObj.attachEventListeners();
       } catch (err) {
-        console.warn("Error in view.attachEventListeners():", err);
+        console.warn("Router: error in view.attachEventListeners():", err);
       }
     }
 
-    // After mount, a small focus/announcement step for accessibility
+    // Accessibility: move focus after the DOM swap so keyboard/SR users land
+    // in the right place.
     try {
-      // if the view exposes a focus() method, call it
       if (viewObj && typeof viewObj.focus === "function") {
         viewObj.focus();
       } else {
-        // otherwise move focus to the mount point for keyboard users
         const appEl = document.querySelector(this.mountPointSelector);
         if (appEl) {
           appEl.setAttribute("tabindex", "-1");
           try {
             appEl.focus();
-          } catch (e) {
-            /* ignore */
+          } catch (_) {
+            /* non-fatal */
           }
         }
       }
-    } catch (err) {
-      // non-fatal
+    } catch (_) {
+      /* non-fatal */
     }
-
-    return;
   }
 
+  /**
+   * Remove all router-mounted children from the mount point.
+   *
+   * Only children that carry the `data-router-mounted` attribute are removed
+   * so that any static content inside the mount container is left untouched.
+   */
   _clearMount() {
     const mountEl =
       document.querySelector(this.mountPointSelector) || document.body;
     if (!mountEl) return;
-    // Remove all children that were mounted previously. We avoid removing elements
-    // that don't have the data attribute in case the mount point contains other content.
-    const children = Array.from(mountEl.children);
-    for (const child of children) {
+
+    for (const child of Array.from(mountEl.children)) {
       try {
-        // If it was mounted by this router, it will have the attribute
         if (
           child.getAttribute &&
           child.getAttribute("data-router-mounted") === "true"
         ) {
           mountEl.removeChild(child);
-        } else {
-          // If the mount point only holds router content, remove everything
-          // (mount point default '#app' is expected to be dedicated).
-          // We be conservative: only remove if mount point contains no other mounted children.
         }
-      } catch (e) {
-        console.warn("Error while clearing mount point:", e);
+      } catch (err) {
+        console.warn("Router: error while clearing mount point:", err);
       }
     }
-  }
-
-  /**
-   * Convenience: returns current route info (handler, pattern, last hash).
-   *
-   * @returns {Object|null} The route info object for the currently mounted view,
-   *   or `null` if no route is active.
-   */
-  getCurrentRoute() {
-    return this.currentRouteInfo;
   }
 }
 

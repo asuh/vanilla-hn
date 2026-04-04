@@ -219,6 +219,169 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (!found) {
+    // SPA fallback: for extensionless paths (app routes like /item/123, /newest, etc.)
+    // serve index.html so the client-side router can handle the route.
+    const reqExt = path.extname(decodedPath.split("?")[0]).toLowerCase();
+    const isSpaRoute = !reqExt || reqExt === ".html";
+    if (isSpaRoute) {
+      const indexPath = path.join(REAL_PUBLIC, "index.html");
+      try {
+        const indexStat = await fstat(indexPath);
+        if (indexStat.isFile()) {
+          const spaHeaders = {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+            "Content-Length": String(indexStat.size),
+            "Last-Modified": new Date(indexStat.mtimeMs).toUTCString(),
+          };
+
+          const spaStream = createReadStream(indexPath, { autoClose: true });
+
+          try {
+            await new Promise((resolve, reject) => {
+              function teardownListeners() {
+                spaStream.removeListener("open", onOpen);
+                spaStream.removeListener("error", onError);
+                signal.removeEventListener &&
+                  signal.removeEventListener("abort", onAbort);
+              }
+              function onOpen() {
+                teardownListeners();
+                resolve();
+              }
+              function onError(err) {
+                teardownListeners();
+                reject(err);
+              }
+              function onAbort() {
+                teardownListeners();
+                const e = new Error("aborted");
+                e.name = "AbortError";
+                reject(e);
+              }
+              if (signal.aborted) return onAbort();
+              spaStream.once("open", onOpen);
+              spaStream.once("error", onError);
+              signal.addEventListener("abort", onAbort, { once: true });
+            });
+          } catch (err) {
+            if (err && err.name === "AbortError") {
+              if (!res.headersSent) {
+                try {
+                  res.writeHead(408, {
+                    "Content-Type": "text/plain; charset=utf-8",
+                  });
+                  res.end("408 Request Timeout");
+                } catch (_) {
+                  try {
+                    res.destroy();
+                  } catch (_) {}
+                }
+              } else {
+                try {
+                  res.destroy();
+                } catch (_) {}
+              }
+              try {
+                spaStream.destroy();
+              } catch (_) {}
+              cleanup();
+              return;
+            }
+            // index.html failed to open — fall through to 404
+            try {
+              spaStream.destroy();
+            } catch (_) {}
+            if (!res.writableEnded) {
+              res.writeHead(404, {
+                "Content-Type": "text/plain; charset=utf-8",
+              });
+              res.end(`404 Not Found: ${decodedPath}`);
+            }
+            cleanup();
+            return;
+          }
+
+          if (signal.aborted) {
+            if (!res.headersSent) {
+              try {
+                res.writeHead(408, {
+                  "Content-Type": "text/plain; charset=utf-8",
+                });
+                res.end("408 Request Timeout");
+              } catch (_) {
+                try {
+                  res.destroy();
+                } catch (_) {}
+              }
+            } else {
+              try {
+                res.destroy();
+              } catch (_) {}
+            }
+            try {
+              spaStream.destroy();
+            } catch (_) {}
+            cleanup();
+            return;
+          }
+
+          if (!res.headersSent) {
+            try {
+              res.writeHead(200, spaHeaders);
+            } catch (e) {
+              if (DEV_LOG) console.warn("[serve] writeHead failed (spa):", e);
+              try {
+                spaStream.destroy();
+              } catch (_) {}
+              cleanup();
+              return;
+            }
+          }
+
+          try {
+            await pipeline(spaStream, res, { signal });
+            cleanup();
+            return;
+          } catch (err) {
+            if (err && err.name === "AbortError") {
+              if (!res.headersSent) {
+                try {
+                  res.writeHead(408, {
+                    "Content-Type": "text/plain; charset=utf-8",
+                  });
+                  res.end("408 Request Timeout");
+                } catch (_) {}
+              } else {
+                try {
+                  res.destroy();
+                } catch (_) {}
+              }
+            } else {
+              console.error("[serve] spa streaming error:", err && err.message);
+              if (!res.headersSent) {
+                try {
+                  res.writeHead(500, {
+                    "Content-Type": "text/plain; charset=utf-8",
+                  });
+                  res.end("500 Internal Server Error");
+                } catch (_) {}
+              } else if (DEV_LOG) {
+                console.warn("[serve] spa error after headers sent:", err);
+              }
+            }
+            try {
+              spaStream.destroy();
+            } catch (_) {}
+            cleanup();
+            return;
+          }
+        }
+      } catch (_) {
+        // index.html missing — fall through to 404
+      }
+    }
+
     if (!res.writableEnded) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end(`404 Not Found: ${decodedPath}`);
@@ -426,6 +589,7 @@ server.listen(PORT, HOST, () => {
   console.log(`\nvanilla-hn dev server → http://${HOST}:${PORT}/`);
   console.log(`  public/ : ${PUBLIC}`);
   console.log(`  src/    : ${SRC}  (live — no copy needed)`);
+  console.log(`  spa fallback: public/index.html`);
   console.log(`  request timeout: ${REQUEST_TIMEOUT_MS}ms`);
   console.log(`\nPress Ctrl+C to stop.\n`);
 });

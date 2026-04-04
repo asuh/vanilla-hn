@@ -96,7 +96,7 @@ export default class NewCommentsView extends View {
     this._paginator = new Paginator({
       page: this.page,
       hasMore: false,
-      buildHref: (p) => (p <= 1 ? "#/newcomments" : `#/newcomments?page=${p}`),
+      buildHref: (p) => (p <= 1 ? "/newcomments" : `/newcomments?page=${p}`),
     });
     this._paginationEl = this._paginator.render();
 
@@ -318,7 +318,7 @@ export default class NewCommentsView extends View {
         "a",
         {
           attrs: {
-            href: `#/user/${comment.by}`,
+            href: `/user/${comment.by}`,
             class: "author",
           },
         },
@@ -344,7 +344,7 @@ export default class NewCommentsView extends View {
         "a",
         {
           attrs: {
-            href: `#/item/${comment.parent}`,
+            href: `/item/${comment.parent}`,
             class: "parent-link",
           },
         },

@@ -5,7 +5,7 @@
  *
  * Responsibilities:
  *  - Render a loading skeleton immediately, then populate when item data arrives.
- *  - Display story title (external link or internal #/item/:id), metadata bar
+ *  - Display story title (external link or internal /item/:id), metadata bar
  *    (score, author link, time, descendants/discuss link), and optional body text.
  *  - Instantiate a per-story StoryCommentThreadStore via initForItem() once data lands.
  *  - Render a "controls bar" when the thread has been visited before, showing:
@@ -20,13 +20,13 @@
  *  - Full cleanup: dispose threadStore, unsubscribe all listeners, cleanup comment elements.
  */
 
-import View from "./View.js";
-import { create, timeAgoFromUnix } from "../utils/dom.js";
-import { pluralise, parseHost } from "../utils/helpers.js";
 import { CommentElement } from "../components/CommentElement.js";
-import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 import CommentSlider from "../components/CommentSlider.js";
 import ItemControls from "../components/ItemControls.js";
+import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
+import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { parseHost, pluralise } from "../utils/helpers.js";
+import View from "./View.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -78,6 +78,9 @@ export default class ItemView extends View {
 
     // Unsubscribe handle for threadStore listener.
     this._threadStoreUnsub = null;
+
+    // Bound beforeunload handler — saves threadStore state on browser reload/close.
+    this._handleBeforeUnload = null;
 
     // Poll timer id for waiting on threadStore.loading.
     this._loadPollTimer = null;
@@ -209,6 +212,12 @@ export default class ItemView extends View {
       this._threadStore = null;
     }
 
+    // Remove the beforeunload listener now that we're doing a clean navigation.
+    if (this._handleBeforeUnload) {
+      window.removeEventListener("beforeunload", this._handleBeforeUnload);
+      this._handleBeforeUnload = null;
+    }
+
     // Cleanup all rendered comment elements.
     for (const ce of this._commentElements.values()) {
       try {
@@ -294,13 +303,10 @@ export default class ItemView extends View {
       // Subsequent updates: patch title, score, descendants.
       this._patchItemMeta(item);
 
-      // If thread store exists and was loading, notify it of updated kids.
-      if (
-        this._threadStore &&
-        typeof this._threadStore.initForItem === "function"
-      ) {
-        // Re-init is idempotent for updates; only call if the store supports it.
-      }
+      // Subscribe to any new top-level kids that appeared since the page loaded.
+      // This handles real-time stories where new top-level comments arrive while
+      // the user is on the page.
+      this._subscribeToNewTopLevelKids(item);
     }
   }
 
@@ -363,6 +369,16 @@ export default class ItemView extends View {
         this._onThreadStoreChanged(change);
       });
     }
+
+    // Mirror react-hn's handleBeforeUnload: persist the current session's
+    // maxCommentId when the user reloads or closes the tab, so the next visit
+    // (or a reload) starts with the correct baseline and shows no stale highlights.
+    this._handleBeforeUnload = () => {
+      if (this._threadStore && typeof this._threadStore.dispose === "function") {
+        this._threadStore.dispose();
+      }
+    };
+    window.addEventListener("beforeunload", this._handleBeforeUnload);
   }
 
   // ── Content building ───────────────────────────────────────────────────────
@@ -397,7 +413,8 @@ export default class ItemView extends View {
 
     content.appendChild(header);
 
-    // Controls bar (new comments info + auto-collapse + mark-as-read)
+    // Controls bar — appended inside .meta, matching react-hn where controls
+    // are passed as extraContent into renderItemMeta() and sit inside Item__meta.
     this._controls = new ItemControls({
       item,
       threadStore: this._threadStore,
@@ -408,7 +425,7 @@ export default class ItemView extends View {
       getCommentCount: () => this._getCommentCount(),
     });
     this._controlsEl = this._controls.render();
-    content.appendChild(this._controlsEl);
+    this._metaEl.appendChild(this._controlsEl);
 
     // Comment time slider
     this._slider = new CommentSlider({
@@ -428,11 +445,11 @@ export default class ItemView extends View {
       content.appendChild(this._itemTextEl);
     }
 
-    // Comments section
+    // Comments section — sibling to .content (matches react-hn's Item__kids / Item__content structure)
     this._kidsEl = create("div", {
       attrs: { class: "kids", role: "list", "aria-label": "Comments" },
     });
-    content.appendChild(this._kidsEl);
+    this.root.appendChild(this._kidsEl);
   }
 
   /**
@@ -440,7 +457,7 @@ export default class ItemView extends View {
    *
    * External URLs get an `<a>` pointing at the URL (with `target="_blank"`)
    * followed by a hostname badge. Internal / dead stories get an `<a>` that
-   * links to `#/item/:id`. Dead stories are prefixed with `[dead]`.
+   * links to `/item/:id`. Dead stories are prefixed with `[dead]`.
    *
    * @param {Object} item - The HN item payload.
    * @returns {HTMLElement} A wrapper `<div class="title">` containing the link.
@@ -487,7 +504,7 @@ export default class ItemView extends View {
       const link = create(
         "a",
         {
-          attrs: { href: `#/item/${item.id}` },
+          attrs: { href: `/item/${item.id}` },
         },
         titleText,
       );
@@ -532,7 +549,7 @@ export default class ItemView extends View {
     // Author link
     const byLink = create(
       "a",
-      { attrs: { href: `#/user/${item.by}`, class: "by" } },
+      { attrs: { href: `/user/${item.by}`, class: "by" } },
       item.by || "unknown",
     );
     meta.appendChild(byLink);
@@ -556,7 +573,7 @@ export default class ItemView extends View {
     const commentsLink = create(
       "a",
       {
-        attrs: { href: `#/item/${item.id}`, class: "comments-link" },
+        attrs: { href: `/item/${item.id}`, class: "comments-link" },
       },
       commentsText,
     );
@@ -637,6 +654,53 @@ export default class ItemView extends View {
         this._onCommentLoaded(comment, placeholder);
       });
 
+      if (typeof unsub === "function") {
+        this._unsubscribers.push(unsub);
+      }
+    }
+  }
+
+  /**
+   * Subscribe to any new top-level kids in an updated story payload.
+   * Called on subsequent item updates to pick up comments that arrived
+   * after the initial page load.
+   *
+   * @param {Object} item - Updated HN item payload.
+   * @returns {void}
+   */
+  _subscribeToNewTopLevelKids(item) {
+    if (!item.kids || !this._kidsEl) return;
+    const hn = this.services && this.services.hnService;
+    if (!hn || typeof hn.onItemValue !== "function") return;
+
+    for (const kidId of item.kids) {
+      const key = String(kidId);
+      // Skip if already rendered or already has a placeholder
+      if (
+        this._commentElements.has(key) ||
+        this._kidsEl.querySelector(`[data-comment-id="${key}"]`)
+      ) {
+        continue;
+      }
+
+      const placeholder = create(
+        "div",
+        {
+          attrs: {
+            class: "placeholder",
+            "data-comment-id": key,
+            role: "group",
+            "aria-label": `Comment ${key} loading`,
+          },
+        },
+        "Loading comment…",
+      );
+      this._kidsEl.appendChild(placeholder);
+
+      const unsub = hn.onItemValue(kidId, (comment) => {
+        if (!comment || !comment.id) return;
+        this._onCommentLoaded(comment, placeholder);
+      });
       if (typeof unsub === "function") {
         this._unsubscribers.push(unsub);
       }

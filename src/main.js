@@ -126,47 +126,44 @@
 
     // Register list routes with a small param indicating list type
     router.register(
-      /^#?\/?$/,
+      /^\/?$/,
       lazyView("./views/ListView.js", { listType: "top" }),
     );
     router.register(
-      /^#?\/newest$/,
+      /^\/newest$/,
       lazyView("./views/ListView.js", { listType: "newest" }),
     );
     router.register(
-      /^#?\/ask$/,
+      /^\/ask$/,
       lazyView("./views/ListView.js", { listType: "ask" }),
     );
     router.register(
-      /^#?\/show$/,
+      /^\/show$/,
       lazyView("./views/ListView.js", { listType: "show" }),
     );
     router.register(
-      /^#?\/jobs$/,
+      /^\/jobs$/,
       lazyView("./views/ListView.js", { listType: "jobs" }),
     );
     router.register(
-      /^#?\/read$/,
+      /^\/read$/,
       lazyView("./views/ListView.js", { listType: "read" }),
     );
 
     // New comments feed
-    router.register(
-      /^#?\/newcomments$/,
-      lazyView("./views/NewCommentsView.js"),
-    );
+    router.register(/^\/newcomments$/, lazyView("./views/NewCommentsView.js"));
 
-    // Item view: expects param extraction done by the Router (or viewFactory receives raw hash)
-    // Here we register a simple matcher that extracts numeric id from the hash like #/item/12345
-    router.register(/^#?\/item\/(\d+)$/, async (hashMatch) => {
-      const params = { id: String(hashMatch[1]) };
+    // Item view — extracts id from path
+    // Extracts numeric id from path like /item/12345
+    router.register(/^\/item\/(\d+)$/, async (match) => {
+      const params = { id: String(match[1]) };
       const viewFactory = lazyView("./views/ItemView.js");
       return await viewFactory(params);
     });
 
     // User view route
-    router.register(/^#?\/user\/([\w-]+)$/, async (hashMatch) => {
-      const params = { id: String(hashMatch[1]) };
+    router.register(/^\/user\/([\w-]+)$/, async (match) => {
+      const params = { id: String(match[1]) };
       const viewFactory = lazyView("./views/UserView.js");
       return await viewFactory(params);
     });

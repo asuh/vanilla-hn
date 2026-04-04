@@ -15,11 +15,11 @@
  *  }
  */
 
-import View from "./View.js";
 import { Paginator } from "../components/Paginator.js";
 import StoryStore from "../stores/StoryStore.js";
-import { create, timeAgoFromUnix, delegate } from "../utils/dom.js";
+import { create, delegate, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
+import View from "./View.js";
 
 /* ─────────────────────────────────────────────
    Constants
@@ -44,17 +44,17 @@ const LIST_TITLES = {
 /**
  * Build the hash fragment used for pagination links.
  * Examples:
- *   paginationHref('top',    1) → '#/'
- *   paginationHref('top',    2) → '#/?page=2'
- *   paginationHref('newest', 1) → '#/newest'
- *   paginationHref('newest', 3) → '#/newest?page=3'
+ *   paginationHref('top',    1) → '/'
+ *   paginationHref('top',    2) → '/?page=2'
+ *   paginationHref('newest', 1) → '/newest'
+ *   paginationHref('newest', 3) → '/newest?page=3'
  *
  * @param {string} listType
  * @param {number} page      1-based page number
  * @returns {string}
  */
 function paginationHref(listType, page) {
-  const base = listType === "top" ? "#/" : `#/${listType}`;
+  const base = listType === "top" ? "/" : `/${listType}`;
   return page <= 1 ? base : `${base}?page=${page}`;
 }
 
@@ -181,6 +181,7 @@ export default class ListView extends View {
     this._hn = this.services.hnService || null;
     this._readStore = this.stores.readStoriesStore || null;
     this._threadStore = this.stores.threadStore || null;
+    this._loadThreadState = this.stores.loadThreadState || null;
   }
 
   /* ─────────────────────────────────────
@@ -267,7 +268,7 @@ export default class ListView extends View {
     if (!this._listEl) return;
 
     // We listen on the list root and let events bubble up, matching
-    // only the internal `#/item/…` title anchors (class title-link).
+    // only the internal `/item/…` title anchors (class title-link).
     this._undelegateClick = delegate(
       this._listEl,
       "click",
@@ -435,10 +436,12 @@ export default class ListView extends View {
           this._loaded = true;
           this._renderPage();
 
-          // Subscribe to individual items on the current page that lack data
-          const needsData = pageItems.filter((item) => !item.title);
-          if (needsData.length > 0) {
-            store.subscribeToItems(needsData.map((item) => item.id));
+          // Always subscribe to individual items on the current page so that
+          // fresh data (e.g. up-to-date descendants/score) replaces any stale
+          // sessionStorage-cached values.
+          const pageIds = pageItems.map((item) => item.id).filter(Boolean);
+          if (pageIds.length > 0) {
+            store.subscribeToItems(pageIds);
           }
         } else {
           // Subsequent notifications — patch individual items that changed
@@ -556,14 +559,14 @@ export default class ListView extends View {
    *     <span class="rank">N.</span>
    *     <div class="col">
    *       <div class="title">
-   *         <a href="[external url or #/item/id]" class="title-link" [target="_blank"] [data-id]>Title</a>
+   *         <a href="[external url or /item/id]" class="title-link" [target="_blank"] [data-id]>Title</a>
    *         [<span class="host">(hostname)</span>]       ← only for external links
    *       </div>
    *       <div class="meta">
    *         NNN points |
-   *         by <a href="#/user/name">name</a> |
+   *         by <a href="/user/name">name</a> |
    *         3 hours ago |
-   *         <a href="#/item/id">N comments</a>  [<span class="badge new">+N new</span>]
+   *         <a href="/item/id">N comments</a>  [<span class="badge new">+N new</span>]
    *       </div>
    *     </div>
    *   </li>
@@ -641,7 +644,7 @@ export default class ListView extends View {
         "a",
         {
           attrs: {
-            href: `#/item/${id}`,
+            href: `/item/${id}`,
             class: "title-link",
             "data-id": id, // picked up by delegated click handler
           },
@@ -668,7 +671,7 @@ export default class ListView extends View {
 
     // Author link
     meta.appendChild(
-      create("a", { attrs: { href: `#/user/${by}`, class: "by" } }, by),
+      create("a", { attrs: { href: `/user/${by}`, class: "by" } }, by),
     );
     meta.appendChild(document.createTextNode(" · "));
 
@@ -683,7 +686,7 @@ export default class ListView extends View {
       "a",
       {
         attrs: {
-          href: `#/item/${id}`,
+          href: `/item/${id}`,
           class: "comments-link",
           "data-id": id, // also needed here so clicking "N comments" marks as read
         },
@@ -719,9 +722,11 @@ export default class ListView extends View {
 
     let threadState = null;
     try {
-      // The thread store's getState(id) retrieves persisted per-story data
-      // (e.g. last-seen comment count) used to compute the "new" badge.
-      if (
+      // Prefer the injected loadThreadState function (reads directly from
+      // localStorage), falling back to threadStore.getState for compatibility.
+      if (typeof this._loadThreadState === "function") {
+        threadState = this._loadThreadState(id);
+      } else if (
         this._threadStore &&
         typeof this._threadStore.getState === "function"
       ) {

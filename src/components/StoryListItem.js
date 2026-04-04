@@ -43,7 +43,7 @@ export function createStoryListItem(story = {}, opts = {}) {
 
   const titleDiv = create("div", { attrs: { class: "col" } });
   const titleEl = create("div", { attrs: { class: "title" } });
-  const a = create("a", { attrs: { href: `#/item/${id}` } }, titleText);
+  const a = create("a", { attrs: { href: `/item/${id}` } }, titleText);
   titleEl.appendChild(a);
   titleDiv.appendChild(titleEl);
 

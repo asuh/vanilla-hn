@@ -13,7 +13,7 @@
  *   const paginator = new Paginator({
  *     page: 2,
  *     hasMore: true,
- *     buildHref: (p) => p <= 1 ? '#/newest' : `#/newest?page=${p}`,
+ *     buildHref: (p) => p <= 1 ? '/newest' : `/newest?page=${p}`,
  *   });
  *
  *   container.appendChild(paginator.render());
