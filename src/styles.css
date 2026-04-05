@@ -17,8 +17,8 @@
         box-sizing: border-box;
     }
     html {
-        -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
+        scrollbar-gutter: stable;
     }
     img,
     svg {
@@ -52,6 +52,7 @@
 
 @layer base {
     :root {
+        interpolate-size: allow-keywords;
         color-scheme: light dark;
 
         --hn-bg: light-dark(#f5f5f5, #0b0b0b);
@@ -204,7 +205,7 @@
         }
 
         a {
-            color: inherit;
+            color: var(--hn-primary);
             text-decoration: none;
 
             &:visited {
@@ -263,11 +264,11 @@
             }
 
             & a {
-                color: inherit;
+                color: var(--hn-primary);
                 text-decoration: none;
 
                 &:visited {
-                    color: inherit;
+                    color: var(--hn-primary);
                 }
                 &:hover,
                 &.active {
@@ -658,13 +659,13 @@
 
     /* -- Comment tree ------------------------------------------------------ */
 
+
     @scope (.comment) to (.kids) {
         :scope.new > .content {
             background-color: var(--hn-new-comment-bg);
         }
 
-        :scope.collapsed > .content > .text,
-        :scope.collapsed > .kids {
+        :scope.collapsed > .content > .text {
             display: none;
         }
 
@@ -748,6 +749,12 @@
             color: var(--hn-muted);
             font-size: var(--font-size-meta);
         }
+    }
+
+    /* .kids is the @scope lower boundary so it cannot be targeted from inside
+       the scope — this rule must live outside @scope (.comment) to (.kids) */
+    .comment.collapsed > .kids {
+        display: none;
     }
 
     /* -- Comment feed ------------------------------------------------------ */
