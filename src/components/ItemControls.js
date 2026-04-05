@@ -17,22 +17,40 @@ import { pluralise } from "../utils/helpers.js";
 export function sinceLastVisit(lastVisitMs) {
   if (!lastVisitMs) return "";
   const diffMs = Date.now() - lastVisitMs;
-  const diffSeconds = Math.max(0, Math.round(diffMs / 1000));
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
 
   const units = [
-    { name: "year", secs: 60 * 60 * 24 * 365 },
-    { name: "month", secs: 60 * 60 * 24 * 30 },
-    { name: "week", secs: 60 * 60 * 24 * 7 },
-    { name: "day", secs: 60 * 60 * 24 },
-    { name: "hour", secs: 60 * 60 },
-    { name: "minute", secs: 60 },
+    { name: "year",   secs: 60 * 60 * 24 * 365 },
+    { name: "month",  secs: 60 * 60 * 24 * 30  },
+    { name: "week",   secs: 60 * 60 * 24 * 7   },
+    { name: "day",    secs: 60 * 60 * 24        },
+    { name: "hour",   secs: 60 * 60             },
+    { name: "minute", secs: 60                  },
+    { name: "second", secs: 1                   },
   ];
 
   for (const u of units) {
     const val = Math.floor(diffSeconds / u.secs);
-    if (val >= 1) return `${val} ${pluralise(val, u.name)}`;
+    if (val >= 1) {
+      // Match react-hn timeUnitsAgo: singular = bare unit name, plural = "N units"
+      return val === 1 ? u.name : `${val} ${u.name}s`;
+    }
   }
   return "a moment";
+}
+
+/**
+ * Return the interval (ms) at which the "since" text should refresh,
+ * based on how old the lastVisit timestamp is.
+ * - Under 60 s  → tick every second
+ * - Under 60 min → tick every minute
+ * - Otherwise   → tick every hour
+ */
+function tickInterval(lastVisitMs) {
+  const diffMs = Date.now() - lastVisitMs;
+  if (diffMs < 60_000) return 1_000;
+  if (diffMs < 3_600_000) return 60_000;
+  return 3_600_000;
 }
 
 // ─── ItemControls ────────────────────────────────────────────────────────────
@@ -65,6 +83,7 @@ export default class ItemControls {
     this.getNewCommentCount = options.getNewCommentCount || (() => 0);
     this.getCommentCount = options.getCommentCount || (() => 0);
     this.el = null;
+    this._sinceTimer = null;
   }
 
   /**
@@ -98,6 +117,12 @@ export default class ItemControls {
     const el = this.el;
     if (!el) return;
 
+    // Cancel any running since-timer before rebuilding.
+    if (this._sinceTimer !== null) {
+      clearInterval(this._sinceTimer);
+      this._sinceTimer = null;
+    }
+
     // Clear existing content
     while (el.firstChild) el.removeChild(el.firstChild);
 
@@ -119,10 +144,10 @@ export default class ItemControls {
 
     el.setAttribute("class", "controls visible");
 
-    const since = sinceLastVisit(lastVisit);
-
-    // "(N new comments in the last X)"
+    // "(N new comments in the last X)" — X is a live-updating text node.
     el.appendChild(document.createTextNode(" ("));
+
+    const sinceTextNode = document.createTextNode(sinceLastVisit(lastVisit));
 
     const newInfo = create(
       "span",
@@ -132,9 +157,25 @@ export default class ItemControls {
         {},
         `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`,
       ),
-      ` in the last ${since}`,
+      " in the last ",
+      sinceTextNode,
     );
     el.appendChild(newInfo);
+
+    el.appendChild(document.createTextNode(") | "));
+
+    // Tick the since text node on an adaptive interval.
+    const scheduleTick = () => {
+      const interval = tickInterval(lastVisit);
+      this._sinceTimer = setInterval(() => {
+        sinceTextNode.textContent = sinceLastVisit(lastVisit);
+        // Reschedule at the new appropriate interval (e.g. once we pass 60 s).
+        clearInterval(this._sinceTimer);
+        this._sinceTimer = null;
+        scheduleTick();
+      }, interval);
+    };
+    scheduleTick();
 
     el.appendChild(document.createTextNode(") | "));
 
@@ -188,6 +229,10 @@ export default class ItemControls {
    * Clean up references.
    */
   cleanup() {
+    if (this._sinceTimer !== null) {
+      clearInterval(this._sinceTimer);
+      this._sinceTimer = null;
+    }
     this.item = null;
     this.threadStore = null;
     this.readStoriesStore = null;

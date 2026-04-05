@@ -15,8 +15,6 @@
     *::before,
     *::after {
         box-sizing: border-box;
-        margin: 0;
-        padding: 0;
     }
     html {
         -webkit-text-size-adjust: 100%;
@@ -165,6 +163,7 @@
 @layer layout {
     .app-wrap {
         width: 90%;
+        min-block-size: 100svh;
         max-width: 1280px;
         margin: 8px auto;
         color: var(--hn-text);
@@ -174,6 +173,7 @@
     }
 
     #app {
+        min-block-size: 100svh;        
         overflow-wrap: break-word;
         word-wrap: break-word;
     }
@@ -676,11 +676,11 @@
             color: var(--hn-error);
         }
 
-        .content > .text {
+        .content {
             padding-right: 1.25em;
             padding-top: 0.65em;
             padding-bottom: 0.65em;
-            padding-left: 1.25em;
+            padding-left: calc(1.25em + var(--comment-level, 0) * 2.5em);
         }
 
         .meta {
@@ -706,6 +706,11 @@
             font-weight: bold;
         }
 
+        .meta .permalink {
+            color: var(--hn-muted);
+            &:visited { color: var(--hn-muted); }
+        }
+
         .meta .toggle {
             cursor: pointer;
             user-select: none;
@@ -714,10 +719,6 @@
             padding: 0;
             font: inherit;
             color: inherit;
-        }
-
-        .meta .sep {
-            margin: 0 0.2em;
         }
 
         .meta .time {

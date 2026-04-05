@@ -76,6 +76,7 @@ export class CommentElement {
       attrs: { class: classes.join(" ") },
       props: { "data-id": this.comment.id },
     });
+    wrapper.style.setProperty("--comment-level", this.depth);
 
     // .content wraps .meta + .text — sibling to .kids (matches react-hn structure)
     this._contentEl = create("div", { attrs: { class: "content" } });
@@ -97,10 +98,7 @@ export class CommentElement {
 
     // Kids container — sibling to .content (not nested inside it)
     this._kidsContainer = create("div", {
-      attrs: {
-        class: "kids",
-        id: `comment-kids-${this.comment.id}`,
-      },
+      attrs: { class: "kids" },
     });
     wrapper.appendChild(this._kidsContainer);
 
@@ -141,7 +139,7 @@ export class CommentElement {
     const meta = create("div", { attrs: { class: "meta" } });
 
     // Collapse toggle button
-    const toggle = create(
+    this._toggleBtn = create(
       "button",
       {
         attrs: {
@@ -157,13 +155,13 @@ export class CommentElement {
           },
         },
       },
-      this._collapsed ? "+" : "−",
+      this._collapsed ? "[+]" : "[\u2013]",
     );
 
     // Byline and time
     const by = create(
-      "span",
-      { attrs: { class: "by" } },
+      "a",
+      { attrs: { class: "by", href: `/user/${this.comment.by}` } },
       String(this.comment.by || "unknown"),
     );
     const time = create(
@@ -171,15 +169,23 @@ export class CommentElement {
       { attrs: { class: "time" } },
       timeAgoFromUnix(this.comment.time || Date.now() / 1000),
     );
+    const permalink = create(
+      "a",
+      { attrs: { class: "permalink", href: `/item/${this.comment.id}` } },
+      "link",
+    );
 
     // Child counts — only populated when collapsed (matches react-hn behaviour).
     // Stored on `this` so toggleCollapse() can update it without re-rendering.
     this._countsEl = create("span", { attrs: { class: "counts" } });
 
-    meta.appendChild(toggle);
+    meta.appendChild(this._toggleBtn);
+    meta.appendChild(document.createTextNode(" "));
     meta.appendChild(by);
-    meta.appendChild(create("span", { attrs: { class: "sep" } }, "·"));
+    meta.appendChild(document.createTextNode(" "));
     meta.appendChild(time);
+    meta.appendChild(document.createTextNode(" | "));
+    meta.appendChild(permalink);
     meta.appendChild(this._countsEl);
 
     return meta;
@@ -238,6 +244,17 @@ export class CommentElement {
       },
       html: this.comment.text || "",
     });
+
+    const replyLinks = this.stores?.settingsStore?.get?.("replyLinks") ?? true;
+    if (replyLinks && !this.comment.dead) {
+      const p = document.createElement("p");
+      const a = create("a", {
+        attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
+      }, "reply");
+      p.appendChild(a);
+      textEl.appendChild(p);
+    }
+
     return textEl;
   }
 
@@ -283,9 +300,11 @@ export class CommentElement {
         } else {
           this.root.classList.remove("collapsed");
         }
-        // update aria-expanded on toggle button if present
-        const btn = this.root.querySelector("button.toggle");
-        if (btn) btn.setAttribute("aria-expanded", String(!this._collapsed));
+        // update aria-expanded and label on toggle button if present
+        if (this._toggleBtn) {
+          this._toggleBtn.setAttribute("aria-expanded", String(!this._collapsed));
+          this._toggleBtn.textContent = this._collapsed ? "[+]" : "[\u2013]";
+        }
         if (!this._collapsed) {
           // when expanding, attempt to load visible (placeholder) children
           this._loadVisiblePlaceholders();
@@ -463,6 +482,15 @@ export class CommentElement {
     const textEl = this.root.querySelector(".text");
     if (textEl) {
       textEl.innerHTML = this.comment.text || "";
+      const replyLinks = this.stores?.settingsStore?.get?.("replyLinks") ?? true;
+      if (replyLinks && !this.comment.dead) {
+        const p = document.createElement("p");
+        const a = create("a", {
+          attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
+        }, "reply");
+        p.appendChild(a);
+        textEl.appendChild(p);
+      }
     }
     // Update time
     const timeEl = this.root.querySelector(".meta .time");

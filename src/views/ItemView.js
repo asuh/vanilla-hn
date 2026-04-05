@@ -810,13 +810,15 @@ export default class ItemView extends View {
     if (!this._threadStore || !this._item) return;
     try {
       if (typeof this._threadStore.commentAdded === "function") {
-        // Always pass the full comment object — both the vanilla StoryCommentThreadStore
-        // and the react-hn-style store expect commentAdded(commentObject).
         this._threadStore.commentAdded(comment);
       }
     } catch (e) {
       // Ignore; store notification is best-effort
     }
+    // Immediately refresh controls and slider after a comment is registered,
+    // rather than waiting for the debounced _debouncedCountChanged to fire.
+    if (this._controls) this._controls.update();
+    if (this._slider) this._slider.show();
   }
 
   // ── Collapse state management ─────────────────────────────────────────────
@@ -976,28 +978,22 @@ export default class ItemView extends View {
       type === "toggleCollapse" ||
       type === "autoCollapse"
     ) {
-      // Re-apply collapse state to all top-level CommentElements.
       this._reapplyAllCommentStates();
       return;
     }
 
     if (type === "markAsRead") {
-      // Refresh the controls bar to clear the "new comments" notice.
       if (this._controls) this._controls.update();
       this._reapplyAllCommentStates();
       return;
     }
 
-    if (type === "commentAdded") {
-      // A new comment was registered — update slider and controls.
-      if (this._slider) this._slider.show();
-      return;
-    }
-
-    // Generic / unknown change: refresh reactive sections.
+    // Update controls and slider for any count-change notification.
     if (this._controls) this._controls.update();
     if (this._slider) this._slider.show();
-    this._reapplyAllCommentStates();
+    if (type === "collapse" || type === "first_load_complete") {
+      this._reapplyAllCommentStates();
+    }
   }
 
   // ── Action handlers ───────────────────────────────────────────────────────
