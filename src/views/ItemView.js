@@ -876,13 +876,24 @@ export default class ItemView extends View {
     }
   }
 
+  _applyNewStateRecursive(ce) {
+    if (!ce || !ce.root) return;
+    const commentId = ce.comment && ce.comment.id;
+    if (commentId) this._applyNewState(ce, commentId);
+    if (ce._loadedKids) {
+      for (const child of ce._loadedKids.values()) {
+        this._applyNewStateRecursive(child);
+      }
+    }
+  }
+
   /**
    * Walk all loaded CommentElements and re-apply collapse + new state from threadStore.
    */
   _reapplyAllCommentStates() {
     for (const [id, ce] of this._commentElements.entries()) {
       this._applyCollapseState(ce, id);
-      this._applyNewState(ce, id);
+      this._applyNewStateRecursive(ce);
     }
   }
 

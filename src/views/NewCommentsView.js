@@ -53,6 +53,9 @@ export default class NewCommentsView extends View {
     /** @type {boolean} Whether the initial update IDs have arrived */
     this._loaded = false;
 
+    /** @type {number[]} Interval IDs for live time tickers */
+    this._timeTimers = [];
+
     /** @type {HTMLElement|null} */
     this._listEl = null;
     /** @type {HTMLElement|null} */
@@ -113,6 +116,8 @@ export default class NewCommentsView extends View {
    * Tear down subscriptions and DOM.
    */
   cleanup() {
+    for (const id of this._timeTimers) clearInterval(id);
+    this._timeTimers = [];
     if (this._unsub) {
       try {
         this._unsub();
@@ -335,6 +340,34 @@ export default class NewCommentsView extends View {
         timeAgoFromUnix(comment.time),
       );
       meta.appendChild(time);
+
+      // Tick the time text live while the comment is recent (< 1h old)
+      const diffMs = Date.now() - comment.time * 1000;
+      const initialInterval = diffMs < 60_000 ? 1_000 : diffMs < 3_600_000 ? 60_000 : 0;
+      if (initialInterval > 0) {
+        const tick = () => {
+          time.textContent = timeAgoFromUnix(comment.time);
+          // Reschedule at coarser interval once we've crossed 60 s
+          const age = Date.now() - comment.time * 1000;
+          const next = age < 60_000 ? 1_000 : age < 3_600_000 ? 60_000 : 0;
+          if (next === 0) {
+            // No more ticking needed — clear the stored timer
+            this._timeTimers = this._timeTimers.filter(id => id !== timerId);
+          } else if (next !== currentInterval) {
+            clearInterval(timerId);
+            timerId = setInterval(tick, next);
+            currentInterval = next;
+            this._timeTimers = this._timeTimers.filter(id => id !== oldId);
+            this._timeTimers.push(timerId);
+          }
+          // eslint-disable-next-line no-unused-vars
+          oldId = timerId;
+        };
+        let oldId;
+        let currentInterval = initialInterval;
+        let timerId = setInterval(tick, initialInterval);
+        this._timeTimers.push(timerId);
+      }
     }
 
     // Link to parent item (story or comment)

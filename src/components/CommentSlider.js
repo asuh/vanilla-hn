@@ -25,6 +25,8 @@ export default class CommentSlider {
     this._sliderEl = null;
     this._labelEl = null;
     this._sliderValue = null;
+    this._userHasInteracted = false;
+    this._labelTimer = null;
   }
 
   /**
@@ -62,6 +64,12 @@ export default class CommentSlider {
     // Clear any previous content.
     while (container.firstChild) container.removeChild(container.firstChild);
 
+    // Clear any existing label tick timer.
+    if (this._labelTimer) {
+      clearInterval(this._labelTimer);
+      this._labelTimer = null;
+    }
+
     if (!this.threadStore) return;
 
     const commentCount = this.getCommentCount();
@@ -71,8 +79,9 @@ export default class CommentSlider {
     container.style.opacity = "1";
     container.setAttribute("aria-hidden", "false");
 
-    // Default slider to the second-to-last comment (highlight most recent)
-    if (this._sliderValue === null || this._sliderValue > commentCount - 1) {
+    // Default slider to max (rightmost = no highlight) unless the user has
+    // explicitly moved it. Matches react-hn: value={showNewCommentsAfter || commentCount - 1}
+    if (!this._userHasInteracted || this._sliderValue === null || this._sliderValue > commentCount - 1) {
       this._sliderValue = commentCount - 1;
     }
 
@@ -127,11 +136,51 @@ export default class CommentSlider {
     this._sliderEl.addEventListener("input", () => {
       const val = parseInt(this._sliderEl.value, 10);
       this._sliderValue = val;
+      this._userHasInteracted = true;
       this.updateLabel(val);
     });
 
     container.appendChild(this._sliderEl);
     container.appendChild(applyBtn);
+
+    // Start a live-ticking timer so the "from X seconds ago" label updates
+    // automatically, matching react-hn's <TimeAgo> behaviour.
+    this._startLabelTick();
+  }
+
+  _startLabelTick() {
+    if (this._labelTimer) {
+      clearInterval(this._labelTimer);
+      this._labelTimer = null;
+    }
+    const tick = () => {
+      if (!this._sliderEl || !this._labelEl) return;
+      this.updateLabel(this._sliderValue);
+      // Reschedule at the right interval for the current age.
+      clearInterval(this._labelTimer);
+      this._labelTimer = setInterval(tick, this._labelTickInterval());
+    };
+    this._labelTimer = setInterval(tick, this._labelTickInterval());
+  }
+
+  _labelTickInterval() {
+    // Determine the unix time of the reference comment.
+    if (
+      this.threadStore &&
+      typeof this.threadStore.getCommentByTimeIndex === "function" &&
+      this._sliderValue !== null
+    ) {
+      try {
+        const ref = this.threadStore.getCommentByTimeIndex(this._sliderValue + 1);
+        if (ref && ref.time) {
+          const diffMs = Date.now() - ref.time * 1000;
+          if (diffMs < 60_000) return 1_000;
+          if (diffMs < 3_600_000) return 60_000;
+          return 3_600_000;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    return 60_000; // fallback: update every minute
   }
 
   /**
@@ -217,6 +266,10 @@ export default class CommentSlider {
    * Clean up references.
    */
   cleanup() {
+    if (this._labelTimer) {
+      clearInterval(this._labelTimer);
+      this._labelTimer = null;
+    }
     this.threadStore = null;
     this.onHighlight = null;
     this.getCommentCount = null;
