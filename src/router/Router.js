@@ -397,8 +397,7 @@ export class Router {
    * `routeInfo` is stored as `currentRouteInfo` for inspection via
    * `getCurrentRoute()`.
    *
-   * Uses the View Transitions API when available for a browser-managed route
-   * transition, falling back to a direct DOM swap in older browsers.
+   * Performs a direct DOM swap.
    *
    * @param {HTMLElement|Object} view
    * @param {Object}             [routeInfo]
@@ -470,18 +469,7 @@ export class Router {
       mountEl.appendChild(el);
     };
 
-    if (
-      typeof document.startViewTransition === "function" &&
-      !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-    ) {
-      try {
-        await document.startViewTransition(applyDOM).finished;
-      } catch (err) {
-        applyDOM();
-      }
-    } else {
-      applyDOM();
-    }
+    applyDOM();
 
     // Persist references for the next navigation cycle.
     this.currentView = viewObj || el;

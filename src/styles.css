@@ -134,12 +134,6 @@
         -moz-osx-font-smoothing: grayscale;
     }
 
-    ::view-transition-old(root),
-    ::view-transition-new(root) {
-        animation-duration: 120ms;
-        animation-timing-function: ease-out;
-    }
-
     @supports (animation-timeline: scroll()) {
         body::before {
             content: "";
@@ -152,6 +146,7 @@
             background-color: var(--override-hn-accent, var(--hn-accent));
             transform: scaleX(0);
             transform-origin: 0 50%;
+            pointer-events: none;
             animation: page-scroll-progress linear both;
             animation-timeline: scroll(root block);
         }
