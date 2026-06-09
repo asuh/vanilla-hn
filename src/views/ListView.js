@@ -162,6 +162,7 @@ export default class ListView extends View {
     // Keyed DOM map: item id (string) → <li> element currently in the list.
     // Used for efficient per-item patching instead of full-list rebuilds.
     this._itemNodes = new Map();
+    this._pageIds = [];
 
     // Unsubscribe function returned by hnService.onStoriesValue
     this._unsub = null;
@@ -432,6 +433,7 @@ export default class ListView extends View {
 
         const pageItems = store.getPageItems(this.page);
         const start = (this.page - 1) * PAGE_SIZE;
+        const pageIds = this._getPageIds(pageItems);
 
         if (!this._loaded) {
           // First notification — do a full page render
@@ -441,7 +443,13 @@ export default class ListView extends View {
           // Always subscribe to individual items on the current page so that
           // fresh data (e.g. up-to-date descendants/score) replaces any stale
           // sessionStorage-cached values.
-          const pageIds = pageItems.map((item) => item.id).filter(Boolean);
+          if (pageIds.length > 0) {
+            store.subscribeToItems(pageIds);
+          }
+        } else if (!this._samePageIds(pageIds)) {
+          // The story ID order changed under a cached page. Rebuild the page so
+          // rank numbers and DOM order stay in sync, then listen to the new IDs.
+          this._renderPage();
           if (pageIds.length > 0) {
             store.subscribeToItems(pageIds);
           }
@@ -481,10 +489,12 @@ export default class ListView extends View {
 
     // ── Story list ─────────────────────────────────────────────────────────
     if (pageItems.length === 0) {
+      this._pageIds = [];
       this._itemNodes.clear();
       this._renderEmpty();
     } else {
       const frag = document.createDocumentFragment();
+      this._pageIds = this._getPageIds(pageItems);
       this._itemNodes.clear();
       pageItems.forEach((item, idx) => {
         const li = this._createItemEl(item, start + idx + 1);
@@ -502,6 +512,20 @@ export default class ListView extends View {
     if (this._paginator) {
       this._paginator.update({ page: this.page, hasMore });
     }
+  }
+
+  _getPageIds(pageItems) {
+    return pageItems
+      .map((item) => (item && item.id != null ? String(item.id) : ""))
+      .filter(Boolean);
+  }
+
+  _samePageIds(nextIds) {
+    if (nextIds.length !== this._pageIds.length) return false;
+    for (let i = 0; i < nextIds.length; i++) {
+      if (nextIds[i] !== this._pageIds[i]) return false;
+    }
+    return true;
   }
 
   /**
