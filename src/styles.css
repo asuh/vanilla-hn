@@ -326,15 +326,6 @@
         }
     }
 
-    @supports (position-anchor: --settings-toggle) {
-        .site-header .settings-panel {
-            position-anchor: --settings-toggle;
-            inset-block-start: anchor(bottom);
-            inset-inline-end: anchor(right);
-            right: auto;
-        }
-    }
-
     /* -- Settings panel ---------------------------------------------------- */
 
     @scope (.settings-panel) {
@@ -355,18 +346,6 @@
                 transform 120ms ease-out,
                 display 120ms allow-discrete,
                 overlay 120ms allow-discrete;
-        }
-
-        :scope:popover-open {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        @starting-style {
-            :scope:popover-open {
-                opacity: 0;
-                transform: translateY(-0.35rem);
-            }
         }
 
         td:first-child {
