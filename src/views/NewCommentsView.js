@@ -10,7 +10,8 @@
  */
 
 import { Paginator } from "../components/Paginator.js";
-import { create, escapeHTML, timeAgoFromUnix } from "../utils/dom.js";
+import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { fetchCommentAncestors, itemPath } from "../utils/item-ancestors.js";
 import View from "./View.js";
 
 const PAGE_SIZE = 30;
@@ -42,16 +43,13 @@ export default class NewCommentsView extends View {
 		/** @type {Object|null} */
 		this._settingsStore = (this.stores && this.stores.settingsStore) || null;
 
-		/** @type {number[]} All comment IDs from the updates feed */
-		this._allCommentIds = [];
-		/** @type {Map<number, Object>} Fetched comment payloads keyed by ID */
-		this._comments = new Map();
-		/** @type {Function|null} Unsubscribe from updates feed */
+		/** @type {Object[]} Comment payloads from the updates store */
+		this._comments = [];
+		/** @type {Function|null} Unsubscribe from updates store */
 		this._unsub = null;
-		/** @type {Function[]} Per-item unsubscribe functions */
-		this._itemUnsubs = [];
 		/** @type {boolean} Whether the initial update IDs have arrived */
 		this._loaded = false;
+		this._updatesStore = this.stores.updatesStore || null;
 
 		/** @type {number[]} Interval IDs for live time tickers */
 		this._timeTimers = [];
@@ -126,15 +124,7 @@ export default class NewCommentsView extends View {
 			}
 			this._unsub = null;
 		}
-		for (const unsub of this._itemUnsubs) {
-			try {
-				unsub();
-			} catch (_) {
-				/* ignore */
-			}
-		}
-		this._itemUnsubs = [];
-		this._comments.clear();
+		this._comments = [];
 		if (this._paginator) {
 			this._paginator.cleanup();
 			this._paginator = null;
@@ -145,123 +135,31 @@ export default class NewCommentsView extends View {
 	// ── Private ──────────────────────────────────────────────────────────
 
 	/**
-	 * Subscribe to the HN updates endpoint to get recently changed item IDs.
+	 * Subscribe to the updates store.
 	 * @private
 	 */
 	_subscribe() {
-		if (!this._hn || typeof this._hn.onUpdatesValue !== "function") {
-			this._renderError("Data service unavailable.");
+		if (!this._updatesStore) {
+			this._renderError("Updates store unavailable.");
 			return;
 		}
 
-		this._unsub = this._hn.onUpdatesValue((updates) => {
-			if (!updates) return;
-
-			// The updates endpoint returns { items: [...ids], profiles: [...] }
-			const itemIds = Array.isArray(updates)
-				? updates
-				: Array.isArray(updates.items)
-					? updates.items
-					: [];
-
-			if (itemIds.length === 0 && !this._loaded) {
-				this._loaded = true;
-				this._renderEmpty();
-				return;
-			}
-
-			// We'll fetch each item and filter to comments client-side.
-			// Store all IDs — we'll identify comments as they load.
-			this._fetchAndFilterComments(itemIds);
-		});
-	}
-
-	/**
-	 * Fetch items by ID and filter to comments.
-	 * @param {number[]} itemIds
-	 * @private
-	 */
-	_fetchAndFilterComments(itemIds) {
-		// Cancel previous per-item subscriptions
-		for (const unsub of this._itemUnsubs) {
-			try {
-				unsub();
-			} catch (_) {
-				/* ignore */
-			}
-		}
-		this._itemUnsubs = [];
-		this._comments.clear();
-		this._allCommentIds = [];
-
-		const showDead = this._settingsStore
-			? this._settingsStore.get("showDead")
-			: false;
-		const showDeleted = this._settingsStore
-			? this._settingsStore.get("showDeleted")
-			: false;
-
-		const pending = itemIds.length;
-		let resolved = 0;
-
-		const onItemResolved = () => {
-			resolved++;
-			// Once we've resolved enough to fill at least a page (or all), render
-			if (
-				(!this._loaded && resolved >= Math.min(pending, PAGE_SIZE * 2)) ||
-				resolved >= pending
-			) {
-				this._loaded = true;
-				this._renderPage();
-			}
-		};
-
-		for (const id of itemIds) {
-			if (typeof this._hn.fetchItem === "function") {
-				this._hn
-					.fetchItem(id)
-					.then((item) => {
-						if (item && item.type === "comment") {
-							if (item.dead && !showDead) {
-								onItemResolved();
-								return;
-							}
-							if (item.deleted && !showDeleted) {
-								onItemResolved();
-								return;
-							}
-							this._comments.set(item.id, item);
-							this._allCommentIds.push(item.id);
-						}
-						onItemResolved();
-					})
-					.catch(() => onItemResolved());
-			} else {
-				// Fallback: use onItemValue for a single read
-				const unsub = this._hn.onItemValue(id, (item) => {
-					if (item && item.type === "comment") {
-						if (item.dead && !showDead) {
-							onItemResolved();
-							return;
-						}
-						if (item.deleted && !showDeleted) {
-							onItemResolved();
-							return;
-						}
-						this._comments.set(item.id, item);
-						this._allCommentIds.push(item.id);
-					}
-					onItemResolved();
-				});
-				if (typeof unsub === "function") this._itemUnsubs.push(unsub);
-			}
-		}
-
-		// Edge case: no IDs at all
-		if (itemIds.length === 0) {
+		this._unsub = this._updatesStore.addListener((updates) => {
 			this._loaded = true;
-			this._renderEmpty();
-		}
+			const showDead = this._settingsStore
+				? this._settingsStore.get("showDead")
+				: false;
+			const showDeleted = this._settingsStore
+				? this._settingsStore.get("showDeleted")
+				: false;
+			this._comments = (updates.comments || []).filter((comment) => {
+				if (comment.dead && !showDead) return false;
+				if (comment.deleted && !showDeleted) return false;
+				return true;
+			});
+			this._renderPage();
+		});
+		this._updatesStore.start();
 	}
 
 	/**
@@ -271,8 +169,7 @@ export default class NewCommentsView extends View {
 	_renderPage() {
 		if (!this._listEl) return;
 
-		// Sort by ID descending (newest first — higher IDs are newer on HN)
-		const sorted = [...this._allCommentIds].sort((a, b) => b - a);
+		const sorted = this._comments.slice().sort((a, b) => (b.time || 0) - (a.time || 0));
 
 		const startIndex = (this.page - 1) * PAGE_SIZE;
 		const pageItems = sorted.slice(startIndex, startIndex + PAGE_SIZE);
@@ -288,9 +185,7 @@ export default class NewCommentsView extends View {
 
 		const fragment = document.createDocumentFragment();
 
-		for (const id of pageItems) {
-			const comment = this._comments.get(id);
-			if (!comment) continue;
+		for (const comment of pageItems) {
 			fragment.appendChild(this._createCommentRow(comment));
 		}
 
@@ -315,7 +210,7 @@ export default class NewCommentsView extends View {
 			},
 		});
 
-		// Meta line: author · time · on Story#parent
+		// Meta line: author · time · parent/on story
 		const meta = create("div", { attrs: { class: "meta" } });
 
 		if (comment.by) {
@@ -371,21 +266,7 @@ export default class NewCommentsView extends View {
 			}
 		}
 
-		// Link to parent item (story or comment)
-		if (comment.parent) {
-			meta.appendChild(document.createTextNode(" | "));
-			const parentLink = create(
-				"a",
-				{
-					attrs: {
-						href: `/item/${comment.parent}`,
-						class: "parent-link",
-					},
-				},
-				"parent",
-			);
-			meta.appendChild(parentLink);
-		}
+		this._appendAncestorLinks(comment, meta).catch(() => {});
 
 		li.appendChild(meta);
 
@@ -406,6 +287,34 @@ export default class NewCommentsView extends View {
 		}
 
 		return li;
+	}
+
+	async _appendAncestorLinks(comment, meta) {
+		if (!this._hn || typeof this._hn.fetchItem !== "function") return;
+		const result = await fetchCommentAncestors(this._hn, comment, {
+			signal: this.signal,
+		});
+		if (!meta.isConnected) return;
+		if (result.parent && result.op && comment.parent !== result.op.id) {
+			meta.appendChild(document.createTextNode(" | "));
+			meta.appendChild(
+				create(
+					"a",
+					{ attrs: { href: itemPath(result.parent.type, comment.parent), class: "parent-link" } },
+					"parent",
+				),
+			);
+		}
+		if (result.op) {
+			meta.appendChild(document.createTextNode(" | on: "));
+			meta.appendChild(
+				create(
+					"a",
+					{ attrs: { href: itemPath(result.op), class: "op-link" } },
+					result.op.title || `Item ${result.op.id}`,
+				),
+			);
+		}
 	}
 
 	// ── Placeholder states ───────────────────────────────────────────────

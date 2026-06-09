@@ -23,9 +23,11 @@
 import { CommentElement } from "../components/CommentElement.js";
 import CommentSlider from "../components/CommentSlider.js";
 import ItemControls from "../components/ItemControls.js";
+import PollOption from "../components/PollOption.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
+import { itemPath, rememberItem } from "../utils/item-ancestors.js";
 import View from "./View.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -72,6 +74,10 @@ export default class ItemView extends View {
 
     // Map of commentId (string) -> CommentElement instance for top-level comments.
     this._commentElements = new Map();
+    this._pollOptions = [];
+    this._commentRetryTimers = new Map();
+    this._delayedComments = new Set();
+    this._knownTopLevelKids = new Set();
 
     // Unsubscribe handle for the primary hnService.onItemValue subscription.
     this._itemUnsub = null;
@@ -186,6 +192,20 @@ export default class ItemView extends View {
       }
       this._slider = null;
     }
+    for (const option of this._pollOptions) {
+      try {
+        option.cleanup();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    this._pollOptions = [];
+    for (const timer of this._commentRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this._commentRetryTimers.clear();
+    this._delayedComments.clear();
+    this._knownTopLevelKids.clear();
 
     // Unsubscribe from threadStore.
     if (typeof this._threadStoreUnsub === "function") {
@@ -277,6 +297,7 @@ export default class ItemView extends View {
 
     const isFirstLoad = !this._item;
     this._item = item;
+    rememberItem(item);
 
     if (isFirstLoad) {
       // Set up the per-story thread store now that we have item data.
@@ -346,7 +367,10 @@ export default class ItemView extends View {
     };
 
     // Create a fresh StoryCommentThreadStore scoped to this story.
-    this._threadStore = new StoryCommentThreadStore(item.id, { getItemById });
+    this._threadStore = new StoryCommentThreadStore(item.id, {
+      getItemById,
+      settings: this.stores && this.stores.settingsStore,
+    });
 
     // Call initForItem if the store exposes it (some implementations do).
     if (typeof this._threadStore.initForItem === "function") {
@@ -445,6 +469,16 @@ export default class ItemView extends View {
       content.appendChild(this._itemTextEl);
     }
 
+    if (item.type === "poll" && Array.isArray(item.parts) && item.parts.length) {
+      this._pollEl = create("div", { attrs: { class: "poll" } });
+      for (const id of item.parts) {
+        const option = new PollOption({ id, services: this.services });
+        this._pollOptions.push(option);
+        this._pollEl.appendChild(option.render());
+      }
+      content.appendChild(this._pollEl);
+    }
+
     // Comments section — sibling to .content (matches react-hn's Item__kids / Item__content structure)
     this._kidsEl = create("div", {
       attrs: { class: "kids", role: "list", "aria-label": "Comments" },
@@ -504,7 +538,7 @@ export default class ItemView extends View {
       const link = create(
         "a",
         {
-          attrs: { href: `/item/${item.id}` },
+          attrs: { href: itemPath(item) },
         },
         titleText,
       );
@@ -573,7 +607,7 @@ export default class ItemView extends View {
     const commentsLink = create(
       "a",
       {
-        attrs: { href: `/item/${item.id}`, class: "comments-link" },
+        attrs: { href: itemPath(item), class: "comments-link" },
       },
       commentsText,
     );
@@ -631,6 +665,7 @@ export default class ItemView extends View {
 
     for (const kidId of item.kids) {
       const childIdStr = String(kidId);
+      this._knownTopLevelKids.add(childIdStr);
 
       // Create a placeholder to preserve ordering while comments load
       const placeholder = create(
@@ -650,7 +685,11 @@ export default class ItemView extends View {
       // Subscribe — use the View base-class _unsubscribers array via a manual push
       // so they're cleaned up if cleanup() is called before comments arrive.
       const unsub = hn.onItemValue(kidId, (comment) => {
-        if (!comment || !comment.id) return;
+        if (!comment || !comment.id) {
+          this._handleDelayedComment(kidId, placeholder);
+          return;
+        }
+        this._clearDelayedComment(kidId);
         this._onCommentLoaded(comment, placeholder);
       });
 
@@ -678,10 +717,12 @@ export default class ItemView extends View {
       // Skip if already rendered or already has a placeholder
       if (
         this._commentElements.has(key) ||
+        this._knownTopLevelKids.has(key) ||
         this._kidsEl.querySelector(`[data-comment-id="${key}"]`)
       ) {
         continue;
       }
+      this._knownTopLevelKids.add(key);
 
       const placeholder = create(
         "div",
@@ -698,7 +739,11 @@ export default class ItemView extends View {
       this._kidsEl.appendChild(placeholder);
 
       const unsub = hn.onItemValue(kidId, (comment) => {
-        if (!comment || !comment.id) return;
+        if (!comment || !comment.id) {
+          this._handleDelayedComment(kidId, placeholder);
+          return;
+        }
+        this._clearDelayedComment(kidId);
         this._onCommentLoaded(comment, placeholder);
       });
       if (typeof unsub === "function") {
@@ -728,6 +773,19 @@ export default class ItemView extends View {
 
     // Notify the thread store about this comment.
     this._notifyThreadStoreComment(comment);
+
+    const showDead = this.stores?.settingsStore?.get?.("showDead") ?? false;
+    const showDeleted = this.stores?.settingsStore?.get?.("showDeleted") ?? false;
+    if ((comment.dead && !showDead) || (comment.deleted && !showDeleted)) {
+      if (existingCE) {
+        existingCE.cleanup();
+        this._commentElements.delete(key);
+      }
+      if (placeholder && placeholder.parentNode) {
+        placeholder.remove();
+      }
+      return;
+    }
 
     if (existingCE) {
       // Update existing CommentElement with fresh data.
@@ -797,6 +855,32 @@ export default class ItemView extends View {
 
     // Mark new-comment visual state.
     this._applyNewState(ce, comment.id);
+  }
+
+  _handleDelayedComment(commentId, placeholder) {
+    const key = String(commentId);
+    if (!this._delayedComments.has(key)) {
+      this._delayedComments.add(key);
+      if (
+        this._threadStore &&
+        typeof this._threadStore.commentDelayed === "function"
+      ) {
+        this._threadStore.commentDelayed(commentId);
+      }
+    }
+    if (placeholder) {
+      placeholder.textContent =
+        "Unable to load comment. Trying again in 30 seconds.";
+      placeholder.classList.add("placeholder--delayed");
+    }
+  }
+
+  _clearDelayedComment(commentId) {
+    const key = String(commentId);
+    this._delayedComments.delete(key);
+    const timer = this._commentRetryTimers.get(key);
+    if (timer) clearTimeout(timer);
+    this._commentRetryTimers.delete(key);
   }
 
   /**

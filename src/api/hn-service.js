@@ -137,15 +137,22 @@ class MockBackend {
       const child = createMockItem(newId, {
         type: "comment",
         text: `Auto comment on ${id}`,
+        // Use the current time so the slider shows "X seconds ago" and ticks
+        // every second — matching the real HN Firebase scenario where comment
+        // timestamps reflect the actual moment the comment was posted.
+        time: nowSeconds(),
+        parent: Number(id),
       });
       this._items.set(newId, child);
       item.kids = [...(item.kids || []), newId];
       item.descendants = (item.descendants || 0) + 1;
       this._notifyItem(id, item);
       this._notifyItem(newId, child);
+      this._notifyUpdates([newId, id]);
     } else {
       item.score = (item.score || 0) + 1;
       this._notifyItem(id, item);
+      this._notifyUpdates([id]);
     }
   }
 
@@ -155,6 +162,16 @@ class MockBackend {
     for (const cb of listeners) {
       try {
         cb({ ...payload });
+      } catch (e) {
+        /* swallow */
+      }
+    }
+  }
+
+  _notifyUpdates(ids) {
+    for (const cb of this._updatesListeners) {
+      try {
+        cb({ items: ids.map(String), profiles: [] });
       } catch (e) {
         /* swallow */
       }
