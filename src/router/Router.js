@@ -397,8 +397,8 @@ export class Router {
    * `routeInfo` is stored as `currentRouteInfo` for inspection via
    * `getCurrentRoute()`.
    *
-   * TODO: wrap `applyDOM()` in `document.startViewTransition(applyDOM)` when
-   * the View Transitions API is available for a cross-fade between views.
+   * Uses the View Transitions API when available for a browser-managed route
+   * transition, falling back to a direct DOM swap in older browsers.
    *
    * @param {HTMLElement|Object} view
    * @param {Object}             [routeInfo]
@@ -462,8 +462,6 @@ export class Router {
     el.setAttribute("data-router-mounted", "true");
 
     // DOM swap ────────────────────────────────────────────────────────────────
-    // TODO: when document.startViewTransition is available, wrap applyDOM in
-    // it for a declarative cross-fade: document.startViewTransition(applyDOM)
     const mountEl =
       document.querySelector(this.mountPointSelector) || document.body;
 
@@ -472,7 +470,18 @@ export class Router {
       mountEl.appendChild(el);
     };
 
-    applyDOM();
+    if (
+      typeof document.startViewTransition === "function" &&
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+    ) {
+      try {
+        await document.startViewTransition(applyDOM).finished;
+      } catch (err) {
+        applyDOM();
+      }
+    } else {
+      applyDOM();
+    }
 
     // Persist references for the next navigation cycle.
     this.currentView = viewObj || el;

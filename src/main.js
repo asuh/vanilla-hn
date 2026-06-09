@@ -241,6 +241,20 @@
 
       if (settingsBtn && settingsPanel) {
         const form = settingsPanel.querySelector("form");
+        const supportsPopover =
+          typeof settingsPanel.showPopover === "function" &&
+          typeof settingsPanel.hidePopover === "function" &&
+          typeof settingsPanel.matches === "function";
+
+        if (supportsPopover) {
+          settingsPanel.hidden = false;
+          settingsPanel.setAttribute("popover", "auto");
+        }
+
+        const isPanelOpen = () =>
+          supportsPopover
+            ? settingsPanel.matches(":popover-open")
+            : !settingsPanel.hidden;
 
         // Sync every form control to the current store state.
         const syncForm = (state) => {
@@ -269,7 +283,11 @@
 
         // Open / close helpers.
         const openPanel = () => {
-          settingsPanel.hidden = false;
+          if (supportsPopover) {
+            settingsPanel.showPopover();
+          } else {
+            settingsPanel.hidden = false;
+          }
           settingsBtn.textContent = "hide settings";
           settingsBtn.setAttribute("aria-expanded", "true");
           try {
@@ -280,16 +298,28 @@
         };
 
         const closePanel = () => {
-          settingsPanel.hidden = true;
+          if (supportsPopover) {
+            settingsPanel.hidePopover();
+          } else {
+            settingsPanel.hidden = true;
+          }
           settingsBtn.textContent = "settings";
           settingsBtn.setAttribute("aria-expanded", "false");
         };
+
+        if (supportsPopover) {
+          settingsPanel.addEventListener("toggle", () => {
+            const open = isPanelOpen();
+            settingsBtn.textContent = open ? "hide settings" : "settings";
+            settingsBtn.setAttribute("aria-expanded", String(open));
+          });
+        }
 
         // Toggle on button click / keyboard activation.
         settingsBtn.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          settingsPanel.hidden ? openPanel() : closePanel();
+          isPanelOpen() ? closePanel() : openPanel();
         });
 
         settingsBtn.addEventListener("keydown", (e) => {
@@ -301,6 +331,7 @@
 
         // Close when clicking anywhere outside the panel.
         document.addEventListener("click", (e) => {
+          if (supportsPopover) return;
           if (
             !settingsPanel.hidden &&
             !settingsPanel.contains(e.target) &&
@@ -316,7 +347,7 @@
         // Close on Escape.
         settingsPanel.addEventListener("keydown", (e) => {
           if (e.key === "Escape") {
-            closePanel();
+            if (isPanelOpen()) closePanel();
             try {
               settingsBtn.focus();
             } catch (ex) {
