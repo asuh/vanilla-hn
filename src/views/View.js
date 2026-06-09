@@ -161,7 +161,7 @@ export default class View {
    *  - dataset: { key: value } will be assigned to el.dataset.
    *  - style: { prop: value } will be applied as inline style.
    *  - events: { eventName: handler } will addEventListener for each event.
-   *  - html: string -> innerHTML (use sparingly & only with sanitized content)
+   *  - html: string -> Element.setHTML() when available, template fallback otherwise
    *
    * @param {string} tag        The HTML tag name (e.g. `'div'`, `'button'`).
    * @param {Object} [options]  Element configuration (attrs, props, dataset, style, events, html).
@@ -228,7 +228,19 @@ export default class View {
     }
 
     if (typeof html === "string") {
-      el.innerHTML = html;
+      if (typeof el.setHTML === "function") {
+        try {
+          el.setHTML(html);
+        } catch (e) {
+          const tpl = document.createElement("template");
+          tpl.innerHTML = html;
+          el.appendChild(tpl.content);
+        }
+      } else {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = html;
+        el.appendChild(tpl.content);
+      }
     } else {
       for (const child of children) {
         if (child == null) continue;

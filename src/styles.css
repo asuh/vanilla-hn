@@ -120,6 +120,30 @@
         -moz-osx-font-smoothing: grayscale;
     }
 
+    @supports (animation-timeline: scroll()) {
+        body::before {
+            content: "";
+            position: fixed;
+            inset-block-start: 0;
+            inset-inline-start: 0;
+            z-index: 1000;
+            block-size: 2px;
+            inline-size: 100%;
+            background-color: var(--override-hn-accent, var(--hn-accent));
+            transform: scaleX(0);
+            transform-origin: 0 50%;
+            animation: page-scroll-progress linear both;
+            animation-timeline: scroll(root block);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body::before {
+                animation: none;
+                display: none;
+            }
+        }
+    }
+
     pre {
         white-space: pre-wrap;
         font-family: var(--font-mono);
@@ -237,6 +261,7 @@
         }
 
         .settings {
+            anchor-name: --settings-toggle;
             position: absolute;
             top: 6px;
             right: 10px;
@@ -275,6 +300,15 @@
                     text-decoration: underline;
                 }
             }
+        }
+    }
+
+    @supports (position-anchor: --settings-toggle) {
+        .site-header .settings-panel {
+            position-anchor: --settings-toggle;
+            inset-block-start: anchor(bottom);
+            inset-inline-end: anchor(right);
+            right: auto;
         }
     }
 
@@ -930,6 +964,12 @@
         40% {
             transform: scale(1);
             -webkit-transform: scale(1);
+        }
+    }
+
+    @keyframes page-scroll-progress {
+        to {
+            transform: scaleX(1);
         }
     }
 

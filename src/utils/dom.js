@@ -4,7 +4,7 @@
  * Lightweight helpers used across the vanilla-hn app to:
  *  - Create elements with attributes, props, dataset, styles, and event listeners
  *  - Query and operate on DOM nodes
- *  - Safely create fragments from HTML strings (uses <template>)
+ *  - Safely create fragments from HTML strings (uses native Sanitizer when available)
  *  - Small helper for formatting relative times (basic replacement for a separate time.js)
  *
  * The API is intentionally small and dependency-free.
@@ -23,7 +23,7 @@
  *  - dataset: { [key]: value } (sets dataset.key = value)
  *  - style: { [propName]: value } (applies inline styles)
  *  - events: { [eventName]: handler } (calls addEventListener)
- *  - html: string (sets innerHTML via template - useful for pre-sanitized content)
+ *  - html: string (uses Element.setHTML() when available, with template fallback)
  *
  * @param {string} tag
  * @param {Object} [options]
@@ -91,17 +91,48 @@ export function create(tag, options = {}, ...children) {
     }
   }
 
-  // html shortcut (use with care -- caller should sanitize if needed)
+  // html shortcut: prefer the platform Sanitizer-backed setHTML() API when
+  // available, then fall back to inert template parsing for older browsers.
   if (typeof html === "string") {
-    // Use a template to avoid parsing into the document prematurely
-    const tpl = document.createElement("template");
-    tpl.innerHTML = html;
-    el.appendChild(tpl.content);
+    setSafeHTML(el, html);
   } else {
     // append children
     appendChildren(el, children);
   }
 
+  return el;
+}
+
+/**
+ * Set HTML content using the platform HTML Sanitizer API when available.
+ *
+ * The current HTML Sanitizer API exposes `Element.setHTML()` as the safe,
+ * browser-maintained insertion primitive. Older browsers keep the previous
+ * inert-template path, which matches the app's existing behavior for HN's
+ * pre-sanitized Firebase HTML while avoiding direct `innerHTML` writes into
+ * live DOM nodes.
+ *
+ * @param {Element} el
+ * @param {string} html
+ * @returns {Element}
+ */
+export function setSafeHTML(el, html) {
+  if (!el) return el;
+  const source = html == null ? "" : String(html);
+
+  if (typeof el.setHTML === "function") {
+    try {
+      el.setHTML(source);
+      return el;
+    } catch (e) {
+      /* fall back to template parsing */
+    }
+  }
+
+  while (el.firstChild) el.removeChild(el.firstChild);
+  const tpl = document.createElement("template");
+  tpl.innerHTML = source;
+  el.appendChild(tpl.content);
   return el;
 }
 
@@ -361,10 +392,11 @@ export function setAttrs(el, attrs = {}) {
  */
 export function formatRelativeTime(when, opts = {}) {
   if (when == null) return "";
-  const now = typeof opts.now === "number" ? opts.now : Date.now();
+  const now = typeof opts.now === "number" ? opts.now : currentEpochMilliseconds();
 
   let time;
-  if (when instanceof Date) time = when.getTime();
+  if (isTemporalInstant(when)) time = Number(when.epochMilliseconds);
+  else if (when instanceof Date) time = when.getTime();
   else {
     // try to parse numeric-like input
     const n = Number(when);
@@ -417,6 +449,26 @@ export function formatRelativeTime(when, opts = {}) {
         : `${absVal} ${unitLabel} ago`;
     }
   }
+}
+
+function currentEpochMilliseconds() {
+  if (globalThis.Temporal?.Now?.instant) {
+    try {
+      return Number(globalThis.Temporal.Now.instant().epochMilliseconds);
+    } catch (e) {
+      /* fall back */
+    }
+  }
+  return Date.now();
+}
+
+function isTemporalInstant(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof value.epochMilliseconds === "number" &&
+      typeof value.epochNanoseconds === "bigint",
+  );
 }
 
 /**

@@ -19,8 +19,7 @@
 
 import {
   create,
-  escapeHTML,
-  fragmentFromHTML,
+  setSafeHTML,
   timeAgoFromUnix,
 } from "../utils/dom.js";
 import { itemPath } from "../utils/item-ancestors.js";
@@ -532,7 +531,7 @@ export class CommentElement {
     // Update text — HN text is pre-sanitized HTML, render it directly.
     const textEl = this.root.querySelector(".text");
     if (textEl) {
-      textEl.innerHTML = this.comment.text || "";
+      setSafeHTML(textEl, this.comment.text || "");
       const replyLinks = this.stores?.settingsStore?.get?.("replyLinks") ?? true;
       if (replyLinks && !this.comment.dead) {
         const p = document.createElement("p");
