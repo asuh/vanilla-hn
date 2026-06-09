@@ -21,6 +21,47 @@
             }
         </script>
 
+        <script>
+            (() => {
+                try {
+                    const raw = localStorage.getItem("vanilla-hn:settings:v1");
+                    if (!raw) return;
+                    const settings = JSON.parse(raw);
+                    const root = document.documentElement;
+                    const theme = settings && settings.theme;
+
+                    if (theme === "dark") {
+                        root.style.setProperty("color-scheme", "dark");
+                        root.style.setProperty("--override-hn-bg", "#0b0b0b");
+                        root.style.setProperty("--override-hn-text", "#e6e6e6");
+                        root.style.setProperty("--override-hn-muted", "#9a9a9a");
+                        root.style.setProperty("--override-hn-accent", "#ffb366");
+                    } else if (theme === "light") {
+                        root.style.setProperty("color-scheme", "light");
+                        root.style.setProperty("--override-hn-bg", "#ffffff");
+                        root.style.setProperty("--override-hn-text", "#111111");
+                        root.style.setProperty("--override-hn-muted", "#666666");
+                        root.style.setProperty("--override-hn-accent", "#ff6600");
+                    }
+
+                    if (settings.titleFontSize) {
+                        root.style.setProperty(
+                            "--font-size-title",
+                            `${Number(settings.titleFontSize) || 18}px`,
+                        );
+                    }
+                    if (settings.listSpacing) {
+                        root.setAttribute(
+                            "data-list-spacing",
+                            String(settings.listSpacing),
+                        );
+                    }
+                } catch (_) {
+                    /* Keep first paint resilient if storage is blocked. */
+                }
+            })();
+        </script>
+
         <link rel="stylesheet" href="/src/styles.css" />
     </head>
     <body>
