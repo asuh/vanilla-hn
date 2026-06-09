@@ -11,6 +11,7 @@
 
 import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost } from "../utils/helpers.js";
+import { itemPath } from "../utils/item-ancestors.js";
 
 /**
  * Create a story list item element.
@@ -43,7 +44,7 @@ export function createStoryListItem(story = {}, opts = {}) {
 
   const titleDiv = create("div", { attrs: { class: "col" } });
   const titleEl = create("div", { attrs: { class: "title" } });
-  const a = create("a", { attrs: { href: `/item/${id}` } }, titleText);
+  const a = create("a", { attrs: { href: itemPath(story) } }, titleText);
   titleEl.appendChild(a);
   titleDiv.appendChild(titleEl);
 

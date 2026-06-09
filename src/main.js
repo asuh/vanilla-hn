@@ -29,11 +29,13 @@
       { default: SettingsStore },
       { default: ReadStoriesStore },
       { default: StoryCommentThreadStore, loadState: loadThreadState },
+      { default: UpdatesStore },
       { default: HNService },
     ] = await Promise.all([
       import("./stores/SettingsStore.js"),
       import("./stores/ReadStoriesStore.js"),
       import("./stores/StoryCommentThreadStore.js"),
+      import("./stores/UpdatesStore.js"),
       import("./api/hn-service.js"),
     ]).catch((err) => {
       // Surface a clear message if one of the core files couldn't be loaded.
@@ -71,6 +73,13 @@
       // HNService should read configuration from environment or gracefully operate in a mock mode
       // For production, users must supply their Firebase config via a separate file or runtime injection.
       // We intentionally pass no secrets here.
+    });
+    const updatesStore = new UpdatesStore(hnService);
+
+    window.addEventListener("beforeunload", () => {
+      try {
+        updatesStore.saveSession();
+      } catch (_) {}
     });
 
     // Apply theme immediately (in case SettingsStore reads persisted preferences).
@@ -115,6 +124,7 @@
           stores: {
             settingsStore,
             readStoriesStore,
+            updatesStore,
             createThreadStore,
             loadThreadState,
           },
@@ -124,40 +134,49 @@
       };
     }
 
+    function pageParamsFromMatch(match) {
+      const params = {};
+      const query = match && match[1] ? match[1] : "";
+      const page = new URLSearchParams(query).get("page");
+      if (page) params.page = page;
+      return params;
+    }
+
+    function listRoute(pattern, listType) {
+      router.register(pattern, (match) => {
+        const viewFactory = lazyView("./views/ListView.js", { listType });
+        return viewFactory(pageParamsFromMatch(match));
+      });
+    }
+
     // Register list routes with a small param indicating list type
-    router.register(
-      /^\/?$/,
-      lazyView("./views/ListView.js", { listType: "top" }),
-    );
-    router.register(
-      /^\/newest$/,
-      lazyView("./views/ListView.js", { listType: "newest" }),
-    );
-    router.register(
-      /^\/ask$/,
-      lazyView("./views/ListView.js", { listType: "ask" }),
-    );
-    router.register(
-      /^\/show$/,
-      lazyView("./views/ListView.js", { listType: "show" }),
-    );
-    router.register(
-      /^\/jobs$/,
-      lazyView("./views/ListView.js", { listType: "jobs" }),
-    );
-    router.register(
-      /^\/read$/,
-      lazyView("./views/ListView.js", { listType: "read" }),
-    );
+    listRoute(/^\/(?:\?(.+))?$/, "top");
+    listRoute(/^\/news(?:\?(.+))?$/, "top");
+    listRoute(/^\/newest(?:\?(.+))?$/, "newest");
+    listRoute(/^\/ask(?:\?(.+))?$/, "ask");
+    listRoute(/^\/show(?:\?(.+))?$/, "show");
+    listRoute(/^\/jobs(?:\?(.+))?$/, "jobs");
+    listRoute(/^\/read(?:\?(.+))?$/, "read");
 
     // New comments feed
-    router.register(/^\/newcomments$/, lazyView("./views/NewCommentsView.js"));
+    router.register(/^\/newcomments(?:\?(.+))?$/, (match) => {
+      const viewFactory = lazyView("./views/NewCommentsView.js");
+      return viewFactory(pageParamsFromMatch(match));
+    });
 
-    // Item view — extracts id from path
-    // Extracts numeric id from path like /item/12345
-    router.register(/^\/item\/(\d+)$/, async (match) => {
+    // Item view — extracts id from paths like /item/12345, /story/12345, etc.
+    router.register(
+      /^\/(?:item|story|job|poll)\/(\d+)(?:\?.*)?$/,
+      async (match) => {
+        const params = { id: String(match[1]) };
+        const viewFactory = lazyView("./views/ItemView.js");
+        return await viewFactory(params);
+      },
+    );
+
+    router.register(/^\/comment\/(\d+)(?:\?.*)?$/, async (match) => {
       const params = { id: String(match[1]) };
-      const viewFactory = lazyView("./views/ItemView.js");
+      const viewFactory = lazyView("./views/PermalinkedCommentView.js");
       return await viewFactory(params);
     });
 
@@ -177,6 +196,7 @@
         stores: {
           settingsStore,
           readStoriesStore,
+          updatesStore,
           createThreadStore,
           loadThreadState,
         },

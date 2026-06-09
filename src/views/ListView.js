@@ -19,6 +19,7 @@ import { Paginator } from "../components/Paginator.js";
 import StoryStore from "../stores/StoryStore.js";
 import { create, delegate, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
+import { itemPath, rememberItem } from "../utils/item-ancestors.js";
 import View from "./View.js";
 
 /* ─────────────────────────────────────────────
@@ -402,6 +403,7 @@ export default class ListView extends View {
           const unsub = this._hn.onItemValue(id, (item) => {
             if (item && typeof item === "object") {
               this._allItems[allIdx] = item;
+              rememberItem(item);
               this._patchItem(item, start + pageIdx + 1);
             }
           });
@@ -577,6 +579,7 @@ export default class ListView extends View {
    */
   _createItemEl(item, rank) {
     const id = item.id != null ? String(item.id) : "";
+    rememberItem(item);
     const title = item.title || `Story ${id}`;
     const by = item.by || "unknown";
     const score = item.score != null ? item.score : 0;
@@ -644,7 +647,7 @@ export default class ListView extends View {
         "a",
         {
           attrs: {
-            href: `/item/${id}`,
+            href: itemPath(item),
             class: "title-link",
             "data-id": id, // picked up by delegated click handler
           },
@@ -686,7 +689,7 @@ export default class ListView extends View {
       "a",
       {
         attrs: {
-          href: `/item/${id}`,
+          href: itemPath(item),
           class: "comments-link",
           "data-id": id, // also needed here so clicking "N comments" marks as read
         },
@@ -696,7 +699,7 @@ export default class ListView extends View {
     meta.appendChild(commentsLink);
 
     // ── New-comment badge ──────────────────────────────────────────────────
-    const badge = this._newCommentBadge(id, descendants);
+    const badge = this._newCommentBadge(item, descendants);
     if (badge) meta.appendChild(badge);
 
     col.appendChild(meta);
@@ -713,11 +716,12 @@ export default class ListView extends View {
    *     visited the comment thread before), AND
    *   • The current descendant count exceeds the stored comment count.
    *
-   * @param {string} id           story id (string)
+   * @param {Object} item         HN item object
    * @param {number} descendants  current total comment count from API
    * @returns {HTMLElement|null}
    */
-  _newCommentBadge(id, descendants) {
+  _newCommentBadge(item, descendants) {
+    const id = item && item.id != null ? String(item.id) : "";
     if (!id || descendants == null) return null;
 
     let threadState = null;
@@ -745,10 +749,11 @@ export default class ListView extends View {
     if (newCount <= 0) return null;
 
     return create(
-      "span",
+      "a",
       {
         attrs: {
           class: "badge new",
+          href: itemPath(item),
           role: "status",
           "aria-label": `${newCount} new comment${pluralise(newCount)}`,
         },
