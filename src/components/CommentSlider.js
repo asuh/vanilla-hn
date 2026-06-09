@@ -66,7 +66,7 @@ export default class CommentSlider {
 
     // Clear any existing label tick timer.
     if (this._labelTimer) {
-      clearInterval(this._labelTimer);
+      clearTimeout(this._labelTimer);
       this._labelTimer = null;
     }
 
@@ -148,39 +148,77 @@ export default class CommentSlider {
     this._startLabelTick();
   }
 
-  _startLabelTick() {
-    if (this._labelTimer) {
-      clearInterval(this._labelTimer);
-      this._labelTimer = null;
-    }
-    const tick = () => {
-      if (!this._sliderEl || !this._labelEl) return;
-      this.updateLabel(this._sliderValue);
-      // Reschedule at the right interval for the current age.
-      clearInterval(this._labelTimer);
-      this._labelTimer = setInterval(tick, this._labelTickInterval());
-    };
-    this._labelTimer = setInterval(tick, this._labelTickInterval());
-  }
-
-  _labelTickInterval() {
-    // Determine the unix time of the reference comment.
+  /**
+   * Return the reference comment used for the current slider position.
+   * @returns {Object|null}
+   */
+  _getRefComment() {
     if (
       this.threadStore &&
       typeof this.threadStore.getCommentByTimeIndex === "function" &&
       this._sliderValue !== null
     ) {
       try {
-        const ref = this.threadStore.getCommentByTimeIndex(this._sliderValue + 1);
-        if (ref && ref.time) {
-          const diffMs = Date.now() - ref.time * 1000;
-          if (diffMs < 60_000) return 1_000;
-          if (diffMs < 3_600_000) return 60_000;
-          return 3_600_000;
-        }
-      } catch (e) { /* ignore */ }
+        return this.threadStore.getCommentByTimeIndex(this._sliderValue + 1);
+      } catch (e) {
+        /* ignore */
+      }
     }
-    return 60_000; // fallback: update every minute
+    return null;
+  }
+
+  /**
+   * Start (or restart) the live-ticking label timer.
+   *
+   * Uses setTimeout scheduled to fire at the next meaningful boundary from
+   * the reference comment's actual unix timestamp — matching react-hn's
+   * <TimeAgo> behaviour so the displayed seconds always advance in step with
+   * the comment's real posting time, regardless of when the API data arrived.
+   *
+   * Transitions:
+   *   < 60 s  — ticks at every whole second from comment.time
+   *   < 1 h   — ticks at every whole minute from comment.time
+   *   ≥ 1 h   — ticks at every whole hour   from comment.time
+   */
+  _startLabelTick() {
+    if (this._labelTimer) {
+      clearTimeout(this._labelTimer);
+      this._labelTimer = null;
+    }
+
+    const schedule = () => {
+      const ref = this._getRefComment();
+      // msSincePosted is based on the comment's actual server timestamp so the
+      // count starts from when the comment was left, not when the data arrived.
+      const msSincePosted =
+        ref && ref.time ? Date.now() - ref.time * 1000 : null;
+
+      let msToNextTick;
+      if (msSincePosted !== null && msSincePosted < 60_000) {
+        // Align to the next whole second from comment.time so transitions are
+        // exactly synchronised with the actual elapsed time.
+        const remainder = msSincePosted % 1_000;
+        msToNextTick = remainder === 0 ? 1_000 : 1_000 - remainder;
+      } else if (msSincePosted !== null && msSincePosted < 3_600_000) {
+        const remainder = msSincePosted % 60_000;
+        msToNextTick = remainder === 0 ? 60_000 : 60_000 - remainder;
+      } else if (msSincePosted !== null) {
+        const remainder = msSincePosted % 3_600_000;
+        msToNextTick = remainder === 0 ? 3_600_000 : 3_600_000 - remainder;
+      } else {
+        // comment.time unavailable — retry in 1 s so we pick it up as soon as
+        // the store has the data, instead of waiting a full minute.
+        msToNextTick = 1_000;
+      }
+
+      this._labelTimer = setTimeout(() => {
+        if (!this._sliderEl || !this._labelEl) return;
+        this.updateLabel(this._sliderValue);
+        schedule();
+      }, msToNextTick);
+    };
+
+    schedule();
   }
 
   /**
@@ -267,7 +305,7 @@ export default class CommentSlider {
    */
   cleanup() {
     if (this._labelTimer) {
-      clearInterval(this._labelTimer);
+      clearTimeout(this._labelTimer);
       this._labelTimer = null;
     }
     this.threadStore = null;

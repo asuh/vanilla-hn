@@ -331,6 +331,22 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
    *   `{ id: number, parent: number, deleted?: boolean, dead?: boolean, kids?: number[] }`.
    */
   commentAdded(comment) {
+    const previous = this.comments[comment.id];
+    if (previous) {
+      const prevKids = Array.isArray(previous.kids) ? previous.kids.length : 0;
+      const nextKids = Array.isArray(comment.kids) ? comment.kids.length : 0;
+      this.comments[comment.id] = comment;
+      if (this.loading && nextKids !== prevKids) {
+        this.adjustExpectedComments(nextKids - prevKids);
+      }
+      if (!previous.deleted && comment.deleted) {
+        this.commentDeleted(previous);
+      } else if (!previous.dead && comment.dead) {
+        this.commentDied(comment);
+      }
+      return;
+    }
+
     // ------------------------------------------------------------------
     // Deleted comments do not count; just reduce what we're waiting for.
     // ------------------------------------------------------------------
@@ -424,6 +440,19 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     delete this.parents[comment.id];
 
     this._debouncedCountChanged();
+  }
+
+  commentDied(comment) {
+    if (!comment) return;
+    this.deadComments[comment.id] = true;
+    if (!this._settings.showDead) {
+      this.commentCount--;
+      if (this.isNew[comment.id]) {
+        this.newCommentCount--;
+        delete this.isNew[comment.id];
+      }
+      this._debouncedCountChanged();
+    }
   }
 
   /**

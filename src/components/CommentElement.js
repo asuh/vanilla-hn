@@ -23,6 +23,7 @@ import {
   fragmentFromHTML,
   timeAgoFromUnix,
 } from "../utils/dom.js";
+import { itemPath } from "../utils/item-ancestors.js";
 
 export class CommentElement {
   /**
@@ -64,6 +65,8 @@ export class CommentElement {
     const classes = ["comment"];
     if (this.depth > 0) classes.push("child");
     if (this._collapsed) classes.push("collapsed");
+    if (this.comment.dead) classes.push("dead");
+    if (this.comment.deleted) classes.push("deleted");
     if (
       this.stores &&
       this.stores.threadStore &&
@@ -171,7 +174,7 @@ export class CommentElement {
     );
     const permalink = create(
       "a",
-      { attrs: { class: "permalink", href: `/item/${this.comment.id}` } },
+      { attrs: { class: "permalink", href: itemPath("comment", this.comment.id) } },
       "link",
     );
 
@@ -235,6 +238,33 @@ export class CommentElement {
   }
 
   _createText() {
+    const showDead = this.stores?.settingsStore?.get?.("showDead") ?? false;
+    const showDeleted = this.stores?.settingsStore?.get?.("showDeleted") ?? false;
+    if (this.comment.deleted) {
+      return create(
+        "div",
+        {
+          attrs: {
+            class: "text deleted",
+            id: `comment-body-${this.comment.id}`,
+          },
+        },
+        showDeleted ? "[deleted]" : "",
+      );
+    }
+    if (this.comment.dead && !showDead) {
+      return create(
+        "div",
+        {
+          attrs: {
+            class: "text dead",
+            id: `comment-body-${this.comment.id}`,
+          },
+        },
+        "[dead]",
+      );
+    }
+
     // HN comment text is pre-sanitized HTML from the Firebase API (e.g. <p>, <a>, <i>).
     // Render it as HTML directly rather than escaping it.
     const textEl = create("div", {
@@ -410,7 +440,28 @@ export class CommentElement {
     const key = String(childId);
     if (!payload) {
       if (placeholderEl)
-        placeholderEl.textContent = `Comment ${childId} not found`;
+        placeholderEl.textContent =
+          "Unable to load comment. Trying again in 30 seconds.";
+      if (
+        this.stores?.threadStore &&
+        typeof this.stores.threadStore.commentDelayed === "function"
+      ) {
+        this.stores.threadStore.commentDelayed(childId);
+      }
+      return;
+    }
+    const showDeleted = this.stores?.settingsStore?.get?.("showDeleted") ?? false;
+    const showDead = this.stores?.settingsStore?.get?.("showDead") ?? false;
+    if ((payload.deleted && !showDeleted) || (payload.dead && !showDead)) {
+      if (this.stores?.threadStore?.commentAdded) {
+        try {
+          this.stores.threadStore.commentAdded(payload);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      if (placeholderEl) placeholderEl.remove();
+      this._loadingPlaceholders.delete(key);
       return;
     }
     // If a child element already exists, update its comment payload

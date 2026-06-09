@@ -142,8 +142,11 @@ export default class CommentThreadStore {
       this.children[comment.parent] = [];
     }
 
-    // Append to parent's children list.
-    this.children[comment.parent].push(comment.id);
+    // Append to parent's children list, avoiding duplicate wiring when a
+    // realtime item listener emits an updated payload for an existing comment.
+    if (!this.children[comment.parent].includes(comment.id)) {
+      this.children[comment.parent].push(comment.id);
+    }
 
     // Flag dead comments.
     if (comment.dead) {
