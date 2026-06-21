@@ -104,17 +104,17 @@
      *
      *   new ListView({ params, services, stores })
      *
-     * @param {string} viewPath - Relative path to the view module.
+     * @param {Function} loadView - Function returning a dynamic import promise.
      * @param {Object} [opts]   - Extra options merged into the view context.
      * @returns {(params: Object) => Promise<View>} Async factory function.
      */
-    function lazyView(viewPath, opts = {}) {
+    function lazyView(loadView, opts = {}) {
       return async function viewFactory(params) {
-        const module = await import(viewPath);
+        const module = await loadView();
         const ViewCtor = module.default;
         if (typeof ViewCtor !== "function") {
           throw new Error(
-            `View at ${viewPath} does not export a default constructor/function`,
+            "Lazy view module does not export a default constructor/function",
           );
         }
         // Provide commonly needed context to views
@@ -144,7 +144,9 @@
 
     function listRoute(pattern, listType) {
       router.register(pattern, (match) => {
-        const viewFactory = lazyView("./views/ListView.js", { listType });
+        const viewFactory = lazyView(() => import("./views/ListView.js"), {
+          listType,
+        });
         return viewFactory(pageParamsFromMatch(match));
       });
     }
@@ -160,7 +162,7 @@
 
     // New comments feed
     router.register(/^\/newcomments(?:\?(.+))?$/, (match) => {
-      const viewFactory = lazyView("./views/NewCommentsView.js");
+      const viewFactory = lazyView(() => import("./views/NewCommentsView.js"));
       return viewFactory(pageParamsFromMatch(match));
     });
 
@@ -169,21 +171,23 @@
       /^\/(?:item|story|job|poll)\/(\d+)(?:\?.*)?$/,
       async (match) => {
         const params = { id: String(match[1]) };
-        const viewFactory = lazyView("./views/ItemView.js");
+        const viewFactory = lazyView(() => import("./views/ItemView.js"));
         return await viewFactory(params);
       },
     );
 
     router.register(/^\/comment\/(\d+)(?:\?.*)?$/, async (match) => {
       const params = { id: String(match[1]) };
-      const viewFactory = lazyView("./views/PermalinkedCommentView.js");
+      const viewFactory = lazyView(() =>
+        import("./views/PermalinkedCommentView.js"),
+      );
       return await viewFactory(params);
     });
 
     // User view route
     router.register(/^\/user\/([\w-]+)$/, async (match) => {
       const params = { id: String(match[1]) };
-      const viewFactory = lazyView("./views/UserView.js");
+      const viewFactory = lazyView(() => import("./views/UserView.js"));
       return await viewFactory(params);
     });
 

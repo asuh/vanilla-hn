@@ -11,7 +11,7 @@
             content="default-src 'self'; script-src 'self' 'unsafe-inline' https://*.firebaseio.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com; style-src 'self' 'unsafe-inline'; frame-src https://*.firebaseio.com;"
         />
 
-        <!-- Import map: resolves firebase bare specifiers to locally vendored files -->
+        <!-- Development-only import map; production builds resolve Firebase from npm. -->
         <script type="importmap">
             {
                 "imports": {

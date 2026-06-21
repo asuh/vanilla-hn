@@ -7,8 +7,9 @@ import { debounce } from "../utils/helpers.js";
  * hn-service.js
  *
  * Firebase Realtime Database integration for the Hacker News public API.
- * Firebase SDK is resolved via importmap to local vendor files — no npm
- * install required. Falls back to MockBackend if Firebase fails to load.
+ * Firebase SDK imports resolve through the development import map in
+ * public/index.html, and through npm package imports in production builds.
+ * Falls back to MockBackend if Firebase fails to load.
  *
  * Public API:
  *   onStoriesValue(listType, cb) -> unsub

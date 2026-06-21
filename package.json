@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "build": "node build.js",
     "dev": "node serve.js",
     "start": "node serve.js",
     "preview": "node serve.js",
@@ -21,5 +22,9 @@
   "license": "MIT",
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.1",
+    "firebase": "^12.15.0"
   }
 }

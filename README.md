@@ -17,16 +17,23 @@ Requirements
      ```
      npm run dev
      ```
-     This runs `npx http-server . -p 5000 -c-1` by default (no files are built; the server serves files directly).
-   - Alternatively, run any static file server that serves the repository root and navigate to `http://localhost:5000/public/` or `http://localhost:5000/public/index.html` depending on your server configuration (the included `public/index.html` tries to import `/src/main.js`).
+     This runs `node serve.js` by default and serves the unbundled development app.
+   - Alternatively, run any static file server that serves the repository root and navigate to `http://localhost:5001/` or `http://localhost:5001/public/index.html` depending on your server configuration (the included `public/index.html` imports `/src/main.js`).
 
 2. Open the app in the browser:
-   - Visit `http://localhost:5000/public/` (or the port your dev server used).
-   - The scaffold runs in mock mode by default; you should see example stories and the ability to navigate between list and item views.
+   - Visit `http://localhost:5001/` (or the port your dev server used).
+   - The app uses the public Hacker News Firebase API by default and falls back to mock data if Firebase cannot load.
 
 Notes:
 - The project is intentionally unbundled to remain simple. `type: "module"` is set in `package.json` and source modules are loaded by the browser.
 - If your dev server only serves the `public/` directory, the `index.html` contains a fallback that attempts to import `/src/main.js`. Running a server from the repository root is recommended so that `/src` can be directly imported.
+
+Production build:
+```
+npm run build
+```
+
+This writes `dist/` with minified, hashed assets. Firebase is resolved from the npm package during this build rather than from `public/vendor/`.
 
 ---
 
@@ -45,7 +52,7 @@ Main folders
   - `src/main.js` — App bootstrap and route registration.
   - `src/router/Router.js` — Small hash-based router.
   - `src/views/` — `View` base class and view implementations (`ListView.js`, `ItemView`, `UserView`).
-  - `src/api/hn-service.js` — `HNService` abstraction. Runs in mock mode by default; swap for a real backend if desired.
+  - `src/api/hn-service.js` — `HNService` abstraction. Uses the public HN Firebase API by default, with mock fallback.
   - `src/components/` — Reusable UI components (`CommentElement.js`, `StoryListItem.js`).
   - `src/stores/` — Lightweight stores (`SettingsStore.js`, `ReadStoriesStore.js`, `StoryCommentThreadStore.js`).
   - `src/utils/` — Utility helpers for DOM, time formatting, etc.
@@ -55,7 +62,7 @@ Main folders
 
 ## How the scaffold works (overview)
 
-- Router: A minimal hash-based router (`src/router/Router.js`) registers routes and mounts views into `#app`. Views follow a common `View` base class API (render, attach listeners, cleanup).
+- Router: A minimal pathname router (`src/router/Router.js`) registers routes and mounts views into `#app`. Views follow a common `View` base class API (render, attach listeners, cleanup).
 - Views: `ListView` shows story lists; `ItemView` displays a story and comments; `UserView` shows basic user info. The views subscribe to stores and use `HNService` to receive data.
 - HNService: `src/api/hn-service.js` provides a clean surface:
   - `onStoriesValue(listType, callback)` -> unsubscribe
@@ -88,6 +95,7 @@ Mock mode
 
 `package.json` includes lightweight scripts:
 
+- `npm run build` — Build minified, hashed production assets into `dist/`.
 - `npm run dev` — Start the included dev server (requires Node >= 24). This runs `node serve.js`.
 - `npm start` — Alias to `dev`.
 - `npm run preview` — Alias to `dev`.
@@ -101,7 +109,7 @@ Because the project intentionally omits a bundler, these commands simply serve f
 
 - Editing modules: Because the browser loads ES modules directly, changes to files under `src/` will require a page reload. Consider using a dev server with live-reload if you want automatic reloads.
 - Debugging: `window.vanillaHN` is exposed by the bootstrap for quick inspection (stores, services, router).
-- Accessibility: The scaffold uses semantic markup, `aria-*` attributes on interactive controls, and focuses the main content after navigation to improve keyboard/AT support.
+- Accessibility: The scaffold uses semantic markup and `aria-*` attributes on interactive controls while keeping initial focus behavior aligned with React HN.
 - Styling: All colors, sizes, and spacing are controlled by CSS variables in `src/styles.css`. Toggle themes by updating `SettingsStore` (or `document.body.classList` for quick testing).
 
 ---
