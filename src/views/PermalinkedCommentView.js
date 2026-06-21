@@ -186,7 +186,7 @@ export default class PermalinkedCommentView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "8px",
+          size: "20px",
           label: `Loading comment ${kidId}`,
         }),
       );

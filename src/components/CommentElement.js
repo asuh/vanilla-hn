@@ -300,7 +300,7 @@ export class CommentElement {
     placeholder.append(
       createSpinner({
         inline: true,
-        size: "8px",
+        size: "20px",
         label: `Loading comment ${kidId}`,
       }),
     );
@@ -401,7 +401,7 @@ export class CommentElement {
       placeholderEl.replaceChildren(
         createSpinner({
           inline: true,
-          size: "8px",
+          size: "20px",
           label: `Loading comment ${childId}`,
         }),
       );

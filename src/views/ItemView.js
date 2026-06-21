@@ -680,7 +680,7 @@ export default class ItemView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "8px",
+          size: "20px",
           label: `Loading comment ${childIdStr}`,
         }),
       );
@@ -739,7 +739,7 @@ export default class ItemView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "8px",
+          size: "20px",
           label: `Loading comment ${key}`,
         }),
       );
