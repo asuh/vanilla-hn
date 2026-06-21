@@ -102,19 +102,19 @@
                         <li><a href="/read">read</a></li>
                     </ul>
                 </nav>
-                <a
+                <button
                     class="settings"
-                    tabindex="0"
-                    role="button"
                     aria-expanded="false"
-                    >settings</a
+                    popovertarget="settings-panel"
+                    type="button"
+                    >settings</button
                 >
 
-                <!-- Settings panel — hidden until the settings link is clicked -->
+                <!-- Settings panel — shown by the native Popover API -->
                 <div
                     class="settings-panel"
                     id="settings-panel"
-                    hidden
+                    popover="auto"
                     tabindex="-1"
                 >
                     <form id="settings-form">

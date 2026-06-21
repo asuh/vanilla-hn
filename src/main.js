@@ -226,15 +226,21 @@
     router.start();
 
     // ── Settings panel wiring ──────────────────────────────────────────────
-    // The panel markup lives in index.html; we just toggle visibility and
-    // keep the form inputs in sync with the SettingsStore.
+    // The panel itself uses the native Popover API; JS only syncs form values
+    // with SettingsStore and mirrors the open state in button text/ARIA.
     try {
       const settingsBtn = document.querySelector(".site-header .settings");
       const settingsPanel = document.getElementById("settings-panel");
 
       if (settingsBtn && settingsPanel) {
         const form = settingsPanel.querySelector("form");
-        const isPanelOpen = () => !settingsPanel.hidden;
+        const supportsPopover =
+          typeof settingsPanel.showPopover === "function" &&
+          typeof settingsPanel.hidePopover === "function";
+        const isPanelOpen = () =>
+          supportsPopover
+            ? settingsPanel.matches(":popover-open")
+            : settingsPanel.classList.contains("is-open");
 
         // Sync every form control to the current store state.
         const syncForm = (state) => {
@@ -261,63 +267,41 @@
         // Subscribe — also fires immediately with current state to seed the form.
         settingsStore.addListener(syncForm);
 
-        // Open / close helpers.
-        const openPanel = () => {
-          settingsPanel.hidden = false;
-          settingsBtn.textContent = "hide settings";
-          settingsBtn.setAttribute("aria-expanded", "true");
-          try {
-            settingsPanel.focus();
-          } catch (e) {
-            /* ignore */
-          }
-        };
-
-        const closePanel = () => {
-          settingsPanel.hidden = true;
-          settingsBtn.textContent = "settings";
-          settingsBtn.setAttribute("aria-expanded", "false");
-        };
-
-        // Toggle on button click / keyboard activation.
-        settingsBtn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          isPanelOpen() ? closePanel() : openPanel();
-        });
-
-        settingsBtn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            settingsBtn.click();
-          }
-        });
-
-        // Close when clicking anywhere outside the panel.
-        document.addEventListener("click", (e) => {
-          if (
-            !settingsPanel.hidden &&
-            !settingsPanel.contains(e.target) &&
-            e.target !== settingsBtn
-          ) {
-            closePanel();
-          }
-        });
-
-        // Prevent panel-internal clicks from bubbling to the document listener.
-        settingsPanel.addEventListener("click", (e) => e.stopPropagation());
-
-        // Close on Escape.
-        settingsPanel.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") {
-            if (isPanelOpen()) closePanel();
+        const syncPopoverState = () => {
+          const open = isPanelOpen();
+          settingsBtn.textContent = open ? "hide settings" : "settings";
+          settingsBtn.setAttribute("aria-expanded", String(open));
+          if (open) {
             try {
-              settingsBtn.focus();
-            } catch (ex) {
+              settingsPanel.focus();
+            } catch (_) {
               /* ignore */
             }
           }
-        });
+        };
+
+        if (supportsPopover) {
+          settingsPanel.addEventListener("toggle", syncPopoverState);
+        } else {
+          settingsPanel.classList.remove("is-open");
+          settingsBtn.addEventListener("click", () => {
+            settingsPanel.classList.toggle("is-open");
+            syncPopoverState();
+          });
+          settingsPanel.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              settingsPanel.classList.remove("is-open");
+              syncPopoverState();
+              try {
+                settingsBtn.focus();
+              } catch (_) {
+                /* ignore */
+              }
+            }
+          });
+        }
+
+        syncPopoverState();
 
         // Propagate form changes to the store.
         if (form) {

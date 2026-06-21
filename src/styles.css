@@ -245,7 +245,8 @@
             margin-right: 0.25em;
         }
 
-        a {
+        a,
+        button {
             color: var(--hn-primary);
             text-decoration: none;
 
@@ -283,6 +284,11 @@
             position: absolute;
             top: 6px;
             right: 10px;
+            padding: 0;
+            border: 0;
+            background: none;
+            font: inherit;
+            color: var(--hn-primary);
             cursor: pointer;
         }
 
@@ -327,20 +333,35 @@
         :scope {
             box-sizing: border-box;
             padding: 0.75em;
-            position: absolute;
-            width: 36%;
-            right: 0;
+            position: fixed;
+            inset-block-start: 36px;
+            inset-inline-end: max(5vw, calc((100vw - 1280px) / 2));
+            width: min(36vw, 30rem);
+            min-width: min(20rem, calc(100vw - 2rem));
+            max-width: calc(100vw - 2rem);
+            margin: 0;
+            border: 0;
             background-color: var(--hn-header-bg);
             border-bottom-left-radius: 1em;
             border-bottom-right-radius: 1em;
             z-index: 100;
-            opacity: 1;
-            transform: translateY(0);
+            opacity: 0;
+            transform: translateY(-0.35rem);
             transition:
                 opacity 120ms ease-out,
                 transform 120ms ease-out,
                 display 120ms allow-discrete,
                 overlay 120ms allow-discrete;
+        }
+
+        :scope:popover-open,
+        :scope.is-open {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        :scope::backdrop {
+            background: transparent;
         }
 
         td:first-child {
@@ -379,6 +400,33 @@
                 padding-bottom: 0;
                 border-bottom: none;
             }
+        }
+    }
+
+    @starting-style {
+        .settings-panel:popover-open {
+            opacity: 0;
+            transform: translateY(-0.35rem);
+        }
+    }
+
+    @supports (position-anchor: --settings-toggle) {
+        .settings-panel[popover] {
+            position-anchor: --settings-toggle;
+            inset-block-start: anchor(bottom);
+            inset-inline-start: anchor(right);
+            inset-inline-end: auto;
+            translate: -100% 0;
+        }
+    }
+
+    @supports not selector(:popover-open) {
+        .settings-panel[popover] {
+            display: none;
+        }
+
+        .settings-panel[popover].is-open {
+            display: block;
         }
     }
 
