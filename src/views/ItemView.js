@@ -24,6 +24,7 @@ import { CommentElement } from "../components/CommentElement.js";
 import CommentSlider from "../components/CommentSlider.js";
 import ItemControls from "../components/ItemControls.js";
 import PollOption from "../components/PollOption.js";
+import { createSpinner } from "../components/Spinner.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
@@ -668,17 +669,21 @@ export default class ItemView extends View {
       this._knownTopLevelKids.add(childIdStr);
 
       // Create a placeholder to preserve ordering while comments load
-      const placeholder = create(
-        "div",
-        {
-          attrs: {
-            class: "placeholder",
-            "data-comment-id": childIdStr,
-            role: "group",
-            "aria-label": `Comment ${childIdStr} loading`,
-          },
+      const placeholder = create("div", {
+        attrs: {
+          class: "placeholder",
+          "data-comment-id": childIdStr,
+          role: "group",
+          "aria-label": `Comment ${childIdStr} loading`,
         },
-        `Loading comment…`,
+      });
+      placeholder.append(
+        createSpinner({
+          inline: true,
+          size: "6px",
+          label: `Loading comment ${childIdStr}`,
+        }),
+        document.createTextNode(" Loading comment..."),
       );
       kidsEl.appendChild(placeholder);
 
@@ -724,17 +729,21 @@ export default class ItemView extends View {
       }
       this._knownTopLevelKids.add(key);
 
-      const placeholder = create(
-        "div",
-        {
-          attrs: {
-            class: "placeholder",
-            "data-comment-id": key,
-            role: "group",
-            "aria-label": `Comment ${key} loading`,
-          },
+      const placeholder = create("div", {
+        attrs: {
+          class: "placeholder",
+          "data-comment-id": key,
+          role: "group",
+          "aria-label": `Comment ${key} loading`,
         },
-        "Loading comment…",
+      });
+      placeholder.append(
+        createSpinner({
+          inline: true,
+          size: "6px",
+          label: `Loading comment ${key}`,
+        }),
+        document.createTextNode(" Loading comment..."),
       );
       this._kidsEl.appendChild(placeholder);
 

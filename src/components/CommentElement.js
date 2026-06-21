@@ -22,6 +22,7 @@ import {
   setSafeHTML,
   timeAgoFromUnix,
 } from "../utils/dom.js";
+import { createSpinner } from "./Spinner.js";
 import { itemPath } from "../utils/item-ancestors.js";
 
 export class CommentElement {
@@ -288,17 +289,21 @@ export class CommentElement {
   }
 
   _createKidPlaceholder(kidId) {
-    const placeholder = create(
-      "div",
-      {
-        attrs: {
-          class: "placeholder",
-          role: "group",
-          "aria-label": `Comment ${kidId} (loading)`,
-          "data-kid-id": String(kidId),
-        },
+    const placeholder = create("div", {
+      attrs: {
+        class: "placeholder",
+        role: "group",
+        "aria-label": `Comment ${kidId} loading`,
+        "data-kid-id": String(kidId),
       },
-      `Loading comment ${kidId}…`,
+    });
+    placeholder.append(
+      createSpinner({
+        inline: true,
+        size: "6px",
+        label: `Loading comment ${kidId}`,
+      }),
+      document.createTextNode(` Loading comment ${kidId}...`),
     );
     // clicking the placeholder should expand and trigger a load immediately
     placeholder.addEventListener("click", () => {
@@ -394,9 +399,14 @@ export class CommentElement {
 
     // Show a temporary spinner in the placeholder
     if (placeholderEl) {
-      placeholderEl.textContent = "Loading…";
-      const spinner = create("span", { attrs: { class: "spinner" } });
-      placeholderEl.appendChild(spinner);
+      placeholderEl.replaceChildren(
+        createSpinner({
+          inline: true,
+          size: "6px",
+          label: `Loading comment ${childId}`,
+        }),
+        document.createTextNode(" Loading..."),
+      );
     }
 
     const hn = this.services && this.services.hnService;

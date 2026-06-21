@@ -1,4 +1,5 @@
 import { CommentElement } from "../components/CommentElement.js";
+import { createSpinner } from "../components/Spinner.js";
 import CommentThreadStore from "../stores/CommentThreadStore.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { fetchCommentAncestors, itemPath, rememberItem } from "../utils/item-ancestors.js";
@@ -179,10 +180,16 @@ export default class PermalinkedCommentView extends View {
     if (!hn || typeof hn.onItemValue !== "function") return;
 
     for (const kidId of comment.kids) {
-      const placeholder = create(
-        "div",
-        { attrs: { class: "placeholder", "data-comment-id": String(kidId) } },
-        "Loading comment...",
+      const placeholder = create("div", {
+        attrs: { class: "placeholder", "data-comment-id": String(kidId) },
+      });
+      placeholder.append(
+        createSpinner({
+          inline: true,
+          size: "6px",
+          label: `Loading comment ${kidId}`,
+        }),
+        document.createTextNode(" Loading comment..."),
       );
       kidsEl.appendChild(placeholder);
       const unsub = hn.onItemValue(kidId, (child) => {
