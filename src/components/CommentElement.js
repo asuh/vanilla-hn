@@ -300,10 +300,9 @@ export class CommentElement {
     placeholder.append(
       createSpinner({
         inline: true,
-        size: "6px",
+        size: "8px",
         label: `Loading comment ${kidId}`,
       }),
-      document.createTextNode(` Loading comment ${kidId}...`),
     );
     // clicking the placeholder should expand and trigger a load immediately
     placeholder.addEventListener("click", () => {
@@ -402,10 +401,9 @@ export class CommentElement {
       placeholderEl.replaceChildren(
         createSpinner({
           inline: true,
-          size: "6px",
+          size: "8px",
           label: `Loading comment ${childId}`,
         }),
-        document.createTextNode(" Loading..."),
       );
     }
 

@@ -680,10 +680,9 @@ export default class ItemView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "6px",
+          size: "8px",
           label: `Loading comment ${childIdStr}`,
         }),
-        document.createTextNode(" Loading comment..."),
       );
       kidsEl.appendChild(placeholder);
 
@@ -740,10 +739,9 @@ export default class ItemView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "6px",
+          size: "8px",
           label: `Loading comment ${key}`,
         }),
-        document.createTextNode(" Loading comment..."),
       );
       this._kidsEl.appendChild(placeholder);
 

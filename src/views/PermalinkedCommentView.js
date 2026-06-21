@@ -186,10 +186,9 @@ export default class PermalinkedCommentView extends View {
       placeholder.append(
         createSpinner({
           inline: true,
-          size: "6px",
+          size: "8px",
           label: `Loading comment ${kidId}`,
         }),
-        document.createTextNode(" Loading comment..."),
       );
       kidsEl.appendChild(placeholder);
       const unsub = hn.onItemValue(kidId, (child) => {
