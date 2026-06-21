@@ -205,8 +205,7 @@
       });
     });
 
-    // Basic keyboard helpers: jump to main app region with 's' (for "skip")
-    // and focus the search/filter input if a view exposes a `focusSearch()` method.
+    // Basic keyboard helpers.
     document.addEventListener("keydown", (ev) => {
       // avoid typing into inputs
       const tag = (ev.target && ev.target.tagName) || "";
@@ -218,12 +217,6 @@
         ev.altKey
       )
         return;
-
-      if (ev.key === "s") {
-        ev.preventDefault();
-        const app = document.querySelector("#app");
-        if (app) app.focus();
-      }
 
       // quick navigation: press 'g' then 'h' to go home (gh)
       // a tiny stateful example - keep it simple
@@ -360,21 +353,6 @@
     };
 
     console.info("vanilla-hn booted — router started.");
-
-    // Announce app readiness for assistive tech
-    const appElement = document.querySelector("#app");
-    if (appElement) {
-      // Focus the app container so keyboard users are positioned to interact.
-      appElement.setAttribute("tabindex", "-1");
-      // small delay to not steal focus during initial load if the user expects it elsewhere
-      setTimeout(() => {
-        try {
-          appElement.focus();
-        } catch (e) {
-          /* no-op */
-        }
-      }, 120);
-    }
   } catch (err) {
     // If bootstrap fails, leave the fallback content (index.html) intact and log an actionable message.
     // Avoid throwing so that the browser doesn't show a noisy stack in some dev servers.

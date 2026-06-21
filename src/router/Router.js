@@ -63,7 +63,6 @@ export class Router {
     // Used in the popstate/click fallback path to discard stale async loads.
     // When the Navigation API is available its own AbortSignal handles this.
     this._routeRequestId = 0;
-    this._hasMountedView = false;
 
     // Bound listener references stored so they can be removed in stop().
     this._onPopState = this._onPopState.bind(this);
@@ -281,9 +280,8 @@ export class Router {
    *   stale navigations are detected via `signal.aborted`.
    * - In the fallback path an internal `_routeRequestId` counter is used.
    *
-   * After mounting, the view's `focus()` hook (or a fallback) is called for
-   * accessibility. The DOM swap can optionally be wrapped in
-   * `document.startViewTransition()` — see TODO below.
+   * The DOM swap can optionally be wrapped in `document.startViewTransition()`
+   * — see TODO below.
    *
    * @param {URL}          url     The URL to route to.
    * @param {AbortSignal}  [signal] AbortSignal from a NavigateEvent (optional).
@@ -485,29 +483,6 @@ export class Router {
       }
     }
 
-    // Accessibility: move focus after client-side navigations, but not after
-    // the initial page mount. React HN leaves the first load unfocused, and
-    // focusing #app on startup creates an obvious outline in Firefox.
-    if (this._hasMountedView) {
-      try {
-        if (viewObj && typeof viewObj.focus === "function") {
-          viewObj.focus();
-        } else {
-          const appEl = document.querySelector(this.mountPointSelector);
-          if (appEl) {
-            appEl.setAttribute("tabindex", "-1");
-            try {
-              appEl.focus();
-            } catch (_) {
-              /* non-fatal */
-            }
-          }
-        }
-      } catch (_) {
-        /* non-fatal */
-      }
-    }
-    this._hasMountedView = true;
   }
 
   /**

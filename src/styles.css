@@ -1099,18 +1099,6 @@
     }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    a:focus-visible,
-    button:focus-visible,
-    input:focus-visible,
-    [tabindex]:focus-visible,
-    [role="button"]:focus-visible {
-        outline: 2px solid var(--hn-primary);
-        outline-offset: 2px;
-        border-radius: 2px;
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
