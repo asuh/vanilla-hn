@@ -1,5 +1,6 @@
 import { create } from "../utils/dom.js";
 import { pluralise } from "../utils/helpers.js";
+import { createSpinner } from "./Spinner.js";
 
 export default class PollOption {
   constructor({ id, services = {} } = {}) {
@@ -13,7 +14,7 @@ export default class PollOption {
     this.root = create(
       "div",
       { attrs: { class: "poll-option poll-option--loading" } },
-      create("span", { attrs: { class: "spinner" } }),
+      createSpinner({ inline: true, label: "Loading poll option" }),
     );
     this._subscribe();
     return this.root;

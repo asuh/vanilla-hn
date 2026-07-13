@@ -10,7 +10,7 @@
     "start": "node serve.js",
     "preview": "node serve.js",
     "lint": "echo \"no linter configured\"",
-    "test": "echo \"no tests configured\""
+    "test": "node --test"
   },
   "keywords": [
     "hacker-news",

@@ -26,7 +26,7 @@ export default class PermalinkedCommentView extends View {
     this._contentEl = create(
       "div",
       { attrs: { class: "comment comment--loading", role: "status" } },
-      create("span", { attrs: { class: "spinner" } }),
+      createSpinner({ inline: true, size: "20px", label: "Loading comment" }),
       " Loading comment...",
     );
     this.root.appendChild(this._contentEl);

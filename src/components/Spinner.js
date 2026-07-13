@@ -4,8 +4,8 @@
  * A tiny, reusable loading spinner component (SpinKit bounce-dot style).
  * Returns a plain DOM element — no framework needed.
  *
- * The corresponding CSS lives in `styles.css` under `.spinner` / `.Spinner`
- * (three bounce dots with staggered animation delays).
+ * The corresponding CSS lives in `styles.css` under `.spinner` (three bounce
+ * dots with staggered animation delays).
  *
  * @module components/Spinner
  */

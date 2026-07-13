@@ -69,10 +69,6 @@
         --hn-error: #ff3333;
         --hn-footer-text: #333333;
 
-        --hn-bg-dark: #242424;
-        --hn-text-dark: #e0e0e0;
-        --hn-muted-dark: #9aa4ad;
-
         --override-hn-bg: ;
         --override-hn-text: ;
         --override-hn-muted: ;
@@ -390,7 +386,7 @@
             font-size: inherit;
         }
 
-        .section {
+        .setting {
             margin-bottom: 0.6em;
             padding-bottom: 0.6em;
             border-bottom: 1px solid #444;
@@ -754,6 +750,9 @@
     .poll-option {
         margin-bottom: 10px;
     }
+    .poll-option--loading {
+        color: var(--hn-muted);
+    }
     .poll-option__score {
         color: var(--hn-muted);
     }
@@ -764,6 +763,10 @@
     @scope (.comment) to (.kids) {
         :scope.new > .content {
             background-color: var(--hn-new-comment-bg);
+        }
+
+        :scope.has-new > .content > .meta .counts {
+            font-weight: bold;
         }
 
         :scope.collapsed > .content > .text {
@@ -852,12 +855,28 @@
             color: var(--hn-muted);
             font-size: var(--font-size-meta);
         }
+
+        .placeholder--delayed {
+            color: var(--hn-error);
+        }
     }
 
     /* .kids is the @scope lower boundary so it cannot be targeted from inside
        the scope — this rule must live outside @scope (.comment) to (.kids) */
     .comment.collapsed > .kids {
         display: none;
+    }
+
+    .comment--loading,
+    .item-view .placeholder {
+        padding: 0.65em 1.25em;
+        color: var(--hn-muted);
+        font-size: var(--font-size-meta);
+    }
+
+    .placeholder--delayed,
+    .item-view .loading-error {
+        color: var(--hn-error);
     }
 
     /* -- Comment feed ------------------------------------------------------ */
@@ -992,8 +1011,7 @@
 
     /* -- Spinner (keep as-is) ---------------------------------------------- */
 
-    .spinner > div,
-    .Spinner > div {
+    .spinner > div {
         background-color: #666;
         border-radius: 100%;
         display: inline-block;
@@ -1045,23 +1063,6 @@
         }
     }
 
-    /* -- Updates view ------------------------------------------------------ */
-
-    .updates {
-        & .comment {
-            margin-bottom: 0.75em;
-        }
-    }
-
-    .updates--loading {
-        padding: 1em 1.25em 0 1.25em;
-        margin-bottom: 1em;
-    }
-
-    .updates__notice {
-        padding: 0 1.25em;
-    }
-
     @container app (max-width: 720px) {
         .story-list {
             padding-left: 2.25em;
@@ -1104,22 +1105,6 @@
         border: 0 !important;
     }
 
-    .text-muted {
-        color: var(--hn-muted);
-    }
-    .font-bold {
-        font-weight: bold;
-    }
-
-    .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
 }
 
 /* =============================================================================
