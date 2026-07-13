@@ -51,6 +51,7 @@ test("createSpinner renders an accessible three-dot spinner", () => {
 test("loading views use the shared spinner component", async () => {
   const files = [
     "src/components/PollOption.js",
+    "src/views/ItemView.js",
     "src/views/PermalinkedCommentView.js",
   ];
 

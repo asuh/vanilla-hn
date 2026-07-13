@@ -46,10 +46,7 @@ export default class UserView extends View {
   constructor(context = {}) {
     super(context);
 
-    this.userId =
-      (context.params && context.params.id) ||
-      (context.options && context.options.id) ||
-      null;
+    this.userId = context.params?.id || context.options?.id || null;
 
     this._unsub = null;
     this._contentEl = null;
@@ -126,12 +123,10 @@ export default class UserView extends View {
    * Calls _renderUser() when data arrives or _renderError() on failure.
    */
   _subscribe() {
-    const hn = this.services && this.services.hnService;
+    const hn = this.services?.hnService;
 
     if (!hn || typeof hn.onUserValue !== "function" || !this.userId) {
-      this._renderError(
-        "User data service unavailable or no user id provided.",
-      );
+      this._renderError("User data service unavailable or no user id provided.");
       return;
     }
 
@@ -159,8 +154,7 @@ export default class UserView extends View {
 
     const id = user.id || this.userId || "Unknown";
     const karma = user.karma != null ? user.karma : 0;
-    const created =
-      user.created != null ? timeAgoFromUnix(user.created) : "unknown";
+    const created = user.created != null ? timeAgoFromUnix(user.created) : "unknown";
     const about = user.about || ""; // may contain HTML (HN returns <a>, <p>, etc.)
     const hnUrl = `https://news.ycombinator.com/user?id=${encodeURIComponent(id)}`;
 
@@ -217,8 +211,6 @@ export default class UserView extends View {
    */
   _renderError(msg) {
     if (!this._contentEl) return;
-    this._contentEl.replaceChildren(
-      create("p", { attrs: { class: "user-view__error" } }, msg),
-    );
+    this._contentEl.replaceChildren(create("p", { attrs: { class: "user-view__error" } }, msg));
   }
 }

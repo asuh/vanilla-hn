@@ -93,7 +93,7 @@ export class Paginator {
    * Remove the element from the DOM and release references.
    */
   cleanup() {
-    if (this.el && this.el.parentNode) {
+    if (this.el?.parentNode) {
       this.el.parentNode.removeChild(this.el);
     }
     this.el = null;

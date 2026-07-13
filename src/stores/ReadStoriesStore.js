@@ -47,10 +47,7 @@ export default class ReadStoriesStore {
    * --------------------------- */
 
   _load() {
-    if (
-      typeof window === "undefined" ||
-      typeof window.localStorage === "undefined"
-    ) {
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
       this._reads = {};
       return;
     }
@@ -64,7 +61,7 @@ export default class ReadStoriesStore {
       try {
         const v = JSON.parse(raw);
         parsed = v && typeof v === "object" ? v : {};
-      } catch (e) {
+      } catch (_e) {
         parsed = {};
       }
       // Normalize keys to strings and values to numbers (seconds)
@@ -83,10 +80,7 @@ export default class ReadStoriesStore {
   }
 
   _persist() {
-    if (
-      typeof window === "undefined" ||
-      typeof window.localStorage === "undefined"
-    ) {
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
       return;
     }
     try {
@@ -247,7 +241,7 @@ export default class ReadStoriesStore {
     // call immediately with current snapshot so subscribers can initialize
     try {
       fn(this.getReadStories());
-    } catch (e) {
+    } catch (_e) {
       /* swallow subscriber errors */
     }
     return () => this._listeners.delete(fn);
@@ -268,7 +262,7 @@ export default class ReadStoriesStore {
     for (const fn of Array.from(this._listeners)) {
       try {
         fn(snapshot);
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }
@@ -298,7 +292,7 @@ export default class ReadStoriesStore {
     // Persist immediately before destroying
     try {
       this._persist();
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
     this._listeners.clear();

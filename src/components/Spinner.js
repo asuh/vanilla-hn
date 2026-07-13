@@ -85,8 +85,7 @@ export function createSpinner(options = {}) {
  * @returns {HTMLElement} A wrapper `<div>` containing the spinner.
  */
 export function createSpinnerContainer(options = {}) {
-  const { wrapperClass = "spinner-container", spinner: spinnerOpts = {} } =
-    options;
+  const { wrapperClass = "spinner-container", spinner: spinnerOpts = {} } = options;
 
   const container = create("div", {
     attrs: { class: wrapperClass },

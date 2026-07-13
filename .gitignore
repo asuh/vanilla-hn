@@ -18,6 +18,9 @@ pids/
 # Coverage and test output
 coverage/
 .nyc_output/
+artifacts/
+playwright-report/
+test-results/
 
 # Build / dist output
 dist/

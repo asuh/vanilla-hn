@@ -57,14 +57,9 @@ function createMockItem(id, opts = {}) {
     id: n,
     by: opts.by || `user${(n % 10) + 1}`,
     time: opts.time || nowSeconds() - (n % 3600),
-    text:
-      opts.text ||
-      (opts.type !== "story" ? `Mock comment body for id ${n}.` : undefined),
+    text: opts.text || (opts.type !== "story" ? `Mock comment body for id ${n}.` : undefined),
     title: opts.type === "story" ? opts.title || `Mock story ${n}` : undefined,
-    url:
-      opts.type === "story"
-        ? opts.url || `https://example.com/story/${n}`
-        : undefined,
+    url: opts.type === "story" ? opts.url || `https://example.com/story/${n}` : undefined,
     kids: Array.isArray(opts.kids) ? opts.kids : [],
     score: opts.score != null ? opts.score : Math.max(1, n % 200),
     descendants: opts.descendants != null ? opts.descendants : n % 30,
@@ -96,8 +91,7 @@ class MockBackend {
     // Pre-populate items
     for (let id = 1; id <= 200; id++) {
       const type = id <= 100 ? "story" : "comment";
-      const kids =
-        type === "story" && id % 3 === 0 ? [id + 200, id + 201, id + 202] : [];
+      const kids = type === "story" && id % 3 === 0 ? [id + 200, id + 201, id + 202] : [];
       this._items.set(String(id), createMockItem(String(id), { type, kids }));
     }
     // A few comment items for kids
@@ -163,7 +157,7 @@ class MockBackend {
     for (const cb of listeners) {
       try {
         cb({ ...payload });
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }
@@ -173,7 +167,7 @@ class MockBackend {
     for (const cb of this._updatesListeners) {
       try {
         cb({ items: ids.map(String), profiles: [] });
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }
@@ -196,9 +190,10 @@ class MockBackend {
     const ids = (this._lists[type] || []).slice();
     const items = ids.map((id) => this._items.get(id)).filter(Boolean);
     setTimeout(() => {
+      if (!set.has(cb)) return;
       try {
         cb(items);
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }, 0);
@@ -220,9 +215,10 @@ class MockBackend {
 
     const item = this._items.get(id) || createMockItem(id, { type: "comment" });
     setTimeout(() => {
+      if (!set.has(cb)) return;
       try {
         cb({ ...item });
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }, 0);
@@ -258,6 +254,7 @@ class MockBackend {
     set.add(cb);
     this._userListeners.set(id, set);
     setTimeout(() => {
+      if (!set.has(cb)) return;
       try {
         cb({
           id,
@@ -265,7 +262,7 @@ class MockBackend {
           created: nowSeconds() - 86400 * 365,
           karma: (id.length * 137) % 9999,
         });
-      } catch (e) {
+      } catch (_e) {
         /* swallow */
       }
     }, 0);
@@ -280,9 +277,10 @@ class MockBackend {
   onUpdatesValue(cb) {
     this._updatesListeners.add(cb);
     setTimeout(() => {
+      if (!this._updatesListeners.has(cb)) return;
       try {
         cb({ items: [], profiles: [] });
-      } catch (e) {}
+      } catch (_e) {}
     }, 0);
     return () => this._updatesListeners.delete(cb);
   }
@@ -332,16 +330,9 @@ class FirebaseBackend {
   }
 
   _init() {
-    try {
-      this._app = initializeApp(
-        { databaseURL: HN_DB_URL },
-        `vanilla-hn-${Date.now()}`,
-      );
-      this._db = getDatabase(this._app);
-      this._sdk = { ref, child, onValue, get };
-    } catch (e) {
-      throw e;
-    }
+    this._app = initializeApp({ databaseURL: HN_DB_URL }, `vanilla-hn-${Date.now()}`);
+    this._db = getDatabase(this._app);
+    this._sdk = { ref, child, onValue, get };
   }
 
   _ref(path) {
@@ -372,7 +363,7 @@ class FirebaseBackend {
           const val = snapshot.val();
           try {
             cb(transform ? transform(val) : val);
-          } catch (e) {
+          } catch (_e) {
             /* swallow cb errors */
           }
         };
@@ -381,10 +372,7 @@ class FirebaseBackend {
         });
       })
       .catch((err) => {
-        console.warn(
-          `[HNService] Firebase not ready, cannot subscribe to ${path}:`,
-          err,
-        );
+        console.warn(`[HNService] Firebase not ready, cannot subscribe to ${path}:`, err);
       });
 
     return () => {
@@ -415,9 +403,8 @@ class FirebaseBackend {
    * @returns {Promise<Object|null>} The item object or null.
    */
   async fetchItem(itemId, opts = {}) {
-    const signal = opts && opts.signal;
-    if (signal && signal.aborted)
-      throw new DOMException("Aborted", "AbortError");
+    const signal = opts?.signal;
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
     await this._firebaseReady;
     if (this._destroyed) throw new Error("HNService destroyed");
@@ -460,7 +447,7 @@ class FirebaseBackend {
     if (this._app) {
       try {
         deleteApp(this._app).catch(noop);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._app = null;
@@ -493,7 +480,7 @@ export default class HNService {
    */
   constructor(options = {}) {
     this._destroyed = false;
-    this._forceMock = Boolean(options && options.mock);
+    this._forceMock = Boolean(options?.mock);
 
     if (this._forceMock) {
       this._backend = new MockBackend();
@@ -506,10 +493,7 @@ export default class HNService {
 
       // If Firebase fails to init, swap to mock automatically
       this._firebaseReady = firebase._firebaseReady.catch((err) => {
-        console.warn(
-          "[HNService] Firebase failed to load — switching to MockBackend.",
-          err,
-        );
+        console.warn("[HNService] Firebase failed to load — switching to MockBackend.", err);
         if (this._destroyed) return;
         const mock = new MockBackend();
         this._backend = mock;
@@ -608,7 +592,7 @@ export default class HNService {
     if (this._backend && typeof this._backend.destroy === "function") {
       try {
         this._backend.destroy();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }

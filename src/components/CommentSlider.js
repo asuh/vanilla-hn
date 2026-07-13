@@ -81,7 +81,11 @@ export default class CommentSlider {
 
     // Default slider to max (rightmost = no highlight) unless the user has
     // explicitly moved it. Matches react-hn: value={showNewCommentsAfter || commentCount - 1}
-    if (!this._userHasInteracted || this._sliderValue === null || this._sliderValue > commentCount - 1) {
+    if (
+      !this._userHasInteracted ||
+      this._sliderValue === null ||
+      this._sliderValue > commentCount - 1
+    ) {
       this._sliderValue = commentCount - 1;
     }
 
@@ -119,7 +123,7 @@ export default class CommentSlider {
             ) {
               try {
                 this.threadStore.highlightNewCommentsSince(val);
-              } catch (e) {
+              } catch (_e) {
                 /* ignore */
               }
             }
@@ -160,7 +164,7 @@ export default class CommentSlider {
     ) {
       try {
         return this.threadStore.getCommentByTimeIndex(this._sliderValue + 1);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -190,8 +194,7 @@ export default class CommentSlider {
       const ref = this._getRefComment();
       // msSincePosted is based on the comment's actual server timestamp so the
       // count starts from when the comment was left, not when the data arrived.
-      const msSincePosted =
-        ref && ref.time ? Date.now() - ref.time * 1000 : null;
+      const msSincePosted = ref?.time ? Date.now() - ref.time * 1000 : null;
 
       let msToNextTick;
       if (msSincePosted !== null && msSincePosted < 60_000) {
@@ -263,18 +266,13 @@ export default class CommentSlider {
     const howMany = Math.max(0, commentCount - sliderVal);
 
     let timeStr = "";
-    if (
-      this.threadStore &&
-      typeof this.threadStore.getCommentByTimeIndex === "function"
-    ) {
+    if (this.threadStore && typeof this.threadStore.getCommentByTimeIndex === "function") {
       try {
-        const refComment = this.threadStore.getCommentByTimeIndex(
-          sliderVal + 1,
-        );
-        if (refComment && refComment.time) {
+        const refComment = this.threadStore.getCommentByTimeIndex(sliderVal + 1);
+        if (refComment?.time) {
           timeStr = timeAgoFromUnix(refComment.time);
         }
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -286,9 +284,7 @@ export default class CommentSlider {
     );
 
     if (timeStr) {
-      labelEl.appendChild(
-        create("span", { attrs: { class: "time" } }, timeStr),
-      );
+      labelEl.appendChild(create("span", { attrs: { class: "time" } }, timeStr));
     }
   }
 

@@ -90,9 +90,8 @@ export async function fetchCommentAncestors(hnService, comment, opts = {}) {
 }
 
 export function itemPath(itemOrType, id) {
-  const type =
-    typeof itemOrType === "string" ? itemOrType : itemOrType && itemOrType.type;
-  const itemId = id != null ? id : itemOrType && itemOrType.id;
+  const type = typeof itemOrType === "string" ? itemOrType : itemOrType?.type;
+  const itemId = id != null ? id : itemOrType?.id;
   if (type === "comment") return `/comment/${itemId}`;
   if (type === "story" || type === "job" || type === "poll") {
     return `/${type}/${itemId}`;

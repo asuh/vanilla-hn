@@ -147,13 +147,10 @@ export default class ListView extends View {
     super(context);
 
     // Resolve the list type from options or direct context property
-    this.listType =
-      (context.options && context.options.listType) ||
-      context.listType ||
-      "top";
+    this.listType = context.options?.listType || context.listType || "top";
 
     // Parse page number (1-based, default 1)
-    const rawPage = (context.params && context.params.page) || 1;
+    const rawPage = context.params?.page || 1;
     this.page = Math.max(1, parseInt(rawPage, 10) || 1);
 
     // All items returned from the service for this list type
@@ -316,7 +313,9 @@ export default class ListView extends View {
     // Tear down per-item subscriptions opened in Firebase (ID-list) mode
     // (used by "read" mode which doesn't go through StoryStore)
     if (Array.isArray(this._itemUnsubs)) {
-      this._itemUnsubs.forEach((fn) => typeof fn === "function" && fn());
+      this._itemUnsubs.forEach((fn) => {
+        if (typeof fn === "function") fn();
+      });
       this._itemUnsubs = [];
     }
 
@@ -365,10 +364,7 @@ export default class ListView extends View {
   _subscribe() {
     // ── Read stories mode ────────────────────────────────────────────────
     if (this.listType === "read") {
-      if (
-        !this._readStore ||
-        typeof this._readStore.getReadStories !== "function"
-      ) {
+      if (!this._readStore || typeof this._readStore.getReadStories !== "function") {
         this._renderError("Read stories store unavailable.");
         return;
       }
@@ -456,7 +452,7 @@ export default class ListView extends View {
         } else {
           // Subsequent notifications — patch individual items that changed
           pageItems.forEach((item, pageIdx) => {
-            if (item && item.title) {
+            if (item?.title) {
               this._patchItem(item, start + pageIdx + 1);
             }
           });
@@ -540,7 +536,7 @@ export default class ListView extends View {
     if (!key) return;
 
     const oldNode = this._itemNodes.get(key);
-    if (!oldNode || !oldNode.parentNode) {
+    if (!oldNode?.parentNode) {
       // Node not found in map or was removed — fall back to full render
       this._renderPage();
       return;
@@ -556,11 +552,7 @@ export default class ListView extends View {
    */
   _renderEmpty() {
     this._listEl.replaceChildren(
-      create(
-        "li",
-        { attrs: { class: "item empty", role: "listitem" } },
-        "No stories found.",
-      ),
+      create("li", { attrs: { class: "item empty", role: "listitem" } }, "No stories found."),
     );
   }
 
@@ -608,11 +600,7 @@ export default class ListView extends View {
     const by = item.by || "unknown";
     const score = item.score != null ? item.score : 0;
     const descendants =
-      item.descendants != null
-        ? item.descendants
-        : Array.isArray(item.kids)
-          ? item.kids.length
-          : 0;
+      item.descendants != null ? item.descendants : Array.isArray(item.kids) ? item.kids.length : 0;
     const url = item.url || null;
     const host = parseHost(url);
     const isRead = this._readStore ? this._readStore.isRead(id) : false;
@@ -629,11 +617,7 @@ export default class ListView extends View {
 
     // ── Rank ───────────────────────────────────────────────────────────────
     li.appendChild(
-      create(
-        "span",
-        { attrs: { class: "rank", "aria-label": `Rank ${rank}` } },
-        `${rank}.`,
-      ),
+      create("span", { attrs: { class: "rank", "aria-label": `Rank ${rank}` } }, `${rank}.`),
     );
 
     // ── Content column ─────────────────────────────────────────────────────
@@ -661,9 +645,7 @@ export default class ListView extends View {
 
       // Hostname badge next to the title
       if (host) {
-        titleRow.appendChild(
-          create("span", { attrs: { class: "host" } }, `(${host})`),
-        );
+        titleRow.appendChild(create("span", { attrs: { class: "host" } }, `(${host})`));
       }
     } else {
       // No external URL — link directly to the comments / item page
@@ -688,18 +670,12 @@ export default class ListView extends View {
 
     // Score
     meta.appendChild(
-      create(
-        "span",
-        { attrs: { class: "score" } },
-        `${score} point${pluralise(score)}`,
-      ),
+      create("span", { attrs: { class: "score" } }, `${score} point${pluralise(score)}`),
     );
     meta.appendChild(document.createTextNode(" by "));
 
     // Author link
-    meta.appendChild(
-      create("a", { attrs: { href: `/user/${by}`, class: "by" } }, by),
-    );
+    meta.appendChild(create("a", { attrs: { href: `/user/${by}`, class: "by" } }, by));
     meta.appendChild(document.createTextNode(" · "));
 
     // Relative time
@@ -754,10 +730,7 @@ export default class ListView extends View {
       // localStorage), falling back to threadStore.getState for compatibility.
       if (typeof this._loadThreadState === "function") {
         threadState = this._loadThreadState(id);
-      } else if (
-        this._threadStore &&
-        typeof this._threadStore.getState === "function"
-      ) {
+      } else if (this._threadStore && typeof this._threadStore.getState === "function") {
         threadState = this._threadStore.getState(id);
       }
     } catch (_) {

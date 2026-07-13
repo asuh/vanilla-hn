@@ -64,10 +64,7 @@ const html = stripDevImportMap(sourceHtml)
   .replace('src="/src/main.js"', `src="${appPath}"`);
 
 await writeFile(path.join(distDir, "index.html"), html);
-await writeFile(
-  path.join(distDir, "meta.json"),
-  JSON.stringify(result.metafile, null, 2),
-);
+await writeFile(path.join(distDir, "meta.json"), JSON.stringify(result.metafile, null, 2));
 
 console.log(`Built ${path.relative(root, distDir)}/`);
 console.log(`  ${stylesPath}`);

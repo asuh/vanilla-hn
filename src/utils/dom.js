@@ -33,14 +33,7 @@
 export function create(tag, options = {}, ...children) {
   const el = document.createElement(tag);
 
-  const {
-    attrs = {},
-    props = {},
-    dataset = {},
-    style = {},
-    events = {},
-    html,
-  } = options;
+  const { attrs = {}, props = {}, dataset = {}, style = {}, events = {}, html } = options;
 
   // attributes
   for (const [name, value] of Object.entries(attrs)) {
@@ -48,7 +41,7 @@ export function create(tag, options = {}, ...children) {
       // remove falsy/explicit false attributes
       try {
         el.removeAttribute(name);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     } else if (value === true) {
@@ -63,7 +56,7 @@ export function create(tag, options = {}, ...children) {
   for (const [k, v] of Object.entries(props)) {
     try {
       el[k] = v;
-    } catch (e) {
+    } catch (_e) {
       // If the property can't be assigned, ignore
     }
   }
@@ -79,7 +72,7 @@ export function create(tag, options = {}, ...children) {
     // allow numeric values to be used directly for CSS variables or numeric props
     try {
       el.style[k] = v;
-    } catch (e) {
+    } catch (_e) {
       // ignore invalid style keys
     }
   }
@@ -124,7 +117,7 @@ export function setSafeHTML(el, html) {
     try {
       el.setHTML(source);
       return el;
-    } catch (e) {
+    } catch (_e) {
       /* fall back to template parsing */
     }
   }
@@ -225,7 +218,7 @@ export function delegate(root, eventName, selector, handler) {
   const listener = (ev) => {
     let el = ev.target;
     while (el && el !== root) {
-      if (el.matches && el.matches(selector)) {
+      if (el.matches?.(selector)) {
         try {
           handler.call(el, ev, el);
         } catch (err) {
@@ -304,7 +297,7 @@ export function escapeHTML(str) {
  * @param {...string} classes
  */
 export function addClass(el, ...classes) {
-  if (!el || !el.classList) return;
+  if (!el?.classList) return;
   el.classList.add(...classes.filter(Boolean));
 }
 
@@ -315,7 +308,7 @@ export function addClass(el, ...classes) {
  * @param {...string} classes
  */
 export function removeClass(el, ...classes) {
-  if (!el || !el.classList) return;
+  if (!el?.classList) return;
   el.classList.remove(...classes.filter(Boolean));
 }
 
@@ -328,7 +321,7 @@ export function removeClass(el, ...classes) {
  * @returns {boolean} `true` if the class is now present, `false` otherwise.
  */
 export function toggleClass(el, className, force) {
-  if (!el || !el.classList) return;
+  if (!el?.classList) return;
   return el.classList.toggle(className, force);
 }
 
@@ -340,11 +333,7 @@ export function toggleClass(el, className, force) {
  */
 export function button(label, opts = {}) {
   const { attrs = {}, events = {}, style = {}, props = {} } = opts;
-  return create(
-    "button",
-    { attrs: { type: "button", ...attrs }, events, style, props },
-    label,
-  );
+  return create("button", { attrs: { type: "button", ...attrs }, events, style, props }, label);
 }
 
 /**
@@ -359,7 +348,7 @@ export function setAttrs(el, attrs = {}) {
     if (v === false || v == null) {
       try {
         el.removeAttribute(k);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     } else if (v === true) {
@@ -427,16 +416,13 @@ export function formatRelativeTime(when, opts = {}) {
     if (absSeconds >= u.secs || u.name === "second") {
       const val = Math.round(diffSeconds / u.secs);
       // Use Intl.RelativeTimeFormat when available
-      if (
-        typeof Intl !== "undefined" &&
-        typeof Intl.RelativeTimeFormat === "function"
-      ) {
+      if (typeof Intl !== "undefined" && typeof Intl.RelativeTimeFormat === "function") {
         try {
           const rtf = new Intl.RelativeTimeFormat(undefined, {
             numeric: "auto",
           });
           return rtf.format(val, u.name);
-        } catch (e) {
+        } catch (_e) {
           // fall through
         }
       }
@@ -444,9 +430,7 @@ export function formatRelativeTime(when, opts = {}) {
       if (val === 0) return "just now";
       const absVal = Math.abs(val);
       const unitLabel = absVal === 1 ? u.name : `${u.name}s`;
-      return val > 0
-        ? `in ${absVal} ${unitLabel}`
-        : `${absVal} ${unitLabel} ago`;
+      return val > 0 ? `in ${absVal} ${unitLabel}` : `${absVal} ${unitLabel} ago`;
     }
   }
 }
@@ -455,7 +439,7 @@ function currentEpochMilliseconds() {
   if (globalThis.Temporal?.Now?.instant) {
     try {
       return Number(globalThis.Temporal.Now.instant().epochMilliseconds);
-    } catch (e) {
+    } catch (_e) {
       /* fall back */
     }
   }
@@ -465,9 +449,9 @@ function currentEpochMilliseconds() {
 function isTemporalInstant(value) {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      typeof value.epochMilliseconds === "number" &&
-      typeof value.epochNanoseconds === "bigint",
+    typeof value === "object" &&
+    typeof value.epochMilliseconds === "number" &&
+    typeof value.epochNanoseconds === "bigint",
   );
 }
 

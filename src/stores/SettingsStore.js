@@ -61,7 +61,7 @@ export default class SettingsStore {
     // Apply theme immediately
     try {
       this.applyTheme();
-    } catch (e) {
+    } catch (_e) {
       /* ignore in non-DOM environments */
     }
   }
@@ -75,18 +75,14 @@ export default class SettingsStore {
    * untouched.
    */
   load() {
-    if (
-      typeof window === "undefined" ||
-      typeof window.localStorage === "undefined"
-    )
-      return;
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       let parsed = null;
       try {
         parsed = JSON.parse(raw);
-      } catch (e) {
+      } catch (_e) {
         // Malformed JSON — fall through and keep defaults.
         return;
       }
@@ -107,11 +103,7 @@ export default class SettingsStore {
    * Internal method; use update() which triggers debounced persistence.
    */
   _persist() {
-    if (
-      typeof window === "undefined" ||
-      typeof window.localStorage === "undefined"
-    )
-      return;
+    if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
     try {
       const json = JSON.stringify(this._state);
       window.localStorage.setItem(STORAGE_KEY, json);
@@ -158,14 +150,10 @@ export default class SettingsStore {
       // persist after a short delay (debounced)
       this._debouncedSave();
       // apply theme immediately if theme changed
-      if (
-        "theme" in updates ||
-        "titleFontSize" in updates ||
-        "listSpacing" in updates
-      ) {
+      if ("theme" in updates || "titleFontSize" in updates || "listSpacing" in updates) {
         try {
           this.applyTheme();
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
       }
@@ -207,7 +195,7 @@ export default class SettingsStore {
     // Immediately call with current state so subscribers can initialize
     try {
       fn(this.get());
-    } catch (e) {
+    } catch (_e) {
       /* swallow subscriber errors */
     }
 
@@ -269,7 +257,7 @@ export default class SettingsStore {
         root.style.removeProperty("--override-hn-text");
         root.style.removeProperty("--override-hn-muted");
         root.style.removeProperty("--override-hn-accent");
-      } catch (e) {
+      } catch (_e) {
         // ignore style errors
       }
     };
@@ -285,7 +273,7 @@ export default class SettingsStore {
         root.style.setProperty("--override-hn-text", "#e6e6e6");
         root.style.setProperty("--override-hn-muted", "#9a9a9a");
         root.style.setProperty("--override-hn-accent", "#ffb366");
-      } catch (e) {
+      } catch (_e) {
         // ignore style errors
       }
     } else {
@@ -296,7 +284,7 @@ export default class SettingsStore {
         root.style.setProperty("--override-hn-text", "#111111");
         root.style.setProperty("--override-hn-muted", "#666666");
         root.style.setProperty("--override-hn-accent", "#ff6600");
-      } catch (e) {
+      } catch (_e) {
         // ignore style errors
       }
     }
@@ -305,7 +293,7 @@ export default class SettingsStore {
     try {
       const size = Number(this._state.titleFontSize) || DEFAULTS.titleFontSize;
       root.style.setProperty("--font-size-title", `${size}px`);
-    } catch (e) {
+    } catch (_e) {
       // ignore style errors
     }
 
@@ -313,7 +301,7 @@ export default class SettingsStore {
     try {
       const spacing = String(this._state.listSpacing || DEFAULTS.listSpacing);
       root.setAttribute("data-list-spacing", spacing);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }
@@ -333,7 +321,7 @@ export default class SettingsStore {
     if (persist) this._debouncedSave();
     try {
       this.applyTheme();
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
     this.notify();

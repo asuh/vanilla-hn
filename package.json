@@ -6,11 +6,19 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
+    "check": "npm run lint && npm run format:check",
     "dev": "node serve.js",
     "start": "node serve.js",
     "preview": "node serve.js",
-    "lint": "echo \"no linter configured\"",
-    "test": "node --test"
+    "lint": "biome lint --error-on-warnings src public/index.html build.js serve.js scripts test playwright.config.js",
+    "lint:fix": "biome lint --write src public/index.html build.js serve.js scripts test playwright.config.js",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "test": "npm run test:unit",
+    "test:unit": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "benchmark": "node scripts/benchmark.mjs"
   },
   "keywords": [
     "hacker-news",
@@ -26,5 +34,10 @@
   "dependencies": {
     "esbuild": "^0.28.1",
     "firebase": "^12.15.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@playwright/test": "^1.61.1",
+    "oxfmt": "^0.57.0"
   }
 }

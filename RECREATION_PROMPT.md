@@ -53,7 +53,7 @@ React HN v2 is a frontend for Hacker News that provides:
 
 ```javascript
 // Hacker News Firebase API endpoints
-const DB_URL = 'https://hacker-news.firebaseio.com/v0';
+const DB_URL = "https://hacker-news.firebaseio.com/v0";
 
 // Available endpoints:
 // - /topstories.json   — top 500 story IDs
@@ -70,6 +70,7 @@ const DB_URL = 'https://hacker-news.firebaseio.com/v0';
 ```
 
 **Firebase SDK Integration**:
+
 - Use Firebase Realtime Database SDK for real-time subscriptions
 - Load Firebase via importmap from local vendor files (no CDN, no bundler)
 - Subscribe to story lists and get updates automatically
@@ -85,32 +86,32 @@ const DB_URL = 'https://hacker-news.firebaseio.com/v0';
 interface HNItem {
   id: number;
   type: "story" | "comment" | "job" | "poll" | "pollopt";
-  by: string;           // username
-  time: number;         // Unix timestamp
-  text?: string;        // HTML content for comments
-  url?: string;         // External link for stories
-  title?: string;       // Story title
-  score?: number;       // Points
+  by: string; // username
+  time: number; // Unix timestamp
+  text?: string; // HTML content for comments
+  url?: string; // External link for stories
+  title?: string; // Story title
+  score?: number; // Points
   descendants?: number; // Total comment count
-  kids?: number[];      // Child item IDs
-  parts?: number[];     // Poll option IDs
-  parent?: number;      // Parent item ID
-  dead?: boolean;       // Flagged as dead
-  deleted?: boolean;    // Deleted by user
+  kids?: number[]; // Child item IDs
+  parts?: number[]; // Poll option IDs
+  parent?: number; // Parent item ID
+  dead?: boolean; // Flagged as dead
+  deleted?: boolean; // Deleted by user
 }
 
 interface HNUser {
   id: string;
-  created: number;      // Unix timestamp
+  created: number; // Unix timestamp
   karma: number;
-  about?: string;       // HTML bio
+  about?: string; // HTML bio
   submitted?: number[]; // Submitted item IDs
 }
 
 interface ThreadState {
-  lastVisit: number | null;   // Timestamp of last visit
-  commentCount: number;       // Comment count at last visit
-  maxCommentId: number;       // Highest comment ID seen
+  lastVisit: number | null; // Timestamp of last visit
+  commentCount: number; // Comment count at last visit
+  maxCommentId: number; // Highest comment ID seen
 }
 ```
 
@@ -140,6 +141,7 @@ Replace React component state with small, focused store classes using the observ
 3. **`StoryCommentThreadStore`** — per-story comment thread state: collapse map, new/dead/deleted tracking, parent→child relationships, persisted visit metadata
 
 Stores expose:
+
 - `get()` / `update()` for state access and mutation
 - `addListener(fn)` / `subscribe(fn)` → returns an `unsubscribe` callback
 - `notify()` to broadcast changes to all listeners
@@ -205,6 +207,7 @@ Views subscribe to stores and update the DOM on changes; the View base class tra
 ### Modern Web APIs to Use
 
 1. **CSS Custom Properties** (CSS Variables):
+
    ```css
    :root {
      --font-size-title: 18px;
@@ -222,6 +225,7 @@ Views subscribe to stores and update the DOM on changes; the View base class tra
    ```
 
 2. **CSS Nesting**:
+
    ```css
    .comment {
      color: var(--text);
@@ -241,6 +245,7 @@ Views subscribe to stores and update the DOM on changes; the View base class tra
    ```
 
 3. **`:has()` selector**:
+
    ```css
    .comment:has(.comment--new) {
      border-left: 2px solid var(--accent);
@@ -248,6 +253,7 @@ Views subscribe to stores and update the DOM on changes; the View base class tra
    ```
 
 4. **View Transitions API** (optional, progressive enhancement):
+
    ```javascript
    if (document.startViewTransition) {
      document.startViewTransition(() => updateDOM());
@@ -255,24 +261,30 @@ Views subscribe to stores and update the DOM on changes; the View base class tra
    ```
 
 5. **`Intl.RelativeTimeFormat`** for time-ago formatting:
+
    ```javascript
-   const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
    // rtf.format(-3, 'hour') → "3 hours ago"
    ```
 
 6. **`IntersectionObserver`** for lazy-loading comment children:
+
    ```javascript
-   const observer = new IntersectionObserver((entries) => {
-     for (const entry of entries) {
-       if (entry.isIntersecting) {
-         loadComment(entry.target.dataset.commentId);
-         observer.unobserve(entry.target);
+   const observer = new IntersectionObserver(
+     (entries) => {
+       for (const entry of entries) {
+         if (entry.isIntersecting) {
+           loadComment(entry.target.dataset.commentId);
+           observer.unobserve(entry.target);
+         }
        }
-     }
-   }, { rootMargin: '200px' });
+     },
+     { rootMargin: "200px" },
+   );
    ```
 
 7. **`AbortController`** for cancellable async operations:
+
    ```javascript
    this.abortController = new AbortController();
    // In cleanup(): this.abortController.abort();
@@ -340,8 +352,8 @@ class Router {
     this.routes = new Map();
     this.currentView = null;
 
-    window.addEventListener('hashchange', () => this.handleRoute());
-    window.addEventListener('load', () => this.handleRoute());
+    window.addEventListener("hashchange", () => this.handleRoute());
+    window.addEventListener("load", () => this.handleRoute());
   }
 
   register(pattern, handler) {
@@ -351,7 +363,7 @@ class Router {
   }
 
   handleRoute() {
-    const hash = window.location.hash.slice(1) || '/';
+    const hash = window.location.hash.slice(1) || "/";
 
     for (const [pattern, handler] of this.routes) {
       const match = this.matchRoute(pattern, hash);
@@ -383,8 +395,8 @@ class Router {
     // Instantiate the new view (may be async for lazy imports)
     this.currentView = await viewFactory(params);
 
-    const appContent = document.querySelector('#app');
-    appContent.innerHTML = '';
+    const appContent = document.querySelector("#app");
+    appContent.innerHTML = "";
 
     // Use View Transitions API if available
     if (document.startViewTransition) {
@@ -402,13 +414,13 @@ class Router {
 
 // Usage in main.js
 const router = new Router();
-router.register('/', (params) => new StoriesView('topstories', params));
-router.register('/item/:id', async (params) => {
-  const { default: ItemView } = await import('./views/ItemView.js');
+router.register("/", (params) => new StoriesView("topstories", params));
+router.register("/item/:id", async (params) => {
+  const { default: ItemView } = await import("./views/ItemView.js");
   return new ItemView(params.id);
 });
-router.register('/user/:id', async (params) => {
-  const { default: UserView } = await import('./views/UserView.js');
+router.register("/user/:id", async (params) => {
+  const { default: UserView } = await import("./views/UserView.js");
   return new UserView(params.id);
 });
 ```
@@ -430,19 +442,19 @@ class View {
 
   render() {
     // Override in subclass — must return a DOM element
-    throw new Error('Subclass must implement render()');
+    throw new Error("Subclass must implement render()");
   }
 
   createElement(tag, attrs = {}, ...children) {
     const el = document.createElement(tag);
     for (const [key, value] of Object.entries(attrs)) {
-      if (key === 'className') el.className = value;
-      else if (key.startsWith('on')) el.addEventListener(key.slice(2).toLowerCase(), value);
-      else if (key === 'dataset') Object.assign(el.dataset, value);
+      if (key === "className") el.className = value;
+      else if (key.startsWith("on")) el.addEventListener(key.slice(2).toLowerCase(), value);
+      else if (key === "dataset") Object.assign(el.dataset, value);
       else el.setAttribute(key, value);
     }
     for (const child of children) {
-      if (typeof child === 'string') el.appendChild(document.createTextNode(child));
+      if (typeof child === "string") el.appendChild(document.createTextNode(child));
       else if (child) el.appendChild(child);
     }
     return el;
@@ -464,11 +476,11 @@ class View {
     this.abortController.abort();
 
     // Unsubscribe from all stores
-    this.subscriptions.forEach(unsub => unsub());
+    this.subscriptions.forEach((unsub) => unsub());
     this.subscriptions = [];
 
     // Remove event listeners
-    this.eventCleanups.forEach(fn => fn());
+    this.eventCleanups.forEach((fn) => fn());
     this.eventCleanups = [];
 
     // Remove DOM
@@ -476,7 +488,7 @@ class View {
     this.element = null;
   }
 
-  static createPlaceholderView(message = 'Loading…') {
+  static createPlaceholderView(message = "Loading…") {
     // Returns a minimal View for loading / not-found states
   }
 }
@@ -495,14 +507,14 @@ class SettingsStore {
       showDeleted: false,
       titleFontSize: 18,
       listSpacing: 16,
-      theme: 'light'  // 'light' | 'dark'
+      theme: "light", // 'light' | 'dark'
     };
     this.listeners = new Set();
     this.load();
   }
 
   load() {
-    const json = localStorage.getItem('vanilla-hn:settings:v1');
+    const json = localStorage.getItem("vanilla-hn:settings:v1");
     if (json) {
       Object.assign(this.data, JSON.parse(json));
     }
@@ -510,18 +522,21 @@ class SettingsStore {
   }
 
   save() {
-    localStorage.setItem('vanilla-hn:settings:v1', JSON.stringify(this.data));
+    localStorage.setItem("vanilla-hn:settings:v1", JSON.stringify(this.data));
   }
 
   update(changes) {
     Object.assign(this.data, changes);
-    if ('theme' in changes) {
+    if ("theme" in changes) {
       this.applyTheme();
     }
-    if ('titleFontSize' in changes) {
-      document.documentElement.style.setProperty('--font-size-title', `${this.data.titleFontSize}px`);
+    if ("titleFontSize" in changes) {
+      document.documentElement.style.setProperty(
+        "--font-size-title",
+        `${this.data.titleFontSize}px`,
+      );
     }
-    if ('listSpacing' in changes) {
+    if ("listSpacing" in changes) {
       document.documentElement.dataset.listSpacing = this.data.listSpacing;
     }
     this.save();
@@ -529,7 +544,7 @@ class SettingsStore {
   }
 
   applyTheme() {
-    document.body.classList.toggle('dark', this.data.theme === 'dark');
+    document.body.classList.toggle("dark", this.data.theme === "dark");
   }
 
   get(key) {
@@ -542,7 +557,7 @@ class SettingsStore {
   }
 
   notify() {
-    this.listeners.forEach(cb => cb(this.data));
+    this.listeners.forEach((cb) => cb(this.data));
   }
 
   reset() {
@@ -560,10 +575,10 @@ export const settingsStore = new SettingsStore();
 ```javascript
 // stores/ReadStoriesStore.js
 class ReadStoriesStore {
-  constructor(storageKey = 'vanilla-hn:read:v1', maxEntries = 500) {
+  constructor(storageKey = "vanilla-hn:read:v1", maxEntries = 500) {
     this.storageKey = storageKey;
     this.maxEntries = maxEntries;
-    this.readMap = {};   // { storyId: timestampSeconds }
+    this.readMap = {}; // { storyId: timestampSeconds }
     this.listeners = new Set();
     this.load();
   }
@@ -604,8 +619,14 @@ class ReadStoriesStore {
     for (const id of toRemove) delete this.readMap[id];
   }
 
-  clearOlderThan(days) { /* ... */ }
-  clearAll() { this.readMap = {}; this.save(); this.notify(); }
+  clearOlderThan(days) {
+    /* ... */
+  }
+  clearAll() {
+    this.readMap = {};
+    this.save();
+    this.notify();
+  }
 
   addListener(callback) {
     this.listeners.add(callback);
@@ -613,7 +634,7 @@ class ReadStoriesStore {
   }
 
   notify() {
-    this.listeners.forEach(cb => cb(this.readMap));
+    this.listeners.forEach((cb) => cb(this.readMap));
   }
 }
 ```
@@ -632,16 +653,16 @@ export class CommentElement {
   }
 
   render() {
-    const div = document.createElement('div');
-    div.className = 'comment';
+    const div = document.createElement("div");
+    div.className = "comment";
     div.dataset.commentId = this.comment.id;
-    div.style.setProperty('--comment-level', this.level);
+    div.style.setProperty("--comment-level", this.level);
 
     if (this.threadStore.isCollapsed[this.comment.id]) {
-      div.classList.add('comment--collapsed');
+      div.classList.add("comment--collapsed");
     }
     if (this.threadStore.isNew[this.comment.id]) {
-      div.classList.add('comment--new');
+      div.classList.add("comment--new");
     }
 
     const meta = this.createMeta();
@@ -652,8 +673,8 @@ export class CommentElement {
       div.appendChild(text);
 
       if (this.comment.kids?.length) {
-        const kidsContainer = document.createElement('div');
-        kidsContainer.className = 'comment-kids';
+        const kidsContainer = document.createElement("div");
+        kidsContainer.className = "comment-kids";
 
         for (const kidId of this.comment.kids) {
           this.loadChild(kidId, kidsContainer);
@@ -668,31 +689,31 @@ export class CommentElement {
   }
 
   createMeta() {
-    const meta = document.createElement('div');
-    meta.className = 'comment-meta';
+    const meta = document.createElement("div");
+    meta.className = "comment-meta";
 
     const collapsed = this.threadStore.isCollapsed[this.comment.id];
-    const toggle = document.createElement('button');
-    toggle.className = 'comment-toggle';
-    toggle.textContent = collapsed ? '[+]' : '[–]';
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    toggle.setAttribute('aria-controls', `comment-body-${this.comment.id}`);
+    const toggle = document.createElement("button");
+    toggle.className = "comment-toggle";
+    toggle.textContent = collapsed ? "[+]" : "[–]";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-controls", `comment-body-${this.comment.id}`);
 
-    toggle.addEventListener('click', () => {
+    toggle.addEventListener("click", () => {
       this.threadStore.toggleCollapse(this.comment.id);
       this.update();
     });
 
     meta.appendChild(toggle);
 
-    const by = document.createElement('a');
+    const by = document.createElement("a");
     by.href = `#/user/${this.comment.by}`;
     by.textContent = this.comment.by;
-    meta.appendChild(document.createTextNode(' '));
+    meta.appendChild(document.createTextNode(" "));
     meta.appendChild(by);
 
-    const time = document.createElement('span');
-    time.className = 'comment-time';
+    const time = document.createElement("span");
+    time.className = "comment-time";
     time.textContent = ` ${formatTimeAgo(this.comment.time * 1000)}`;
     meta.appendChild(time);
 
@@ -700,8 +721,8 @@ export class CommentElement {
       const counts = this.threadStore.getChildCounts(this.comment);
       meta.appendChild(document.createTextNode(` [${counts.children} more]`));
       if (counts.newComments > 0) {
-        const newBadge = document.createElement('span');
-        newBadge.className = 'comment-new-badge';
+        const newBadge = document.createElement("span");
+        newBadge.className = "comment-new-badge";
         newBadge.textContent = ` ${counts.newComments} new`;
         meta.appendChild(newBadge);
       }
@@ -711,8 +732,8 @@ export class CommentElement {
   }
 
   createText() {
-    const text = document.createElement('div');
-    text.className = 'comment-text';
+    const text = document.createElement("div");
+    text.className = "comment-text";
     text.id = `comment-body-${this.comment.id}`;
     text.innerHTML = this.comment.text; // HN API returns pre-sanitized HTML
     return text;
@@ -726,26 +747,29 @@ export class CommentElement {
 
   async loadChild(kidId, container) {
     // Create a placeholder observed by IntersectionObserver
-    const placeholder = document.createElement('div');
-    placeholder.className = 'comment-loading';
+    const placeholder = document.createElement("div");
+    placeholder.className = "comment-loading";
     placeholder.dataset.commentId = kidId;
     container.appendChild(placeholder);
 
     // Lazy-load: only subscribe to Firebase when placeholder is near viewport
-    this.childObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const unsub = HNService.onItemValue(kidId, (item) => {
-            if (item) {
-              const childComment = new CommentElement(item, this.threadStore, this.level + 1);
-              const childElement = childComment.render();
-              container.replaceChild(childElement, placeholder);
-            }
-          });
-          this.childObserver.unobserve(entry.target);
+    this.childObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const unsub = HNService.onItemValue(kidId, (item) => {
+              if (item) {
+                const childComment = new CommentElement(item, this.threadStore, this.level + 1);
+                const childElement = childComment.render();
+                container.replaceChild(childElement, placeholder);
+              }
+            });
+            this.childObserver.unobserve(entry.target);
+          }
         }
-      }
-    }, { rootMargin: '200px' });
+      },
+      { rootMargin: "200px" },
+    );
 
     this.childObserver.observe(placeholder);
   }
@@ -755,48 +779,50 @@ export class CommentElement {
 ```javascript
 // components/StoryListItem.js — factory function pattern
 export function createStoryListItem(item, threadState, settingsStore) {
-  const li = document.createElement('li');
-  li.className = 'item';
-  if (item.dead) li.classList.add('item--dead');
+  const li = document.createElement("li");
+  li.className = "item";
+  if (item.dead) li.classList.add("item--dead");
 
-  li.style.marginBottom = `${settingsStore.get('listSpacing')}px`;
+  li.style.marginBottom = `${settingsStore.get("listSpacing")}px`;
 
   // Title
-  const titleDiv = document.createElement('div');
-  titleDiv.className = 'item__title';
-  titleDiv.style.fontSize = `${settingsStore.get('titleFontSize')}px`;
+  const titleDiv = document.createElement("div");
+  titleDiv.className = "item__title";
+  titleDiv.style.fontSize = `${settingsStore.get("titleFontSize")}px`;
 
-  const titleLink = document.createElement('a');
-  titleLink.className = 'item__title-link';
+  const titleLink = document.createElement("a");
+  titleLink.className = "item__title-link";
   titleLink.href = item.url || `#/item/${item.id}`;
   titleLink.textContent = item.title;
   titleDiv.appendChild(titleLink);
 
   if (item.url) {
-    const host = document.createElement('span');
-    host.className = 'item__host';
+    const host = document.createElement("span");
+    host.className = "item__host";
     try {
-      host.textContent = ` (${new URL(item.url).hostname.replace(/^www\./, '')})`;
-    } catch { /* invalid URL */ }
+      host.textContent = ` (${new URL(item.url).hostname.replace(/^www\./, "")})`;
+    } catch {
+      /* invalid URL */
+    }
     titleDiv.appendChild(host);
   }
 
   // Meta
-  const metaDiv = document.createElement('div');
-  metaDiv.className = 'item__meta';
+  const metaDiv = document.createElement("div");
+  metaDiv.className = "item__meta";
   metaDiv.innerHTML = `
-    <span class="item__score">${item.score || 0} point${item.score !== 1 ? 's' : ''}</span>
+    <span class="item__score">${item.score || 0} point${item.score !== 1 ? "s" : ""}</span>
     by <a href="#/user/${item.by}">${item.by}</a>
     <span class="item__time">${formatTimeAgo(item.time * 1000)}</span>
-    | <a href="#/item/${item.id}">${item.descendants || 0} comment${item.descendants !== 1 ? 's' : ''}</a>
+    | <a href="#/item/${item.id}">${item.descendants || 0} comment${item.descendants !== 1 ? "s" : ""}</a>
   `;
 
   // New comment badge
   if (threadState?.lastVisit != null) {
     const newCount = (item.descendants || 0) - (threadState.commentCount || 0);
     if (newCount > 0) {
-      const newBadge = document.createElement('span');
-      newBadge.className = 'item__new-comments';
+      const newBadge = document.createElement("span");
+      newBadge.className = "item__new-comments";
       newBadge.innerHTML = ` (<a href="#/item/${item.id}">${newCount} new</a>)`;
       metaDiv.appendChild(newBadge);
     }
@@ -821,7 +847,7 @@ function renderCommentList(comments, container) {
     fragment.appendChild(commentEl.render());
   }
 
-  container.innerHTML = ''; // Clear once
+  container.innerHTML = ""; // Clear once
   container.appendChild(fragment); // Insert once
 }
 
@@ -829,13 +855,13 @@ function renderCommentList(comments, container) {
 function updateCommentCount(itemId, newCount) {
   const el = document.querySelector(`[data-item-id="${itemId}"] .item__descendants`);
   if (el) {
-    el.textContent = `${newCount} comment${newCount !== 1 ? 's' : ''}`;
+    el.textContent = `${newCount} comment${newCount !== 1 ? "s" : ""}`;
   }
 }
 
 // Use event delegation on lists for better performance:
-storyList.addEventListener('click', (e) => {
-  const link = e.target.closest('[data-story-id]');
+storyList.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-story-id]");
   if (link) {
     readStoriesStore.markAsRead(link.dataset.storyId);
   }
@@ -846,15 +872,15 @@ storyList.addEventListener('click', (e) => {
 
 ```javascript
 // api/hn-service.js
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, get, child } from 'firebase/database';
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue, get, child } from "firebase/database";
 
 const app = initializeApp({
-  databaseURL: 'https://hacker-news.firebaseio.com'
+  databaseURL: "https://hacker-news.firebaseio.com",
 });
 
 const db = getDatabase(app);
-const api = ref(db, '/v0');
+const api = ref(db, "/v0");
 
 export const HNService = {
   // Subscribe to story list (returns unsubscribe function)
@@ -890,7 +916,7 @@ export const HNService = {
 
   // Subscribe to updates feed
   onUpdatesValue(callback) {
-    const updatesRef = child(api, 'updates/items');
+    const updatesRef = child(api, "updates/items");
     return onValue(updatesRef, (snapshot) => {
       callback(snapshot.val()); // Array of recently changed IDs
     });
@@ -899,7 +925,7 @@ export const HNService = {
   // Cleanup
   destroy() {
     // Remove all listeners, delete app
-  }
+  },
 };
 ```
 
@@ -914,6 +940,7 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
 ### Use Modern CSS
 
 1. **CSS Custom Properties** for theming:
+
    ```css
    :root {
      --bg: #f5f5f5;
@@ -936,6 +963,7 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
    ```
 
 2. **CSS Nesting** for component styles:
+
    ```css
    .comment {
      color: var(--text);
@@ -962,17 +990,21 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
    ```
 
 3. **Container Queries** for responsive components:
+
    ```css
    .comment-thread {
      container-type: inline-size;
    }
 
    @container (width < 500px) {
-     .comment-meta { font-size: 0.85em; }
+     .comment-meta {
+       font-size: 0.85em;
+     }
    }
    ```
 
 4. **Skeleton loading shimmers** for async content:
+
    ```css
    .skeleton {
      background: linear-gradient(90deg, var(--bg) 25%, #e0e0e0 50%, var(--bg) 75%);
@@ -981,15 +1013,21 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
    }
 
    @keyframes shimmer {
-     0% { background-position: 200% 0; }
-     100% { background-position: -200% 0; }
+     0% {
+       background-position: 200% 0;
+     }
+     100% {
+       background-position: -200% 0;
+     }
    }
    ```
 
 5. **`prefers-reduced-motion`** support:
    ```css
    @media (prefers-reduced-motion: reduce) {
-     *, *::before, *::after {
+     *,
+     *::before,
+     *::after {
        animation-duration: 0.01ms !important;
        transition-duration: 0.01ms !important;
      }
@@ -1000,7 +1038,7 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
 
 ```css
 :root {
-  --hn-primary: #00d8ff;       /* Cyan accent from React HN */
+  --hn-primary: #00d8ff; /* Cyan accent from React HN */
   --hn-header-bg: #222;
   --hn-bg-light: #f5f5f5;
   --hn-bg-dark: #242424;
@@ -1013,7 +1051,7 @@ Do not commit real Firebase credentials. Use the `firebase.example.js` helper wh
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 ```
 
@@ -1027,18 +1065,21 @@ body {
 // Only load visible comments initially
 // Use IntersectionObserver to load more as user scrolls
 
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      const commentId = entry.target.dataset.commentId;
-      loadComment(commentId);
-      observer.unobserve(entry.target);
-    }
-  });
-}, { rootMargin: '200px' }); // Prefetch slightly before visible
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const commentId = entry.target.dataset.commentId;
+        loadComment(commentId);
+        observer.unobserve(entry.target);
+      }
+    });
+  },
+  { rootMargin: "200px" },
+); // Prefetch slightly before visible
 
 // Observe placeholder elements
-document.querySelectorAll('.comment-placeholder').forEach(el => {
+document.querySelectorAll(".comment-placeholder").forEach((el) => {
   observer.observe(el);
 });
 ```
@@ -1066,7 +1107,7 @@ function throttle(fn, limit) {
     if (!inThrottle) {
       fn(...args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      setTimeout(() => (inThrottle = false), limit);
     }
   };
 }
@@ -1088,10 +1129,13 @@ class VirtualScroller {
     this.itemHeight = itemHeight;
     this.visibleRange = { start: 0, end: 20 };
 
-    this.container.addEventListener('scroll', throttle(() => {
-      this.updateVisibleRange();
-      this.render();
-    }, 50));
+    this.container.addEventListener(
+      "scroll",
+      throttle(() => {
+        this.updateVisibleRange();
+        this.render();
+      }, 50),
+    );
   }
 
   updateVisibleRange() {
@@ -1136,7 +1180,7 @@ class StoryCommentThreadStore {
     this.comments = {};
     this.isNew = {};
     this.isCollapsed = {};
-    this.children = {};  // commentId → [childIds]
+    this.children = {}; // commentId → [childIds]
 
     // Load previous visit state
     this.threadState = this.loadState();
@@ -1154,11 +1198,14 @@ class StoryCommentThreadStore {
   }
 
   saveState() {
-    localStorage.setItem(`thread_${this.itemId}`, JSON.stringify({
-      lastVisit: Date.now(),
-      commentCount: this.commentCount,
-      maxCommentId: this.maxCommentId
-    }));
+    localStorage.setItem(
+      `thread_${this.itemId}`,
+      JSON.stringify({
+        lastVisit: Date.now(),
+        commentCount: this.commentCount,
+        maxCommentId: this.maxCommentId,
+      }),
+    );
   }
 
   commentAdded(comment) {
@@ -1173,8 +1220,7 @@ class StoryCommentThreadStore {
     // 1. This is NOT the first visit AND
     // 2. Comment ID > previous max OR comment time > last visit
     if (this.lastVisit !== null) {
-      if (comment.id > this.prevMaxCommentId ||
-          comment.time * 1000 > this.lastVisit) {
+      if (comment.id > this.prevMaxCommentId || comment.time * 1000 > this.lastVisit) {
         this.isNew[comment.id] = true;
       }
     }
@@ -1257,7 +1303,7 @@ class StoryCommentThreadStore {
   }
 
   notify() {
-    this.listeners.forEach(cb => cb());
+    this.listeners.forEach((cb) => cb());
   }
 }
 
@@ -1385,12 +1431,14 @@ createCommentSlider(threadStore) {
 ### 3. Browser Compatibility (March 2026)
 
 Target browsers:
+
 - Chrome/Edge 110+
 - Firefox 115+
 - Safari 17+
 - Mobile browsers (iOS Safari 17+, Chrome Android 110+)
 
 Graceful degradation:
+
 - If `IntersectionObserver` is unavailable, fall back to eager-loading all comments
 - If View Transitions API is unavailable, render without animation
 - No polyfills should be needed for target browsers
@@ -1407,12 +1455,12 @@ Firebase is loaded via an **importmap** in `index.html` pointing to local vendor
 
 ```html
 <script type="importmap">
-{
-  "imports": {
-    "firebase/app": "/vendor/firebase-app.js",
-    "firebase/database": "/vendor/firebase-database.js"
+  {
+    "imports": {
+      "firebase/app": "/vendor/firebase-app.js",
+      "firebase/database": "/vendor/firebase-database.js"
+    }
   }
-}
 </script>
 <script type="module" src="/src/main.js"></script>
 ```

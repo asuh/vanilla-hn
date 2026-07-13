@@ -37,7 +37,7 @@ export default class PollOption {
       return;
     }
     this._unsub = hn.onItemValue(this.id, (pollopt) => {
-      if (!pollopt || !pollopt.id) return;
+      if (!pollopt?.id) return;
       this._renderOption(pollopt);
     });
   }

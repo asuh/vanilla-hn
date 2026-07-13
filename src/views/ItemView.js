@@ -61,7 +61,7 @@ export default class ItemView extends View {
   constructor(context = {}) {
     super(context);
 
-    this.itemId = this.params && this.params.id ? String(this.params.id) : null;
+    this.itemId = this.params?.id ? String(this.params.id) : null;
 
     // Per-story thread store — created once we have item data.
     this._threadStore = null;
@@ -127,7 +127,7 @@ export default class ItemView extends View {
       {
         attrs: { class: "loading", role: "status", "aria-live": "polite" },
       },
-      create("span", { attrs: { class: "spinner" } }),
+      createSpinner({ inline: true, label: "Loading story" }),
       " Loading story…",
     );
     root.appendChild(this._loadingEl);
@@ -170,7 +170,7 @@ export default class ItemView extends View {
     if (typeof this._itemUnsub === "function") {
       try {
         this._itemUnsub();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._itemUnsub = null;
@@ -180,7 +180,7 @@ export default class ItemView extends View {
     if (this._controls) {
       try {
         this._controls.cleanup();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._controls = null;
@@ -188,7 +188,7 @@ export default class ItemView extends View {
     if (this._slider) {
       try {
         this._slider.cleanup();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._slider = null;
@@ -196,7 +196,7 @@ export default class ItemView extends View {
     for (const option of this._pollOptions) {
       try {
         option.cleanup();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -212,7 +212,7 @@ export default class ItemView extends View {
     if (typeof this._threadStoreUnsub === "function") {
       try {
         this._threadStoreUnsub();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._threadStoreUnsub = null;
@@ -227,7 +227,7 @@ export default class ItemView extends View {
           // vanilla StoryCommentThreadStore uses saveState instead of dispose
           this._threadStore.saveState();
         }
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._threadStore = null;
@@ -243,7 +243,7 @@ export default class ItemView extends View {
     for (const ce of this._commentElements.values()) {
       try {
         if (typeof ce.cleanup === "function") ce.cleanup();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -265,7 +265,7 @@ export default class ItemView extends View {
    * @returns {void}
    */
   _subscribeToItem() {
-    const hn = this.services && this.services.hnService;
+    const hn = this.services?.hnService;
     if (!hn || typeof hn.onItemValue !== "function" || !this.itemId) {
       this._showError("Service unavailable or missing item id.");
       return;
@@ -291,7 +291,7 @@ export default class ItemView extends View {
    * @returns {void}
    */
   _onItemLoaded(item) {
-    if (!item || !item.id) {
+    if (!item?.id) {
       if (!this._item) this._showError("Story not found.");
       return;
     }
@@ -346,7 +346,7 @@ export default class ItemView extends View {
    * @returns {void}
    */
   _initThreadStore(item) {
-    const globalThreadStore = this.stores && this.stores.threadStore;
+    const globalThreadStore = this.stores?.threadStore;
 
     // Build a getItemById helper that the vanilla store can use for traversal.
     // It looks up loaded comment elements and returns their comment payload.
@@ -356,12 +356,9 @@ export default class ItemView extends View {
       if (key === String(this.itemId)) return this._item;
       // Check loaded comment elements
       const ce = this._commentElements.get(key);
-      if (ce && ce.comment) return ce.comment;
+      if (ce?.comment) return ce.comment;
       // Fallback to global threadStore's item cache if available
-      if (
-        globalThreadStore &&
-        typeof globalThreadStore.getItemById === "function"
-      ) {
+      if (globalThreadStore && typeof globalThreadStore.getItemById === "function") {
         return globalThreadStore.getItemById(id);
       }
       return null;
@@ -370,14 +367,14 @@ export default class ItemView extends View {
     // Create a fresh StoryCommentThreadStore scoped to this story.
     this._threadStore = new StoryCommentThreadStore(item.id, {
       getItemById,
-      settings: this.stores && this.stores.settingsStore,
+      settings: this.stores?.settingsStore,
     });
 
     // Call initForItem if the store exposes it (some implementations do).
     if (typeof this._threadStore.initForItem === "function") {
       try {
         this._threadStore.initForItem(item);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     } else {
@@ -443,7 +440,7 @@ export default class ItemView extends View {
     this._controls = new ItemControls({
       item,
       threadStore: this._threadStore,
-      readStoriesStore: this.stores && this.stores.readStoriesStore,
+      readStoriesStore: this.stores?.readStoriesStore,
       onAutoCollapse: () => this._handleAutoCollapse(),
       onMarkAsRead: () => this._handleMarkAsRead(),
       getNewCommentCount: () => this._getNewCommentCount(),
@@ -498,14 +495,10 @@ export default class ItemView extends View {
    * @returns {HTMLElement} A wrapper `<div class="title">` containing the link.
    */
   _buildTitle(item) {
-    const titleText = item.dead
-      ? `[dead] ${item.title || ""}`
-      : item.title || `Item ${item.id}`;
-    const settings = this.stores && this.stores.settingsStore;
+    const titleText = item.dead ? `[dead] ${item.title || ""}` : item.title || `Item ${item.id}`;
+    const settings = this.stores?.settingsStore;
     const fontSize =
-      settings && typeof settings.get === "function"
-        ? settings.get("titleFontSize")
-        : 18;
+      settings && typeof settings.get === "function" ? settings.get("titleFontSize") : 18;
 
     const titleWrapper = create("div", {
       attrs: { class: "title" },
@@ -528,11 +521,7 @@ export default class ItemView extends View {
 
       const host = parseHost(item.url);
       if (host) {
-        const hostEl = create(
-          "span",
-          { attrs: { class: "host" } },
-          ` (${host})`,
-        );
+        const hostEl = create("span", { attrs: { class: "host" } }, ` (${host})`);
         titleWrapper.appendChild(hostEl);
       }
     } else {
@@ -563,11 +552,7 @@ export default class ItemView extends View {
 
     if (item.type === "job") {
       // Job posts only show time
-      const time = create(
-        "span",
-        { attrs: { class: "time" } },
-        timeAgoFromUnix(item.time),
-      );
+      const time = create("span", { attrs: { class: "time" } }, timeAgoFromUnix(item.time));
       meta.appendChild(time);
       return meta;
     }
@@ -591,20 +576,14 @@ export default class ItemView extends View {
     meta.appendChild(document.createTextNode(" "));
 
     // Time
-    const timeEl = create(
-      "span",
-      { attrs: { class: "time" } },
-      timeAgoFromUnix(item.time),
-    );
+    const timeEl = create("span", { attrs: { class: "time" } }, timeAgoFromUnix(item.time));
     meta.appendChild(timeEl);
     meta.appendChild(document.createTextNode(" | "));
 
     // Comments/discuss link
     const commentsCount = item.descendants != null ? item.descendants : 0;
     const commentsText =
-      commentsCount > 0
-        ? `${commentsCount} ${pluralise(commentsCount, "comment")}`
-        : "discuss";
+      commentsCount > 0 ? `${commentsCount} ${pluralise(commentsCount, "comment")}` : "discuss";
     const commentsLink = create(
       "a",
       {
@@ -625,8 +604,7 @@ export default class ItemView extends View {
     if (!this._metaEl) return;
 
     const scoreEl = this._metaEl.querySelector(".score");
-    if (scoreEl)
-      scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, "point")}`;
+    if (scoreEl) scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, "point")}`;
 
     const timeEl = this._metaEl.querySelector(".time");
     if (timeEl) timeEl.textContent = timeAgoFromUnix(item.time);
@@ -635,9 +613,7 @@ export default class ItemView extends View {
     if (commentsEl) {
       const commentsCount = item.descendants != null ? item.descendants : 0;
       commentsEl.textContent =
-        commentsCount > 0
-          ? `${commentsCount} ${pluralise(commentsCount, "comment")}`
-          : "discuss";
+        commentsCount > 0 ? `${commentsCount} ${pluralise(commentsCount, "comment")}` : "discuss";
     }
   }
 
@@ -658,7 +634,7 @@ export default class ItemView extends View {
    */
   _subscribeToComments(item) {
     if (!item.kids || item.kids.length === 0) return;
-    const hn = this.services && this.services.hnService;
+    const hn = this.services?.hnService;
     if (!hn || typeof hn.onItemValue !== "function") return;
 
     const kidsEl = this._kidsEl;
@@ -689,7 +665,7 @@ export default class ItemView extends View {
       // Subscribe — use the View base-class _unsubscribers array via a manual push
       // so they're cleaned up if cleanup() is called before comments arrive.
       const unsub = hn.onItemValue(kidId, (comment) => {
-        if (!comment || !comment.id) {
+        if (!comment?.id) {
           this._handleDelayedComment(kidId, placeholder);
           return;
         }
@@ -713,7 +689,7 @@ export default class ItemView extends View {
    */
   _subscribeToNewTopLevelKids(item) {
     if (!item.kids || !this._kidsEl) return;
-    const hn = this.services && this.services.hnService;
+    const hn = this.services?.hnService;
     if (!hn || typeof hn.onItemValue !== "function") return;
 
     for (const kidId of item.kids) {
@@ -746,7 +722,7 @@ export default class ItemView extends View {
       this._kidsEl.appendChild(placeholder);
 
       const unsub = hn.onItemValue(kidId, (comment) => {
-        if (!comment || !comment.id) {
+        if (!comment?.id) {
           this._handleDelayedComment(kidId, placeholder);
           return;
         }
@@ -788,7 +764,7 @@ export default class ItemView extends View {
         existingCE.cleanup();
         this._commentElements.delete(key);
       }
-      if (placeholder && placeholder.parentNode) {
+      if (placeholder?.parentNode) {
         placeholder.remove();
       }
       return;
@@ -799,7 +775,7 @@ export default class ItemView extends View {
       existingCE.comment = comment;
       try {
         if (typeof existingCE.update === "function") existingCE.update();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       // Apply collapse state from threadStore if it changed.
@@ -822,12 +798,8 @@ export default class ItemView extends View {
         depth: 0,
       });
     } catch (err) {
-      console.warn(
-        "ItemView: failed to create CommentElement for",
-        comment.id,
-        err,
-      );
-      if (placeholder && placeholder.parentNode) {
+      console.warn("ItemView: failed to create CommentElement for", comment.id, err);
+      if (placeholder?.parentNode) {
         placeholder.textContent = `[Error loading comment ${comment.id}]`;
       }
       return;
@@ -840,18 +812,14 @@ export default class ItemView extends View {
     try {
       commentNode = ce.render();
     } catch (err) {
-      console.warn(
-        "ItemView: CommentElement.render() failed for",
-        comment.id,
-        err,
-      );
-      if (placeholder && placeholder.parentNode) {
+      console.warn("ItemView: CommentElement.render() failed for", comment.id, err);
+      if (placeholder?.parentNode) {
         placeholder.textContent = `[Error rendering comment ${comment.id}]`;
       }
       return;
     }
 
-    if (placeholder && placeholder.parentNode) {
+    if (placeholder?.parentNode) {
       placeholder.parentNode.replaceChild(commentNode, placeholder);
     } else if (this._kidsEl) {
       this._kidsEl.appendChild(commentNode);
@@ -868,16 +836,12 @@ export default class ItemView extends View {
     const key = String(commentId);
     if (!this._delayedComments.has(key)) {
       this._delayedComments.add(key);
-      if (
-        this._threadStore &&
-        typeof this._threadStore.commentDelayed === "function"
-      ) {
+      if (this._threadStore && typeof this._threadStore.commentDelayed === "function") {
         this._threadStore.commentDelayed(commentId);
       }
     }
     if (placeholder) {
-      placeholder.textContent =
-        "Unable to load comment. Trying again in 30 seconds.";
+      placeholder.textContent = "Unable to load comment. Trying again in 30 seconds.";
       placeholder.classList.add("placeholder--delayed");
     }
   }
@@ -903,7 +867,7 @@ export default class ItemView extends View {
       if (typeof this._threadStore.commentAdded === "function") {
         this._threadStore.commentAdded(comment);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore; store notification is best-effort
     }
     // Immediately refresh controls and slider after a comment is registered,
@@ -924,10 +888,7 @@ export default class ItemView extends View {
     try {
       let collapsed = false;
       if (typeof this._threadStore.isCollapsed === "function") {
-        collapsed = this._threadStore.isCollapsed(
-          this._item && this._item.id,
-          commentId,
-        );
+        collapsed = this._threadStore.isCollapsed(this._item?.id, commentId);
       } else if (
         this._threadStore.isCollapsed &&
         typeof this._threadStore.isCollapsed === "object"
@@ -937,7 +898,7 @@ export default class ItemView extends View {
       if (typeof ce.toggleCollapse === "function") {
         ce.toggleCollapse(collapsed, false);
       }
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
   }
@@ -948,13 +909,10 @@ export default class ItemView extends View {
    * @param {number|string} commentId
    */
   _applyNewState(ce, commentId) {
-    if (!this._threadStore || !ce || !ce.root) return;
+    if (!this._threadStore || !ce?.root) return;
     try {
       let isNew = false;
-      if (
-        this._threadStore.isNew &&
-        typeof this._threadStore.isNew === "object"
-      ) {
+      if (this._threadStore.isNew && typeof this._threadStore.isNew === "object") {
         isNew = Boolean(this._threadStore.isNew[String(commentId)]);
       }
       if (isNew) {
@@ -962,14 +920,14 @@ export default class ItemView extends View {
       } else {
         ce.root.classList.remove("new");
       }
-    } catch (e) {
+    } catch (_e) {
       /* ignore */
     }
   }
 
   _applyNewStateRecursive(ce) {
-    if (!ce || !ce.root) return;
-    const commentId = ce.comment && ce.comment.id;
+    if (!ce?.root) return;
+    const commentId = ce.comment?.id;
     if (commentId) this._applyNewState(ce, commentId);
     if (ce._loadedKids) {
       for (const child of ce._loadedKids.values()) {
@@ -1041,22 +999,17 @@ export default class ItemView extends View {
   _onThreadLoadComplete() {
     this._clearLoadPoll();
 
-    const settings = this.stores && this.stores.settingsStore;
+    const settings = this.stores?.settingsStore;
     const autoCollapse =
-      settings && typeof settings.get === "function"
-        ? settings.get("autoCollapse")
-        : false;
+      settings && typeof settings.get === "function" ? settings.get("autoCollapse") : false;
 
     const newCommentCount = this._getNewCommentCount();
 
     if (autoCollapse && newCommentCount > 0 && this._threadStore) {
-      if (
-        typeof this._threadStore.collapseThreadsWithoutNewComments ===
-        "function"
-      ) {
+      if (typeof this._threadStore.collapseThreadsWithoutNewComments === "function") {
         try {
           this._threadStore.collapseThreadsWithoutNewComments();
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
       }
@@ -1073,13 +1026,9 @@ export default class ItemView extends View {
    * @param {Object|undefined} change  change descriptor from threadStore._notify()
    */
   _onThreadStoreChanged(change) {
-    const type = change && change.type;
+    const type = change?.type;
 
-    if (
-      type === "collapse" ||
-      type === "toggleCollapse" ||
-      type === "autoCollapse"
-    ) {
+    if (type === "collapse" || type === "toggleCollapse" || type === "autoCollapse") {
       this._reapplyAllCommentStates();
       return;
     }
@@ -1111,12 +1060,10 @@ export default class ItemView extends View {
    */
   _handleAutoCollapse() {
     if (!this._threadStore) return;
-    if (
-      typeof this._threadStore.collapseThreadsWithoutNewComments === "function"
-    ) {
+    if (typeof this._threadStore.collapseThreadsWithoutNewComments === "function") {
       try {
         this._threadStore.collapseThreadsWithoutNewComments();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -1138,27 +1085,24 @@ export default class ItemView extends View {
    * @returns {void}
    */
   _handleMarkAsRead() {
-    const storyId = this._item && this._item.id;
+    const storyId = this._item?.id;
     if (!storyId) return;
 
     // Mark in the per-story thread store.
-    if (
-      this._threadStore &&
-      typeof this._threadStore.markAsRead === "function"
-    ) {
+    if (this._threadStore && typeof this._threadStore.markAsRead === "function") {
       try {
         this._threadStore.markAsRead(storyId);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
 
     // Mark in the global read-stories store.
-    const readStore = this.stores && this.stores.readStoriesStore;
+    const readStore = this.stores?.readStoriesStore;
     if (readStore && typeof readStore.markAsRead === "function") {
       try {
         readStore.markAsRead(storyId);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -1193,7 +1137,7 @@ export default class ItemView extends View {
   _getCommentCount() {
     if (this._threadStore) {
       // vanilla store: check entry via getState
-      const storyId = this._item && this._item.id;
+      const storyId = this._item?.id;
       if (storyId && typeof this._threadStore.getState === "function") {
         const s = this._threadStore.getState(storyId);
         if (s && typeof s.commentCount === "number") return s.commentCount;
@@ -1203,7 +1147,7 @@ export default class ItemView extends View {
         return this._threadStore.commentCount;
       }
     }
-    return this._item && this._item.descendants ? this._item.descendants : 0;
+    return this._item?.descendants ? this._item.descendants : 0;
   }
 
   /**
@@ -1219,7 +1163,7 @@ export default class ItemView extends View {
     }
 
     // Vanilla store: derive from getState + maxCommentId heuristic
-    const storyId = this._item && this._item.id;
+    const storyId = this._item?.id;
     if (storyId && typeof this._threadStore.getState === "function") {
       const s = this._threadStore.getState(storyId);
       if (s) {
@@ -1230,7 +1174,7 @@ export default class ItemView extends View {
           try {
             const counts = this._threadStore.getChildCounts(storyId, null);
             if (counts && typeof counts.new === "number") return counts.new;
-          } catch (e) {
+          } catch (_e) {
             /* ignore */
           }
         }

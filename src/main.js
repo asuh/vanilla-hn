@@ -70,6 +70,7 @@
     }
 
     const hnService = new HNService({
+      mock: Boolean(globalThis.__VANILLA_HN_MOCK__),
       // HNService should read configuration from environment or gracefully operate in a mock mode
       // For production, users must supply their Firebase config via a separate file or runtime injection.
       // We intentionally pass no secrets here.
@@ -113,9 +114,7 @@
         const module = await loadView();
         const ViewCtor = module.default;
         if (typeof ViewCtor !== "function") {
-          throw new Error(
-            "Lazy view module does not export a default constructor/function",
-          );
+          throw new Error("Lazy view module does not export a default constructor/function");
         }
         // Provide commonly needed context to views
         const context = {
@@ -136,7 +135,7 @@
 
     function pageParamsFromMatch(match) {
       const params = {};
-      const query = match && match[1] ? match[1] : "";
+      const query = match?.[1] ? match[1] : "";
       const page = new URLSearchParams(query).get("page");
       if (page) params.page = page;
       return params;
@@ -167,20 +166,15 @@
     });
 
     // Item view — extracts id from paths like /item/12345, /story/12345, etc.
-    router.register(
-      /^\/(?:item|story|job|poll)\/(\d+)(?:\?.*)?$/,
-      async (match) => {
-        const params = { id: String(match[1]) };
-        const viewFactory = lazyView(() => import("./views/ItemView.js"));
-        return await viewFactory(params);
-      },
-    );
+    router.register(/^\/(?:item|story|job|poll)\/(\d+)(?:\?.*)?$/, async (match) => {
+      const params = { id: String(match[1]) };
+      const viewFactory = lazyView(() => import("./views/ItemView.js"));
+      return await viewFactory(params);
+    });
 
     router.register(/^\/comment\/(\d+)(?:\?.*)?$/, async (match) => {
       const params = { id: String(match[1]) };
-      const viewFactory = lazyView(() =>
-        import("./views/PermalinkedCommentView.js"),
-      );
+      const viewFactory = lazyView(() => import("./views/PermalinkedCommentView.js"));
       return await viewFactory(params);
     });
 
@@ -212,15 +206,8 @@
     // Basic keyboard helpers.
     document.addEventListener("keydown", (ev) => {
       // avoid typing into inputs
-      const tag = (ev.target && ev.target.tagName) || "";
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        ev.metaKey ||
-        ev.ctrlKey ||
-        ev.altKey
-      )
-        return;
+      const tag = ev.target?.tagName || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || ev.metaKey || ev.ctrlKey || ev.altKey) return;
 
       // quick navigation: press 'g' then 'h' to go home (gh)
       // a tiny stateful example - keep it simple
@@ -249,12 +236,7 @@
         // Sync every form control to the current store state.
         const syncForm = (state) => {
           if (!form) return;
-          for (const name of [
-            "autoCollapse",
-            "replyLinks",
-            "showDead",
-            "showDeleted",
-          ]) {
+          for (const name of ["autoCollapse", "replyLinks", "showDead", "showDeleted"]) {
             const input = form.querySelector(`[name="${name}"]`);
             if (input) input.checked = Boolean(state[name]);
           }
@@ -323,6 +305,8 @@
             settingsStore.update({ [el.name]: value });
           });
         }
+
+        settingsBtn.disabled = false;
       }
     } catch (err) {
       console.warn("Settings panel wiring failed:", err);
@@ -344,9 +328,6 @@
   } catch (err) {
     // If bootstrap fails, leave the fallback content (index.html) intact and log an actionable message.
     // Avoid throwing so that the browser doesn't show a noisy stack in some dev servers.
-    console.error(
-      "Application bootstrap failed. See earlier logs for details.",
-      err,
-    );
+    console.error("Application bootstrap failed. See earlier logs for details.", err);
   }
 })();

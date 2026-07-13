@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "singleQuote": false,
+  "semi": true,
+  "trailingComma": "all",
+  "sortImports": false,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "dist/**",
+    "artifacts/**",
+    "playwright-report/**",
+    "test-results/**",
+    "public/vendor/**"
+  ]
+}

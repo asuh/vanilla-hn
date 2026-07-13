@@ -112,14 +112,14 @@ const defaultStorage = {
   get(key) {
     try {
       return window.localStorage.getItem(key);
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   },
   set(key, value) {
     try {
       window.localStorage.setItem(key, value);
-    } catch (e) {
+    } catch (_e) {
       /* quota / private mode */
     }
   },
@@ -149,7 +149,7 @@ export function loadState(storyId, storage = defaultStorage) {
   if (raw) {
     try {
       return JSON.parse(raw);
-    } catch (e) {
+    } catch (_e) {
       // Malformed JSON — fall through to defaults.
     }
   }
@@ -186,8 +186,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     super();
 
     this.storyId = storyId;
-    this._storageKey =
-      options.storageKey != null ? options.storageKey : String(storyId);
+    this._storageKey = options.storageKey != null ? options.storageKey : String(storyId);
     this._storage = options.storage != null ? options.storage : defaultStorage;
 
     /**
@@ -268,10 +267,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
      * with re-renders while hundreds of comments are streaming in.
      * Matches react-hn's 123 ms debounce interval exactly.
      */
-    this._debouncedCountChanged = cancellableDebounce(
-      () => this.notify({ type: "number" }),
-      123,
-    );
+    this._debouncedCountChanged = cancellableDebounce(() => this.notify({ type: "number" }), 123);
 
     /**
      * Debounced persistence.  Also fires at 123 ms to match react-hn.
@@ -464,7 +460,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
    *
    * @param {number} commentId
    */
-  commentDelayed(commentId) {
+  commentDelayed(_commentId) {
     // eslint-disable-line no-unused-vars
     this.expectedComments--;
     // No checkLoadCompletion here: react-hn doesn't call it in commentDelayed either.
@@ -510,10 +506,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     if (this.commentCount < this.expectedComments) return;
 
     // Log load timing in non-production environments.
-    if (
-      typeof process === "undefined" ||
-      process.env.NODE_ENV !== "production"
-    ) {
+    if (typeof process === "undefined" || process.env.NODE_ENV !== "production") {
       const elapsed = ((Date.now() - this._startedLoading) / 1000).toFixed(2);
       console.info(
         `Initial load of ${this.commentCount} comment${pluralise(this.commentCount)}` +
@@ -610,7 +603,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
         } else {
           // This subtree contains new comments — keep it open and go deeper.
           const childIds = this.children[commentId];
-          if (childIds && childIds.length) {
+          if (childIds?.length) {
             nextCommentIds.push(...childIds);
           }
         }
@@ -683,7 +676,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
         }
 
         const childIds = this.children[commentId];
-        if (childIds && childIds.length) {
+        if (childIds?.length) {
           nextCommentIds.push(...childIds);
         }
       }

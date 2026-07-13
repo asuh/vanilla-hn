@@ -71,6 +71,7 @@ export default class UpdatesStore {
   }
 
   stop() {
+    this._fetchGeneration++;
     if (typeof this._unsub === "function") {
       try {
         this._unsub();
@@ -112,11 +113,7 @@ export default class UpdatesStore {
     }
 
     const generation = ++this._fetchGeneration;
-    const items = await Promise.all(
-      ids.map((id) =>
-        this._hn.fetchItem(id).catch(() => null),
-      ),
-    );
+    const items = await Promise.all(ids.map((id) => this._hn.fetchItem(id).catch(() => null)));
     if (generation !== this._fetchGeneration) return;
 
     let changed = false;

@@ -20,13 +20,13 @@ export function sinceLastVisit(lastVisitMs) {
   const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
 
   const units = [
-    { name: "year",   secs: 60 * 60 * 24 * 365 },
-    { name: "month",  secs: 60 * 60 * 24 * 30  },
-    { name: "week",   secs: 60 * 60 * 24 * 7   },
-    { name: "day",    secs: 60 * 60 * 24        },
-    { name: "hour",   secs: 60 * 60             },
-    { name: "minute", secs: 60                  },
-    { name: "second", secs: 1                   },
+    { name: "year", secs: 60 * 60 * 24 * 365 },
+    { name: "month", secs: 60 * 60 * 24 * 30 },
+    { name: "week", secs: 60 * 60 * 24 * 7 },
+    { name: "day", secs: 60 * 60 * 24 },
+    { name: "hour", secs: 60 * 60 },
+    { name: "minute", secs: 60 },
+    { name: "second", secs: 1 },
   ];
 
   for (const u of units) {
@@ -128,15 +128,13 @@ export default class ItemControls {
 
     if (!this.threadStore) return;
 
-    const storyId = this.item && this.item.id;
+    const storyId = this.item?.id;
     const state =
       storyId && typeof this.threadStore.getState === "function"
         ? this.threadStore.getState(storyId)
         : null;
 
-    const lastVisit = state
-      ? state.lastVisit
-      : this.threadStore.lastVisit || null;
+    const lastVisit = state ? state.lastVisit : this.threadStore.lastVisit || null;
     const newCommentCount = this.getNewCommentCount();
 
     // Only show the controls bar when we've been here before and have new comments.
@@ -152,11 +150,7 @@ export default class ItemControls {
     const newInfo = create(
       "span",
       { attrs: { class: "new-info" } },
-      create(
-        "em",
-        {},
-        `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`,
-      ),
+      create("em", {}, `${newCommentCount} new ${pluralise(newCommentCount, "comment")}`),
       " in the last ",
       sinceTextNode,
     );

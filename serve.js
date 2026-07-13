@@ -68,12 +68,10 @@ for (const [name, realPath] of [
   try {
     const s = await fstat(realPath);
     if (!s.isDirectory()) {
-      console.error(
-        `\nMissing required directory: ${name}/ (${realPath}) — not a directory`,
-      );
+      console.error(`\nMissing required directory: ${name}/ (${realPath}) — not a directory`);
       process.exit(1);
     }
-  } catch (err) {
+  } catch (_err) {
     console.error(`\nMissing required directory: ${name}/ (${realPath})`);
     console.error(`Create the directory and re-run: mkdir -p ${name}`);
     process.exit(1);
@@ -139,8 +137,7 @@ const server = http.createServer(async (req, res) => {
   // Manual per-request timer that will call ac.abort() when elapsed.
   const timer = setTimeout(() => {
     if (!signal.aborted) {
-      if (DEV_LOG)
-        console.warn(`[serve] request timeout: ${req.method} ${req.url}`);
+      if (DEV_LOG) console.warn(`[serve] request timeout: ${req.method} ${req.url}`);
       ac.abort();
     }
   }, REQUEST_TIMEOUT_MS);
@@ -157,15 +154,13 @@ const server = http.createServer(async (req, res) => {
       res.removeListener("finish", onResFinish);
     } catch (_) {}
     try {
-      signal.removeEventListener &&
-        signal.removeEventListener("abort", onSignalAbort);
+      signal.removeEventListener?.("abort", onSignalAbort);
     } catch (_) {}
   }
 
   function onSignalAbort() {
     // Do minimal work here. The streaming pipeline's catch will handle 408/cleanup
-    if (DEV_LOG)
-      console.warn(`[serve] abort signal for ${req.method} ${req.url}`);
+    if (DEV_LOG) console.warn(`[serve] abort signal for ${req.method} ${req.url}`);
     cleanup();
   }
 
@@ -186,7 +181,7 @@ const server = http.createServer(async (req, res) => {
   let decodedPath;
   try {
     decodedPath = decodeURIComponent((req.url || "/").split("?")[0]);
-  } catch (err) {
+  } catch (_err) {
     if (!res.writableEnded) {
       res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("400 Bad Request: malformed URL encoding");
@@ -242,8 +237,7 @@ const server = http.createServer(async (req, res) => {
               function teardownListeners() {
                 spaStream.removeListener("open", onOpen);
                 spaStream.removeListener("error", onError);
-                signal.removeEventListener &&
-                  signal.removeEventListener("abort", onAbort);
+                signal.removeEventListener?.("abort", onAbort);
               }
               function onOpen() {
                 teardownListeners();
@@ -358,7 +352,7 @@ const server = http.createServer(async (req, res) => {
                 } catch (_) {}
               }
             } else {
-              console.error("[serve] spa streaming error:", err && err.message);
+              console.error("[serve] spa streaming error:", err?.message);
               if (!res.headersSent) {
                 try {
                   res.writeHead(500, {
@@ -393,10 +387,7 @@ const server = http.createServer(async (req, res) => {
   const { filePath, stat } = found;
 
   // Ensure resolved path is inside one of our canonical roots.
-  if (
-    !isInsideRoot(REAL_PUBLIC, filePath) &&
-    !isInsideRoot(REAL_SRC, filePath)
-  ) {
+  if (!isInsideRoot(REAL_PUBLIC, filePath) && !isInsideRoot(REAL_SRC, filePath)) {
     console.warn(`[serve] forbidden path escape attempt: ${filePath}`);
     if (!res.writableEnded) {
       res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
@@ -410,10 +401,7 @@ const server = http.createServer(async (req, res) => {
   const ifMod = req.headers["if-modified-since"];
   if (ifMod) {
     const since = Date.parse(ifMod);
-    if (
-      !Number.isNaN(since) &&
-      Math.floor(stat.mtimeMs / 1000) <= Math.floor(since / 1000)
-    ) {
+    if (!Number.isNaN(since) && Math.floor(stat.mtimeMs / 1000) <= Math.floor(since / 1000)) {
       if (!res.writableEnded) {
         res.writeHead(304);
         res.end();
@@ -440,8 +428,7 @@ const server = http.createServer(async (req, res) => {
       function teardownListeners() {
         stream.removeListener("open", onOpen);
         stream.removeListener("error", onError);
-        signal.removeEventListener &&
-          signal.removeEventListener("abort", onAbort);
+        signal.removeEventListener?.("abort", onAbort);
       }
       function onOpen() {
         teardownListeners();
@@ -566,7 +553,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Other streaming error
-    console.error("[serve] streaming error:", err && err.message);
+    console.error("[serve] streaming error:", err?.message);
     if (!res.headersSent) {
       try {
         res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
@@ -597,9 +584,7 @@ server.listen(PORT, HOST, () => {
 server.on("error", (err) => {
   if (err && err.code === "EADDRINUSE") {
     console.error(`\nError: port ${PORT} is already in use.`);
-    console.error(
-      `Run with a different port:  PORT=3000 HOST=0.0.0.0 node serve.js\n`,
-    );
+    console.error(`Run with a different port:  PORT=3000 HOST=0.0.0.0 node serve.js\n`);
   } else {
     console.error("Server error:", err);
   }

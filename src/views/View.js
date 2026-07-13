@@ -137,13 +137,12 @@ export default class View {
   focus() {
     if (!this.root) return;
     // Try to find a meaningful focus target
-    const selectors =
-      'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
+    const selectors = 'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])';
     const target = this.root.querySelector(selectors);
     try {
       if (target && typeof target.focus === "function") target.focus();
-      else this.root.focus && this.root.focus();
-    } catch (e) {
+      else this.root.focus?.();
+    } catch (_e) {
       // ignore focus errors
     }
   }
@@ -170,21 +169,14 @@ export default class View {
    */
   createElement(tag, options = {}, ...children) {
     const el = document.createElement(tag);
-    const {
-      attrs = {},
-      props = {},
-      dataset = {},
-      style = {},
-      events = {},
-      html,
-    } = options;
+    const { attrs = {}, props = {}, dataset = {}, style = {}, events = {}, html } = options;
 
     // attrs
     for (const [k, v] of Object.entries(attrs)) {
       if (v === false || v == null) {
         try {
           el.removeAttribute(k);
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
       } else if (v === true) {
@@ -198,7 +190,7 @@ export default class View {
     for (const [k, v] of Object.entries(props)) {
       try {
         el[k] = v;
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -213,7 +205,7 @@ export default class View {
     for (const [k, v] of Object.entries(style)) {
       try {
         el.style[k] = v;
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -231,7 +223,7 @@ export default class View {
       if (typeof el.setHTML === "function") {
         try {
           el.setHTML(html);
-        } catch (e) {
+        } catch (_e) {
           const tpl = document.createElement("template");
           tpl.innerHTML = html;
           el.appendChild(tpl.content);
@@ -348,7 +340,7 @@ export default class View {
     const unsub = () => {
       try {
         el.removeEventListener(eventName, handler, options);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     };
@@ -396,7 +388,7 @@ export default class View {
     // Abort outstanding operations
     try {
       if (this._abortController) this._abortController.abort();
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
 
@@ -413,16 +405,16 @@ export default class View {
     for (const { el, evt, handler } of this._elementListeners.splice(0)) {
       try {
         el.removeEventListener(evt, handler);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
 
     // If root is present and mounted, remove it from DOM.
-    if (this.root && this.root.parentNode) {
+    if (this.root?.parentNode) {
       try {
         this.root.parentNode.removeChild(this.root);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }

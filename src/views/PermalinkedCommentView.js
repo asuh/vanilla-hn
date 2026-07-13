@@ -14,6 +14,7 @@ export default class PermalinkedCommentView extends View {
     this._comment = null;
     this._threadStore = null;
     this._commentElements = new Map();
+    this._kidUnsubs = [];
     this._itemUnsub = null;
     this._ancestorAbort = null;
   }
@@ -41,13 +42,24 @@ export default class PermalinkedCommentView extends View {
       } catch (_) {}
       this._itemUnsub = null;
     }
+    this._resetRenderedThread();
+    this._contentEl = null;
+    super.cleanup();
+  }
+
+  _resetRenderedThread() {
+    for (const unsub of this._kidUnsubs.splice(0)) {
+      try {
+        unsub();
+      } catch (_) {}
+    }
     for (const ce of this._commentElements.values()) {
       try {
         ce.cleanup();
       } catch (_) {}
     }
     this._commentElements.clear();
-    super.cleanup();
+    this._threadStore = null;
   }
 
   _subscribe() {
@@ -75,6 +87,8 @@ export default class PermalinkedCommentView extends View {
 
   async _renderComment(comment) {
     if (!this._contentEl) return;
+
+    this._resetRenderedThread();
 
     if (comment.deleted) {
       document.title = `Deleted comment | ${SITE_TITLE}`;
@@ -153,7 +167,7 @@ export default class PermalinkedCommentView extends View {
     const hn = this.services.hnService;
     if (!hn || typeof hn.fetchItem !== "function") return;
     const result = await fetchCommentAncestors(hn, comment, { signal: this.signal });
-    if (!meta || !meta.isConnected) return;
+    if (!meta?.isConnected) return;
 
     if (result.parent && result.op && comment.parent !== result.op.id) {
       meta.appendChild(document.createTextNode(" | "));
@@ -192,7 +206,7 @@ export default class PermalinkedCommentView extends View {
       );
       kidsEl.appendChild(placeholder);
       const unsub = hn.onItemValue(kidId, (child) => {
-        if (!child || !child.id) return;
+        if (!child?.id) return;
         this._threadStore.commentAdded(child);
         const ce = new CommentElement({
           comment: child,
@@ -203,7 +217,7 @@ export default class PermalinkedCommentView extends View {
         this._commentElements.set(String(child.id), ce);
         placeholder.replaceWith(ce.render());
       });
-      if (typeof unsub === "function") this._unsubscribers.push(unsub);
+      if (typeof unsub === "function") this._kidUnsubs.push(unsub);
     }
   }
 

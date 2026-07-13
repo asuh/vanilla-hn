@@ -36,7 +36,7 @@ export function debounce(fn, wait = 150) {
       try {
         fn.apply(this, args);
       } catch (e) {
-        console.warn('[debounce] callback threw:', e);
+        console.warn("[debounce] callback threw:", e);
       }
     }, wait);
   };
@@ -80,7 +80,7 @@ export function cancellableDebounce(fn, wait) {
       try {
         fn.apply(savedThis, savedArgs);
       } catch (e) {
-        console.warn('[cancellableDebounce] callback threw:', e);
+        console.warn("[cancellableDebounce] callback threw:", e);
       }
       savedArgs = null;
       savedThis = null;
@@ -131,10 +131,10 @@ export function cancellableDebounce(fn, wait) {
 export function pluralise(n, singular, plural) {
   // Suffix-only mode: pluralise(3) → 's', pluralise(1) → ''
   if (singular === undefined) {
-    return n === 1 ? '' : 's';
+    return n === 1 ? "" : "s";
   }
 
-  const p = plural !== undefined ? plural : singular + 's';
+  const p = plural !== undefined ? plural : `${singular}s`;
   return n === 1 ? singular : p;
 }
 
@@ -153,11 +153,11 @@ export function pluralise(n, singular, plural) {
  *   parseHost(null)                         // → ''
  */
 export function parseHost(url) {
-  if (!url) return '';
+  if (!url) return "";
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return '';
+    return "";
   }
 }
 

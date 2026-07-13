@@ -17,11 +17,7 @@
  *  - Real sanitization of HTML is environment-specific. Here we escape text by default.
  */
 
-import {
-  create,
-  setSafeHTML,
-  timeAgoFromUnix,
-} from "../utils/dom.js";
+import { create, setSafeHTML, timeAgoFromUnix } from "../utils/dom.js";
 import { createSpinner } from "./Spinner.js";
 import { itemPath } from "../utils/item-ancestors.js";
 
@@ -36,8 +32,7 @@ export class CommentElement {
    * @param {number} [opts.depth=0] - Comment nesting depth (for styling/logic).
    */
   constructor({ comment, services = {}, stores = {}, depth = 0 } = {}) {
-    if (!comment || !comment.id)
-      throw new Error("CommentElement requires a comment with an id");
+    if (!comment?.id) throw new Error("CommentElement requires a comment with an id");
 
     this.comment = comment;
     this.services = services;
@@ -67,12 +62,7 @@ export class CommentElement {
     if (this._collapsed) classes.push("collapsed");
     if (this.comment.dead) classes.push("dead");
     if (this.comment.deleted) classes.push("deleted");
-    if (
-      this.stores &&
-      this.stores.threadStore &&
-      this.stores.threadStore.isNew &&
-      this.stores.threadStore.isNew[String(this.comment.id)]
-    ) classes.push("new");
+    if (this.stores?.threadStore?.isNew?.[String(this.comment.id)]) classes.push("new");
 
     // Root wrapper
     const wrapper = create("article", {
@@ -114,7 +104,7 @@ export class CommentElement {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
             const el = entry.target;
-            const kidId = el.dataset && el.dataset.kidId;
+            const kidId = el.dataset?.kidId;
             if (kidId) {
               this._observer.unobserve(el);
               this._loadChildAndReplacePlaceholder(kidId, el).catch(() => {
@@ -205,18 +195,14 @@ export class CommentElement {
     let children = 0;
     let newComments = 0;
 
-    if (
-      this.stores &&
-      this.stores.threadStore &&
-      typeof this.stores.threadStore.getChildCounts === "function"
-    ) {
+    if (this.stores?.threadStore && typeof this.stores.threadStore.getChildCounts === "function") {
       try {
         const c = this.stores.threadStore.getChildCounts(this.comment);
         if (c) {
           children = c.children || 0;
           newComments = c.newComments || 0;
         }
-      } catch (e) {
+      } catch (_e) {
         children = Array.isArray(this.comment.kids) ? this.comment.kids.length : 0;
       }
     } else {
@@ -278,9 +264,13 @@ export class CommentElement {
     const replyLinks = this.stores?.settingsStore?.get?.("replyLinks") ?? true;
     if (replyLinks && !this.comment.dead) {
       const p = document.createElement("p");
-      const a = create("a", {
-        attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
-      }, "reply");
+      const a = create(
+        "a",
+        {
+          attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
+        },
+        "reply",
+      );
       p.appendChild(a);
       textEl.appendChild(p);
     }
@@ -322,8 +312,7 @@ export class CommentElement {
    * @returns {boolean} The new collapsed state.
    */
   toggleCollapse(explicitState, notifyStore = true) {
-    const newState =
-      explicitState === undefined ? !this._collapsed : Boolean(explicitState);
+    const newState = explicitState === undefined ? !this._collapsed : Boolean(explicitState);
     this._collapsed = newState;
 
     if (this.root) {
@@ -359,16 +348,12 @@ export class CommentElement {
     // an infinite notify → reapply → notify loop)
     if (
       notifyStore &&
-      this.stores &&
-      this.stores.threadStore &&
+      this.stores?.threadStore &&
       typeof this.stores.threadStore.toggleCollapse === "function"
     ) {
       try {
-        this.stores.threadStore.toggleCollapse(
-          this.comment.id,
-          this._collapsed,
-        );
-      } catch (e) {
+        this.stores.threadStore.toggleCollapse(this.comment.id, this._collapsed);
+      } catch (_e) {
         // ignore store errors
       }
     }
@@ -389,7 +374,7 @@ export class CommentElement {
     const key = String(childId);
     if (this._loadedKids.has(key)) {
       const childElement = this._loadedKids.get(key);
-      if (placeholderEl && childElement && childElement.root) {
+      if (placeholderEl && childElement?.root) {
         placeholderEl.replaceWith(childElement.root);
         this._loadingPlaceholders.delete(key);
       }
@@ -407,7 +392,7 @@ export class CommentElement {
       );
     }
 
-    const hn = this.services && this.services.hnService;
+    const hn = this.services?.hnService;
     if (!hn) {
       if (placeholderEl) placeholderEl.textContent = "Cannot load (no service)";
       return;
@@ -421,7 +406,7 @@ export class CommentElement {
           // Create or update child element when payload arrives
           this._upsertChildFromPayload(childId, payload, placeholderEl);
         });
-      } catch (e) {
+      } catch (_e) {
         // fallback to fetch
         unsub = null;
       }
@@ -432,9 +417,8 @@ export class CommentElement {
       try {
         const payload = await hn.fetchItem(childId);
         this._upsertChildFromPayload(childId, payload, placeholderEl);
-      } catch (err) {
-        if (placeholderEl)
-          placeholderEl.textContent = `Failed to load ${childId}`;
+      } catch (_err) {
+        if (placeholderEl) placeholderEl.textContent = `Failed to load ${childId}`;
       }
       return;
     }
@@ -447,8 +431,7 @@ export class CommentElement {
     const key = String(childId);
     if (!payload) {
       if (placeholderEl)
-        placeholderEl.textContent =
-          "Unable to load comment. Trying again in 30 seconds.";
+        placeholderEl.textContent = "Unable to load comment. Trying again in 30 seconds.";
       if (
         this.stores?.threadStore &&
         typeof this.stores.threadStore.commentDelayed === "function"
@@ -463,7 +446,7 @@ export class CommentElement {
       if (this.stores?.threadStore?.commentAdded) {
         try {
           this.stores.threadStore.commentAdded(payload);
-        } catch (e) {
+        } catch (_e) {
           /* ignore */
         }
       }
@@ -476,12 +459,11 @@ export class CommentElement {
       const existing = this._loadedKids.get(key);
       existing.comment = payload;
       try {
-        existing.update && existing.update();
-      } catch (e) {
+        existing.update?.();
+      } catch (_e) {
         /* ignore */
       }
-      if (placeholderEl && existing.root)
-        placeholderEl.replaceWith(existing.root);
+      if (placeholderEl && existing.root) placeholderEl.replaceWith(existing.root);
       this._loadingPlaceholders.delete(key);
       return;
     }
@@ -489,14 +471,10 @@ export class CommentElement {
     // Register the comment with the threadStore so isNew / graph wiring is set
     // before render(). Child comments never flow through ItemView._notifyThreadStoreComment,
     // so without this call isNew[childId] is never populated.
-    if (
-      this.stores &&
-      this.stores.threadStore &&
-      typeof this.stores.threadStore.commentAdded === "function"
-    ) {
+    if (this.stores?.threadStore && typeof this.stores.threadStore.commentAdded === "function") {
       try {
         this.stores.threadStore.commentAdded(payload);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -510,7 +488,7 @@ export class CommentElement {
     });
     const childNode = childElement.render();
     // Insert into DOM replacing placeholder if present
-    if (placeholderEl && placeholderEl.parentNode) {
+    if (placeholderEl?.parentNode) {
       placeholderEl.replaceWith(childNode);
       this._loadingPlaceholders.delete(key);
     } else if (this._kidsContainer) {
@@ -519,12 +497,7 @@ export class CommentElement {
     this._loadedKids.set(key, childElement);
 
     // Apply .new highlight if the threadStore marks this comment as new
-    if (
-      this.stores &&
-      this.stores.threadStore &&
-      this.stores.threadStore.isNew &&
-      this.stores.threadStore.isNew[String(childId)]
-    ) {
+    if (this.stores?.threadStore?.isNew?.[String(childId)]) {
       childNode.classList.add("new");
     }
   }
@@ -543,9 +516,13 @@ export class CommentElement {
       const replyLinks = this.stores?.settingsStore?.get?.("replyLinks") ?? true;
       if (replyLinks && !this.comment.dead) {
         const p = document.createElement("p");
-        const a = create("a", {
-          attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
-        }, "reply");
+        const a = create(
+          "a",
+          {
+            attrs: { href: `https://news.ycombinator.com/reply?id=${this.comment.id}` },
+          },
+          "reply",
+        );
         p.appendChild(a);
         textEl.appendChild(p);
       }
@@ -553,9 +530,7 @@ export class CommentElement {
     // Update time
     const timeEl = this.root.querySelector(".meta .time");
     if (timeEl) {
-      timeEl.textContent = timeAgoFromUnix(
-        this.comment.time || Date.now() / 1000,
-      );
+      timeEl.textContent = timeAgoFromUnix(this.comment.time || Date.now() / 1000);
     }
     // Update counts
     const descEl = this.root.querySelector(".meta .desc");
@@ -569,15 +544,11 @@ export class CommentElement {
       descEl.textContent = `${descendantCount} replies`;
     }
     // If store can report new-child counts, refresh badge
-    if (
-      this.stores &&
-      this.stores.threadStore &&
-      typeof this.stores.threadStore.getChildCounts === "function"
-    ) {
+    if (this.stores?.threadStore && typeof this.stores.threadStore.getChildCounts === "function") {
       try {
         const countsObj = this.stores.threadStore.getChildCounts(this.comment);
         const existingBadge = this.root.querySelector(".badge.new");
-        if (countsObj && countsObj.newComments && countsObj.newComments > 0) {
+        if (countsObj?.newComments && countsObj.newComments > 0) {
           if (!existingBadge) {
             const newBadge = create(
               "span",
@@ -601,7 +572,7 @@ export class CommentElement {
           existingBadge.remove();
           this.root.classList.remove("has-new");
         }
-      } catch (e) {
+      } catch (_e) {
         // ignore store errors
       }
     }
@@ -637,7 +608,7 @@ export class CommentElement {
     if (this._observer) {
       try {
         this._observer.disconnect();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
       this._observer = null;
@@ -647,7 +618,7 @@ export class CommentElement {
     for (const child of this._loadedKids.values()) {
       try {
         if (typeof child.cleanup === "function") child.cleanup();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
@@ -657,17 +628,17 @@ export class CommentElement {
     for (const unsub of this._unsubs) {
       try {
         typeof unsub === "function" && unsub();
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }
     this._unsubs = [];
 
     // Remove references to DOM nodes
-    if (this.root && this.root.parentNode) {
+    if (this.root?.parentNode) {
       try {
         this.root.parentNode.removeChild(this.root);
-      } catch (e) {
+      } catch (_e) {
         /* ignore */
       }
     }

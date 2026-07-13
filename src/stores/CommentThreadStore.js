@@ -80,8 +80,7 @@ export default class CommentThreadStore {
    * @returns {Function} An unsubscribe function — call it to remove the listener.
    */
   addListener(fn) {
-    if (typeof fn !== "function")
-      throw new TypeError("addListener: expected a function");
+    if (typeof fn !== "function") throw new TypeError("addListener: expected a function");
     this._listeners.push(fn);
     return () => {
       const idx = this._listeners.indexOf(fn);
@@ -106,7 +105,7 @@ export default class CommentThreadStore {
     for (let i = 0; i < snapshot.length; i++) {
       try {
         snapshot[i](change);
-      } catch (e) {
+      } catch (_e) {
         /* never let a bad listener break the store */
       }
     }
@@ -201,9 +200,7 @@ export default class CommentThreadStore {
    */
   toggleCollapse(commentId, explicitState) {
     const newState =
-      explicitState !== undefined
-        ? Boolean(explicitState)
-        : !this.isCollapsed[commentId];
+      explicitState !== undefined ? Boolean(explicitState) : !this.isCollapsed[commentId];
     const oldState = Boolean(this.isCollapsed[commentId]);
 
     if (newState === oldState) return;
@@ -240,7 +237,7 @@ export default class CommentThreadStore {
 
       for (let i = 0; i < nodes.length; i++) {
         const nodeChildren = this.children[nodes[i]];
-        if (nodeChildren && nodeChildren.length) {
+        if (nodeChildren?.length) {
           nextNodes.push(...nodeChildren);
         }
       }

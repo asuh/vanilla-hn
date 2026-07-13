@@ -61,19 +61,24 @@ function _readEnv(candidates = []) {
   for (const name of candidates) {
     // 1) Runtime-injected config on `window`
     try {
-      if (typeof window !== 'undefined' && window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__[name] != null) {
+      if (
+        typeof window !== "undefined" &&
+        window.__FIREBASE_CONFIG__ &&
+        window.__FIREBASE_CONFIG__[name] != null
+      ) {
         return window.__FIREBASE_CONFIG__[name];
       }
     } catch (e) {
       // ignore
     }
 
-    // 2) import.meta.env (Vite-style or bundler-provided)
+    // 2) import.meta.env (bundler-provided)
     try {
-      if (typeof import !== 'undefined' && typeof import.meta !== 'undefined' && import.meta.env) {
+      const metaEnv = import.meta.env;
+      if (metaEnv) {
         // Common convention: VITE_* env vars or direct names
         for (const cand of [name, `VITE_${name}`]) {
-          if (import.meta.env[cand] != null && import.meta.env[cand] !== '') return import.meta.env[cand];
+          if (metaEnv[cand] != null && metaEnv[cand] !== "") return metaEnv[cand];
         }
       }
     } catch (e) {
@@ -82,9 +87,9 @@ function _readEnv(candidates = []) {
 
     // 3) process.env (Node-like builds / server-side)
     try {
-      if (typeof process !== 'undefined' && process.env) {
+      if (typeof process !== "undefined" && process.env) {
         for (const cand of [name, `VITE_${name}`]) {
-          if (process.env[cand] != null && process.env[cand] !== '') return process.env[cand];
+          if (process.env[cand] != null && process.env[cand] !== "") return process.env[cand];
         }
       }
     } catch (e) {
@@ -101,7 +106,7 @@ function _readEnv(candidates = []) {
 export function getFirebaseConfig() {
   // If the whole config object was injected at runtime via window, prefer it.
   try {
-    if (typeof window !== 'undefined' && window.__FIREBASE_CONFIG__) {
+    if (typeof window !== "undefined" && window.__FIREBASE_CONFIG__) {
       return Object.assign({}, window.__FIREBASE_CONFIG__);
     }
   } catch (e) {
@@ -109,14 +114,14 @@ export function getFirebaseConfig() {
   }
 
   // Candidate value resolution (try common variable names)
-  const apiKey = _readEnv(['FIREBASE_API_KEY', 'API_KEY']);
-  const authDomain = _readEnv(['FIREBASE_AUTH_DOMAIN', 'AUTH_DOMAIN']);
-  const databaseURL = _readEnv(['FIREBASE_DATABASE_URL', 'DATABASE_URL']);
-  const projectId = _readEnv(['FIREBASE_PROJECT_ID', 'PROJECT_ID']);
-  const storageBucket = _readEnv(['FIREBASE_STORAGE_BUCKET', 'STORAGE_BUCKET']);
-  const messagingSenderId = _readEnv(['FIREBASE_MESSAGING_SENDER_ID', 'MESSAGING_SENDER_ID']);
-  const appId = _readEnv(['FIREBASE_APP_ID', 'APP_ID']);
-  const measurementId = _readEnv(['FIREBASE_MEASUREMENT_ID', 'MEASUREMENT_ID']);
+  const apiKey = _readEnv(["FIREBASE_API_KEY", "API_KEY"]);
+  const authDomain = _readEnv(["FIREBASE_AUTH_DOMAIN", "AUTH_DOMAIN"]);
+  const databaseURL = _readEnv(["FIREBASE_DATABASE_URL", "DATABASE_URL"]);
+  const projectId = _readEnv(["FIREBASE_PROJECT_ID", "PROJECT_ID"]);
+  const storageBucket = _readEnv(["FIREBASE_STORAGE_BUCKET", "STORAGE_BUCKET"]);
+  const messagingSenderId = _readEnv(["FIREBASE_MESSAGING_SENDER_ID", "MESSAGING_SENDER_ID"]);
+  const appId = _readEnv(["FIREBASE_APP_ID", "APP_ID"]);
+  const measurementId = _readEnv(["FIREBASE_MEASUREMENT_ID", "MEASUREMENT_ID"]);
 
   // If none of the required values present, return null so caller can fallback to mock mode
   if (!apiKey || !projectId || !appId) {
@@ -131,7 +136,7 @@ export function getFirebaseConfig() {
     storageBucket: storageBucket || undefined,
     messagingSenderId: messagingSenderId || undefined,
     appId,
-    measurementId: measurementId || undefined
+    measurementId: measurementId || undefined,
   };
 }
 
@@ -143,11 +148,11 @@ export function requireFirebaseConfig() {
   const cfg = getFirebaseConfig();
   if (!cfg) {
     throw new Error(
-      'Firebase config not found. Provide config by one of the following methods:\n' +
-      '  - Set window.__FIREBASE_CONFIG__ = { apiKey: ..., projectId: ..., appId: ..., databaseURL: ... } before loading the app\n' +
-      '  - Provide environment variables (e.g., FIREBASE_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_APP_ID) via your dev server/build\n' +
-      '  - Create a non-committed local file that exports the config and import it in your local setup\n\n' +
-      'See firebase.example.js and .env.example for examples. Do not commit real credentials to source control.'
+      "Firebase config not found. Provide config by one of the following methods:\n" +
+        "  - Set window.__FIREBASE_CONFIG__ = { apiKey: ..., projectId: ..., appId: ..., databaseURL: ... } before loading the app\n" +
+        "  - Provide environment variables (e.g., FIREBASE_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_APP_ID) via your dev server/build\n" +
+        "  - Create a non-committed local file that exports the config and import it in your local setup\n\n" +
+        "See firebase.example.js and .env.example for examples. Do not commit real credentials to source control.",
     );
   }
   return cfg;
@@ -183,5 +188,5 @@ export const exampleInitComment = `See comments in this module for example initi
 export default {
   getFirebaseConfig,
   requireFirebaseConfig,
-  exampleInitComment
+  exampleInitComment,
 };

@@ -1,4 +1,4 @@
-import { debounce } from '../utils/helpers.js';
+import { debounce } from "../utils/helpers.js";
 
 /**
  * StoryStore — manages a story list (by type) with sessionStorage caching.
@@ -20,21 +20,25 @@ export default class StoryStore {
     this.listType = listType;
     this._hn = hnService;
     this._pageSize = options.pageSize || 30;
-    this._ids = [];                // All story IDs in order
-    this._items = new Map();       // id (string) → full item object
+    this._ids = []; // All story IDs in order
+    this._items = new Map(); // id (string) → full item object
     this._listeners = new Set();
-    this._unsub = null;            // List subscription unsub
-    this._itemUnsubs = [];         // Per-item subscription unsubs
+    this._unsub = null; // List subscription unsub
+    this._itemUnsubs = []; // Per-item subscription unsubs
     this._debouncedSave = debounce(() => this._saveToSession(), 300);
 
     this._loadFromSession();
   }
 
   /** @returns {string[]} All story IDs in list order */
-  get ids() { return this._ids; }
+  get ids() {
+    return this._ids;
+  }
 
   /** @returns {number} Total number of stories */
-  get length() { return this._ids.length; }
+  get length() {
+    return this._ids.length;
+  }
 
   /**
    * Get a single cached item by ID.
@@ -55,9 +59,7 @@ export default class StoryStore {
   getPageItems(page) {
     const start = (page - 1) * this._pageSize;
     const end = start + this._pageSize;
-    return this._ids.slice(start, end).map(id =>
-      this._items.get(id) || { id }
-    );
+    return this._ids.slice(start, end).map((id) => this._items.get(id) || { id });
   }
 
   /**
@@ -82,15 +84,15 @@ export default class StoryStore {
     this._unsub = this._hn.onStoriesValue(this.listType, (raw) => {
       if (!raw || !Array.isArray(raw) || raw.length === 0) return;
 
-      if (typeof raw[0] === 'object') {
+      if (typeof raw[0] === "object") {
         // Full objects (mock mode)
-        this._ids = raw.map(item => String(item.id));
+        this._ids = raw.map((item) => String(item.id));
         for (const item of raw) {
           this._items.set(String(item.id), item);
         }
       } else {
         // ID list (Firebase)
-        this._ids = raw.map(id => String(id));
+        this._ids = raw.map((id) => String(id));
       }
 
       this._debouncedSave();
@@ -118,7 +120,7 @@ export default class StoryStore {
           this._notify();
         }
       });
-      if (typeof unsub === 'function') this._itemUnsubs.push(unsub);
+      if (typeof unsub === "function") this._itemUnsubs.push(unsub);
     }
   }
 
@@ -133,7 +135,14 @@ export default class StoryStore {
 
   /** Tear down all subscriptions and save final state. */
   dispose() {
-    if (this._unsub) { try { this._unsub(); } catch (_) { /* ignore */ } this._unsub = null; }
+    if (this._unsub) {
+      try {
+        this._unsub();
+      } catch (_) {
+        /* ignore */
+      }
+      this._unsub = null;
+    }
     this._clearItemSubs();
     this._debouncedSave.cancel();
     this._saveToSession();
@@ -144,14 +153,22 @@ export default class StoryStore {
 
   _clearItemSubs() {
     for (const unsub of this._itemUnsubs) {
-      try { unsub(); } catch (_) { /* ignore */ }
+      try {
+        unsub();
+      } catch (_) {
+        /* ignore */
+      }
     }
     this._itemUnsubs = [];
   }
 
   _notify() {
     for (const fn of this._listeners) {
-      try { fn(this); } catch (e) { console.warn('[StoryStore] listener error:', e); }
+      try {
+        fn(this);
+      } catch (e) {
+        console.warn("[StoryStore] listener error:", e);
+      }
     }
   }
 
@@ -164,12 +181,14 @@ export default class StoryStore {
       if (Array.isArray(data.ids)) {
         this._ids = data.ids;
       }
-      if (data.items && typeof data.items === 'object') {
+      if (data.items && typeof data.items === "object") {
         for (const [id, item] of Object.entries(data.items)) {
           this._items.set(id, item);
         }
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   _saveToSession() {
@@ -178,14 +197,20 @@ export default class StoryStore {
       // Only cache items we actually have full data for (not placeholders)
       const items = {};
       for (const [id, item] of this._items) {
-        if (item && item.title) { // Only cache items with full data
+        if (item?.title) {
+          // Only cache items with full data
           items[id] = item;
         }
       }
-      sessionStorage.setItem(key, JSON.stringify({
-        ids: this._ids,
-        items,
-      }));
-    } catch (_) { /* ignore */ }
+      sessionStorage.setItem(
+        key,
+        JSON.stringify({
+          ids: this._ids,
+          items,
+        }),
+      );
+    } catch (_) {
+      /* ignore */
+    }
   }
 }

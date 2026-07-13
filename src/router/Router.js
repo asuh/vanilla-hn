@@ -410,9 +410,7 @@ export class Router {
           const cleanupResult = this.currentView.cleanup();
           if (cleanupResult && typeof cleanupResult.then === "function") {
             // Don't await — fire-and-forget, but swallow errors.
-            cleanupResult.catch((err) =>
-              console.warn("Router: async cleanup() error:", err),
-            );
+            cleanupResult.catch((err) => console.warn("Router: async cleanup() error:", err));
           }
         } catch (err) {
           console.warn("Router: error in previous view.cleanup():", err);
@@ -460,8 +458,7 @@ export class Router {
     el.setAttribute("data-router-mounted", "true");
 
     // DOM swap ────────────────────────────────────────────────────────────────
-    const mountEl =
-      document.querySelector(this.mountPointSelector) || document.body;
+    const mountEl = document.querySelector(this.mountPointSelector) || document.body;
 
     const applyDOM = () => {
       this._clearMount();
@@ -482,7 +479,6 @@ export class Router {
         console.warn("Router: error in view.attachEventListeners():", err);
       }
     }
-
   }
 
   /**
@@ -492,16 +488,12 @@ export class Router {
    * so that any static content inside the mount container is left untouched.
    */
   _clearMount() {
-    const mountEl =
-      document.querySelector(this.mountPointSelector) || document.body;
+    const mountEl = document.querySelector(this.mountPointSelector) || document.body;
     if (!mountEl) return;
 
     for (const child of Array.from(mountEl.children)) {
       try {
-        if (
-          child.getAttribute &&
-          child.getAttribute("data-router-mounted") === "true"
-        ) {
+        if (child.getAttribute && child.getAttribute("data-router-mounted") === "true") {
           mountEl.removeChild(child);
         }
       } catch (err) {
