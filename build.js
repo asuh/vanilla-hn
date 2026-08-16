@@ -5,16 +5,31 @@ import { brotliCompress, constants, gzip } from "node:zlib";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { normalizeBasePath } from "./src/utils/app-url.js";
 
 const root = import.meta.dirname;
 const distDir = path.resolve(process.env.BUILD_OUTDIR || path.join(root, "dist"));
 const assetsDir = path.join(distDir, "assets");
 const publicDir = path.join(root, "public");
 const splitting = process.env.BUILD_SPLITTING === "true";
+const githubPages = process.env.GITHUB_PAGES === "true";
+const precompressEnabled = process.env.BUILD_PRECOMPRESS !== "false";
+const writeFallback = githubPages || process.env.BUILD_404 === "true";
 const compressibleExtensions = new Set([".css", ".html", ".js", ".json", ".mjs", ".svg"]);
 const brotliCompressAsync = promisify(brotliCompress);
 const gzipAsync = promisify(gzip);
 const packageData = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+
+function deploymentBasePath() {
+  if (process.env.BASE_PATH) return normalizeBasePath(process.env.BASE_PATH);
+  if (!githubPages) return "/";
+
+  const repositoryName = process.env.GITHUB_REPOSITORY?.split("/").at(-1);
+  if (!repositoryName || repositoryName.endsWith(".github.io")) return "/";
+  return normalizeBasePath(repositoryName);
+}
+
+const basePath = deploymentBasePath();
 
 function repositoryURL(repository) {
   const value = typeof repository === "string" ? repository : repository?.url;
@@ -34,7 +49,8 @@ function repositoryLabel(url) {
 function outputForEntry(metafile, entryPoint, suffix) {
   for (const [file, output] of Object.entries(metafile.outputs)) {
     if (output.entryPoint === entryPoint && file.endsWith(suffix)) {
-      return `/${path.relative(distDir, path.join(root, file))}`;
+      const relativePath = path.relative(distDir, path.join(root, file)).split(path.sep).join("/");
+      return `${basePath}${relativePath}`;
     }
   }
   throw new Error(`Build output not found for ${entryPoint}`);
@@ -119,8 +135,9 @@ const stylesPath = outputForEntry(result.metafile, "src/styles.css", ".css");
 const sourceHtml = await readFile(path.join(publicDir, "index.html"), "utf8");
 const sourceURL = process.env.SOURCE_URL || repositoryURL(packageData.repository);
 const html = stripDevImportMap(sourceHtml)
-  .replace('href="/src/styles.css"', `href="${stylesPath}"`)
-  .replace('src="/src/main.js"', `src="${appPath}"`)
+  .replace('<base href="/" />', `<base href="${basePath}" />`)
+  .replace('href="src/styles.css"', `href="${stylesPath}"`)
+  .replace('src="src/main.js"', `src="${appPath}"`)
   .replace(
     /(<span data-app-version>)[^<]*(<\/span>)/,
     (_match, before, after) => `${before}${packageData.version}${after}`,
@@ -132,10 +149,18 @@ const html = stripDevImportMap(sourceHtml)
   );
 
 await writeFile(path.join(distDir, "index.html"), html);
-await writeFile(path.join(distDir, "meta.json"), JSON.stringify(result.metafile, null, 2));
-await precompress(distDir);
+if (writeFallback) await writeFile(path.join(distDir, "404.html"), html);
+await writeFile(path.join(distDir, ".nojekyll"), "");
+await writeFile(
+  path.join(distDir, "meta.json"),
+  JSON.stringify({ ...result.metafile, vanillaHN: { basePath } }, null, 2),
+);
+if (precompressEnabled) await precompress(distDir);
 
 console.log(`Built ${path.relative(root, distDir)}/`);
 console.log(`  bundling: ${splitting ? "split" : "single"}`);
+console.log(`  base path: ${basePath}`);
+console.log(`  precompression: ${precompressEnabled ? "brotli + gzip" : "disabled"}`);
+console.log(`  route fallback: ${writeFallback ? "404.html" : "disabled"}`);
 console.log(`  ${stylesPath}`);
 console.log(`  ${appPath}`);

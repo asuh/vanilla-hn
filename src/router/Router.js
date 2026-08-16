@@ -32,6 +32,14 @@
  *   If a view exposes `cleanup()` it will be called when the router removes it.
  */
 
+import {
+  getAppBasePath,
+  isAppURL,
+  normalizeBasePath,
+  toAppPath,
+  toRouteTarget,
+} from "../utils/app-url.js";
+
 /**
  * A small, dependency-free client-side router.
  *
@@ -54,6 +62,7 @@ export class Router {
    */
   constructor(options = {}) {
     this.mountPointSelector = options.mountPoint || "#app";
+    this.basePath = normalizeBasePath(options.basePath || getAppBasePath());
     this.routes = [];
     this.notFoundHandler = null;
     this.currentView = null;
@@ -121,7 +130,7 @@ export class Router {
    * @param {string} path  The target path, e.g. '/item/123' or '/newest?page=2'.
    */
   navigate(path) {
-    const url = new URL(path, location.href);
+    const url = new URL(toAppPath(path, this.basePath), location.href);
     if (window.navigation) {
       window.navigation.navigate(url.href);
     } else {
@@ -210,11 +219,14 @@ export class Router {
     if (evt.hashChange) return;
     if (evt.downloadRequest !== null) return;
 
+    const url = new URL(evt.destination.url);
+    if (url.origin !== location.origin || !isAppURL(url, this.basePath)) return;
+
     const signal = evt.signal;
 
     evt.intercept({
       handler: async () => {
-        await this._handleUrl(new URL(evt.destination.url), signal);
+        await this._handleUrl(url, signal);
       },
     });
   }
@@ -245,6 +257,7 @@ export class Router {
 
     // Only intercept same-origin links.
     if (url.origin !== location.origin) return;
+    if (!isAppURL(url, this.basePath)) return;
     if (anchor.hasAttribute("download")) return;
     if (anchor.target === "_blank") return;
 
@@ -300,7 +313,8 @@ export class Router {
 
     // The string we test patterns against: pathname + search
     // e.g. "/", "/newest", "/item/123", "/newest?page=2"
-    const target = url.pathname + (url.search || "");
+    const target = toRouteTarget(url, this.basePath);
+    if (target == null) return;
 
     // Find first matching route ───────────────────────────────────────────────
     for (const route of this.routes) {

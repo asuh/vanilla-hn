@@ -1,3 +1,5 @@
+import { toAppPath } from "./app-url.js";
+
 /**
  * Utilities for DOM creation and manipulation.
  *
@@ -48,7 +50,8 @@ export function create(tag, options = {}, ...children) {
       // boolean attribute (present)
       el.setAttribute(name, "");
     } else {
-      el.setAttribute(name, String(value));
+      const attributeValue = name === "href" ? toAppPath(String(value)) : String(value);
+      el.setAttribute(name, attributeValue);
     }
   }
 

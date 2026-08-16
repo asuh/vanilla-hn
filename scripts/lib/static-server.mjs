@@ -33,8 +33,24 @@ function isInside(root, target) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function normalizeBasePath(value = "/") {
+  const segments = String(value || "/")
+    .split(/[?#]/, 1)[0]
+    .split("/")
+    .filter(Boolean);
+  return segments.length ? `/${segments.join("/")}/` : "/";
+}
+
+function stripBasePath(urlPath, basePath) {
+  if (basePath === "/") return urlPath;
+  const baseWithoutSlash = basePath.slice(0, -1);
+  if (urlPath === baseWithoutSlash) return "/";
+  if (!urlPath.startsWith(basePath)) return null;
+  return urlPath.slice(baseWithoutSlash.length) || "/";
+}
+
 function cacheControl(urlPath, filePath) {
-  if (path.basename(filePath) === "index.html") return "no-cache";
+  if (path.extname(filePath) === ".html") return "no-cache";
   if (urlPath.startsWith("/assets/") && HASHED_ASSET.test(path.basename(filePath))) {
     return "public, max-age=31536000, immutable";
   }
@@ -132,8 +148,9 @@ function sendError(response, status) {
   response.end(`${status} ${message}\n`);
 }
 
-export function createStaticServer({ root, fallback = "index.html" }) {
+export function createStaticServer({ root, fallback = "index.html", basePath = "/" }) {
   const resolvedRoot = path.resolve(root);
+  const normalizedBasePath = normalizeBasePath(basePath);
 
   return http.createServer(async (request, response) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -143,7 +160,13 @@ export function createStaticServer({ root, fallback = "index.html" }) {
     }
 
     const url = new URL(request.url || "/", "http://localhost");
-    const source = await resolveSource(resolvedRoot, url.pathname, fallback);
+    const sourcePath = stripBasePath(url.pathname, normalizedBasePath);
+    if (sourcePath == null) {
+      sendError(response, 404);
+      return;
+    }
+
+    const source = await resolveSource(resolvedRoot, sourcePath, fallback);
     if (source.error) {
       sendError(response, source.error);
       return;
@@ -155,7 +178,7 @@ export function createStaticServer({ root, fallback = "index.html" }) {
     const variesByEncoding = Boolean(representation) || (await hasEncodedFile(source.filePath));
     const etag = `W/"${fileStat.size.toString(16)}-${Math.trunc(fileStat.mtimeMs).toString(16)}"`;
     const headers = {
-      "Cache-Control": cacheControl(url.pathname, source.filePath),
+      "Cache-Control": cacheControl(sourcePath, source.filePath),
       "Content-Length": String(fileStat.size),
       "Content-Type":
         MIME_TYPES[path.extname(source.filePath).toLowerCase()] || "application/octet-stream",

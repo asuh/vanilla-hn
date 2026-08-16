@@ -72,3 +72,31 @@ test("production server negotiates compression and applies cache policies", asyn
   assert.equal(cached.status, 304);
   assert.equal(cached.body.byteLength, 0);
 });
+
+test("production server scopes files and SPA routes to a deployment base path", async (context) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "vanilla-hn-base-path-"));
+  const assets = path.join(directory, "assets");
+  await mkdir(assets);
+  await Promise.all([
+    writeFile(path.join(directory, "index.html"), "<!doctype html><main>Project site</main>"),
+    writeFile(path.join(assets, "app-ABCDEFGH.js"), "console.log('project site');"),
+  ]);
+
+  const server = createStaticServer({ root: directory, basePath: "/vanilla-hn/" });
+  const address = await listen(server, { host: "127.0.0.1", port: 0 });
+  context.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  const home = await request(address.port, "/vanilla-hn/");
+  const deepLink = await request(address.port, "/vanilla-hn/story/33");
+  const asset = await request(address.port, "/vanilla-hn/assets/app-ABCDEFGH.js");
+  const outside = await request(address.port, "/story/33");
+
+  assert.equal(home.status, 200);
+  assert.equal(deepLink.status, 200);
+  assert.equal(asset.status, 200);
+  assert.equal(asset.headers["cache-control"], "public, max-age=31536000, immutable");
+  assert.equal(outside.status, 404);
+});
