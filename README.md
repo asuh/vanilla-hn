@@ -2,7 +2,7 @@
 
 A lightweight, framework-free recreation of the React HN reader. It uses native browser APIs, Firebase realtime subscriptions, modern CSS, and an esbuild production pipeline without shipping a UI framework runtime.
 
-This README explains how to run the scaffold locally, where to find important files, and how to swap in a real realtime backend (Firebase) when you choose to.
+This README explains how to run the app locally, create and preview a production build, and work with its realtime Firebase backend.
 
 ---
 
@@ -26,7 +26,7 @@ Requirements
 
 Notes:
 
-- Development stays unbundled for fast startup and direct source debugging. Production uses esbuild for minification, hashing, tree shaking, and route-level code splitting.
+- Development stays unbundled for fast startup and direct source debugging. Production uses esbuild for minification, hashing, tree shaking, and a single application bundle to minimize cold-start requests.
 
 Production build:
 
@@ -34,7 +34,15 @@ Production build:
 npm run build
 ```
 
-This writes `dist/` with minified, hashed assets. Firebase is resolved from the npm package during this build rather than from `public/vendor/`.
+This writes `dist/` with minified, hashed assets and precompressed Brotli and gzip representations. Firebase is resolved from the npm package during this build rather than from `public/vendor/`.
+
+Preview the production output with the same compression and caching behavior used by the benchmark:
+
+```
+npm run preview
+```
+
+The preview is available at `http://127.0.0.1:5002/` by default. Set `BUILD_SPLITTING=true` to produce an experimental route-split build instead of the measured single-bundle default.
 
 ---
 
@@ -101,15 +109,17 @@ Mock mode
 
 - `npm run build` — Build minified, hashed production assets into `dist/`.
 - `npm run dev` — Start the included dev server (requires Node >= 24). This runs `node serve.js`.
-- `npm start` — Alias to `dev`.
-- `npm run preview` — Alias to `dev`.
+- `npm start` — Serve an existing production build; equivalent to `preview`.
+- `npm run preview` — Serve an existing `dist/` build with Brotli/gzip negotiation and production cache headers.
 - `npm run check` — Run Biome linting and verify Oxfmt formatting.
 - `npm run format` — Format the repository with Oxfmt.
 - `npm test` — Run dependency-free Node unit tests.
 - `npm run test:e2e` — Run Playwright workflows on desktop and mobile Chromium.
 - `npm run benchmark` — Compare production Vanilla HN with React HN and write raw results to `artifacts/performance-comparison.json`.
 
-The benchmark defaults to the deployed React HN site. Set `REACT_HN_URL` and `VANILLA_HN_URL` to compare two locally hosted production builds under the same network conditions. Set `BENCHMARK_SAMPLES` to control the median sample count.
+The benchmark uses a fresh Chromium context for every sample, blocks service workers, and observes each app for a fixed 1.5 seconds so realtime connections do not prevent completion. It reports first-party application requests separately from backend traffic and records request-level transfer, content encoding, and realtime WebSocket payload details.
+
+The comparison defaults to a locally served Vanilla HN production build and the deployed React HN site. Transfer sizes are compression-aware, but local-versus-remote timings are not directly comparable and the benchmark prints a warning accordingly. Set both `REACT_HN_URL` and `VANILLA_HN_URL` to production or local URLs under equivalent network conditions for timing comparisons. Set `BENCHMARK_SAMPLES` to control the median sample count.
 
 ---
 
@@ -124,7 +134,7 @@ The benchmark defaults to the deployed React HN site. Set `REACT_HN_URL` and `VA
 
 ## Tests & quality
 
-- Node tests cover spinner construction and subscription cleanup behavior.
+- Node tests cover spinner construction, subscription cleanup, and production server behavior.
 - Playwright covers routing, link interaction, startup focus, settings persistence, dark first paint, loading spinners, and cached ranking reconciliation.
 - Biome provides correctness and accessibility linting; Oxfmt owns formatting.
 
