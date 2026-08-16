@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 
 import * as esbuild from "esbuild";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { brotliCompress, constants, gzip } from "node:zlib";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
 const root = import.meta.dirname;
-const distDir = path.join(root, "dist");
+const distDir = path.resolve(process.env.BUILD_OUTDIR || path.join(root, "dist"));
 const assetsDir = path.join(distDir, "assets");
 const publicDir = path.join(root, "public");
+const splitting = process.env.BUILD_SPLITTING === "true";
+const compressibleExtensions = new Set([".css", ".html", ".js", ".json", ".mjs", ".svg"]);
+const brotliCompressAsync = promisify(brotliCompress);
+const gzipAsync = promisify(gzip);
 
 function outputForEntry(metafile, entryPoint, suffix) {
   for (const [file, output] of Object.entries(metafile.outputs)) {
@@ -25,6 +31,42 @@ function stripDevImportMap(html) {
   );
 }
 
+async function listFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      return entry.isDirectory() ? listFiles(entryPath) : [entryPath];
+    }),
+  );
+  return files.flat();
+}
+
+async function precompress(directory) {
+  const files = await listFiles(directory);
+  const candidates = files.filter(
+    (file) => compressibleExtensions.has(path.extname(file)) && !file.endsWith("meta.json"),
+  );
+
+  await Promise.all(
+    candidates.map(async (file) => {
+      const contents = await readFile(file);
+      if (contents.byteLength < 1_024) return;
+
+      const [brotli, gzipped] = await Promise.all([
+        brotliCompressAsync(contents, {
+          params: {
+            [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+            [constants.BROTLI_PARAM_QUALITY]: 11,
+          },
+        }),
+        gzipAsync(contents, { level: 9 }),
+      ]);
+      await Promise.all([writeFile(`${file}.br`, brotli), writeFile(`${file}.gz`, gzipped)]);
+    }),
+  );
+}
+
 await rm(distDir, { recursive: true, force: true });
 await mkdir(assetsDir, { recursive: true });
 
@@ -35,7 +77,7 @@ const result = await esbuild.build({
   },
   outdir: assetsDir,
   bundle: true,
-  splitting: true,
+  splitting,
   format: "esm",
   platform: "browser",
   target: ["es2024"],
@@ -65,7 +107,9 @@ const html = stripDevImportMap(sourceHtml)
 
 await writeFile(path.join(distDir, "index.html"), html);
 await writeFile(path.join(distDir, "meta.json"), JSON.stringify(result.metafile, null, 2));
+await precompress(distDir);
 
 console.log(`Built ${path.relative(root, distDir)}/`);
+console.log(`  bundling: ${splitting ? "split" : "single"}`);
 console.log(`  ${stylesPath}`);
 console.log(`  ${appPath}`);
