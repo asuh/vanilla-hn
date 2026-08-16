@@ -10,6 +10,7 @@
  */
 
 import { Paginator } from "../components/Paginator.js";
+import { createSpinner } from "../components/Spinner.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
 import { fetchCommentAncestors, itemPath } from "../utils/item-ancestors.js";
 import View from "./View.js";
@@ -47,8 +48,6 @@ export default class NewCommentsView extends View {
     this._comments = [];
     /** @type {Function|null} Unsubscribe from updates store */
     this._unsub = null;
-    /** @type {boolean} Whether the initial update IDs have arrived */
-    this._loaded = false;
     this._updatesStore = this.stores.updatesStore || null;
 
     /** @type {number[]} Interval IDs for live time tickers */
@@ -87,8 +86,7 @@ export default class NewCommentsView extends View {
       },
     });
 
-    // Show loading skeletons
-    this._renderSkeletons();
+    this._renderLoading();
 
     this._paginator = new Paginator({
       page: this.page,
@@ -140,18 +138,19 @@ export default class NewCommentsView extends View {
       return;
     }
 
-    this._unsub = this._updatesStore.addListener((updates) => {
-      this._loaded = true;
+    this._updatesStore.start();
+    this._unsub = this._updatesStore.addListener((updates, status = {}) => {
       const showDead = this._settingsStore ? this._settingsStore.get("showDead") : false;
       const showDeleted = this._settingsStore ? this._settingsStore.get("showDeleted") : false;
-      this._comments = (updates.comments || []).filter((comment) => {
+      const comments = (updates.comments || []).filter((comment) => {
         if (comment.dead && !showDead) return false;
         if (comment.deleted && !showDeleted) return false;
         return true;
       });
+      if (!status.ready && comments.length === 0) return;
+      this._comments = comments;
       this._renderPage();
     });
-    this._updatesStore.start();
   }
 
   /**
@@ -311,28 +310,15 @@ export default class NewCommentsView extends View {
   /**
    * @private
    */
-  _renderSkeletons() {
+  _renderLoading() {
     if (!this._listEl) return;
-    this._listEl.innerHTML = "";
-    for (let i = 0; i < PAGE_SIZE; i++) {
-      const li = create("li", {
-        attrs: {
-          class: "entry skeleton",
-          "aria-hidden": "true",
-        },
-      });
-      const metaSkel = create("div", {
-        attrs: { class: "skeleton skeleton--meta" },
-      });
-      metaSkel.innerHTML = "&nbsp;";
-      const textSkel = create("div", {
-        attrs: { class: "skeleton skeleton--text" },
-      });
-      textSkel.innerHTML = "&nbsp;<br>&nbsp;";
-      li.appendChild(metaSkel);
-      li.appendChild(textSkel);
-      this._listEl.appendChild(li);
-    }
+    this._listEl.replaceChildren(
+      create(
+        "li",
+        { attrs: { class: "entry loading" } },
+        createSpinner({ size: "20px", label: "Loading new comments…" }),
+      ),
+    );
   }
 
   /**

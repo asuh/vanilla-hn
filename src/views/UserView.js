@@ -17,10 +17,11 @@
  *     <div class="container user-profile">
  *       <h2 class="user-view__name">username</h2>
  *       <dl class="user-view__stats">
- *         <dt>karma</dt>  <dd>NNN</dd>
- *         <dt>joined</dt> <dd>X years ago</dd>
+ *         <dt>created</dt> <dd>X years ago (absolute date)</dd>
+ *         <dt>karma</dt>   <dd>NNN</dd>
+ *         <dt>delay</dt>   <dd>N</dd>
+ *         <dt>about</dt>   <dd>…HTML from HN…</dd>
  *       </dl>
- *       <div class="about">…HTML from HN…</div>
  *       <p class="hn-link">
  *         <a href="https://news.ycombinator.com/user?id=username">profile on HN ↗</a>
  *       </p>
@@ -29,7 +30,8 @@
  */
 
 import View from "./View.js";
-import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { createSpinner } from "../components/Spinner.js";
+import { create, setSafeHTML, timeAgoFromUnix } from "../utils/dom.js";
 
 export default class UserView extends View {
   /**
@@ -73,18 +75,12 @@ export default class UserView extends View {
       attrs: { class: "container user-profile" },
     });
 
-    // Show a loading indicator immediately
-    this._contentEl.appendChild(
+    this._contentEl.append(
+      create("h2", { attrs: { class: "user-view__name" } }, this.userId || "User"),
       create(
-        "p",
+        "div",
         { attrs: { class: "user-view__loading" } },
-        create("span", {
-          attrs: {
-            class: "spinner",
-            role: "status",
-            "aria-label": "Loading user profile…",
-          },
-        }),
+        createSpinner({ size: "20px", label: "Loading user profile…" }),
       ),
     );
 
@@ -147,39 +143,42 @@ export default class UserView extends View {
   /**
    * Replace the content element's children with the fully rendered user profile.
    *
-   * @param {Object} user  — { id, karma, created (unix seconds), about (HTML string) }
+   * @param {Object} user  — { id, karma, delay, created (unix seconds), about (HTML string) }
    */
   _renderUser(user) {
     if (!this._contentEl) return;
 
     const id = user.id || this.userId || "Unknown";
     const karma = user.karma != null ? user.karma : 0;
-    const created = user.created != null ? timeAgoFromUnix(user.created) : "unknown";
+    const createdDate = new Date(Number(user.created) * 1000);
+    const hasCreatedDate = user.created != null && !Number.isNaN(createdDate.valueOf());
+    const created = hasCreatedDate
+      ? `${timeAgoFromUnix(user.created)} (${createdDate.toDateString()})`
+      : "unknown";
+    const delay = user.delay != null ? user.delay : 0;
     const about = user.about || ""; // may contain HTML (HN returns <a>, <p>, etc.)
     const hnUrl = `https://news.ycombinator.com/user?id=${encodeURIComponent(id)}`;
 
     // ── Name heading ───────────────────────────────────────────────────────
     const heading = create("h2", { attrs: { class: "user-view__name" } }, id);
 
-    // ── Stats table (karma + joined date) ──────────────────────────────────
+    // ── Stats table ────────────────────────────────────────────────────────
     const stats = create(
       "dl",
       { attrs: { class: "user-view__stats" } },
+      create("dt", {}, "created"),
+      create("dd", { attrs: { class: "user-view__created" } }, created),
       create("dt", {}, "karma"),
       create("dd", { attrs: { class: "user-view__karma" } }, String(karma)),
-      create("dt", {}, "joined"),
-      create("dd", { attrs: { class: "user-view__joined" } }, created),
+      create("dt", {}, "delay"),
+      create("dd", { attrs: { class: "user-view__delay" } }, String(delay)),
     );
 
     // ── About section ──────────────────────────────────────────────────────
-    // HN returns the `about` field as pre-rendered HTML (links, paragraphs, etc.)
-    // so we must use innerHTML here. This is fine because the content originates
-    // directly from HN's API and is the user's own self-description.
-    const aboutSection = create("div", {
-      attrs: { class: "about" },
-    });
     if (about) {
-      aboutSection.innerHTML = about;
+      const aboutSection = create("div", { attrs: { class: "about" } });
+      setSafeHTML(aboutSection, about);
+      stats.append(create("dt", {}, "about"), create("dd", {}, aboutSection));
     }
 
     // ── External HN profile link ───────────────────────────────────────────
@@ -201,7 +200,7 @@ export default class UserView extends View {
     );
 
     // ── Replace content ────────────────────────────────────────────────────
-    this._contentEl.replaceChildren(heading, stats, aboutSection, hnLink);
+    this._contentEl.replaceChildren(heading, stats, hnLink);
   }
 
   /**

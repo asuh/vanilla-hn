@@ -209,8 +209,8 @@ export default class ListView extends View {
     );
     wrapper.appendChild(header);
 
-    // ── Main content container ─────────────────────────────────────────────
-    const main = create("main", {
+    // ── Content container ──────────────────────────────────────────────────
+    const content = create("div", {
       attrs: { class: "container" },
     });
 
@@ -229,7 +229,7 @@ export default class ListView extends View {
     const startRank = (this.page - 1) * PAGE_SIZE + 1;
     renderSkeletons(this._listEl, startRank);
 
-    main.appendChild(this._listEl);
+    content.appendChild(this._listEl);
 
     // Pagination nav (empty until data arrives)
     this._paginator = new Paginator({
@@ -240,9 +240,9 @@ export default class ListView extends View {
       linkClassName: "link",
     });
     this._paginationEl = this._paginator.render();
-    main.appendChild(this._paginationEl);
+    content.appendChild(this._paginationEl);
 
-    wrapper.appendChild(main);
+    wrapper.appendChild(content);
     this.root = wrapper;
 
     // Start the realtime subscription (fills in the list when data arrives)

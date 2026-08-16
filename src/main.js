@@ -179,29 +179,13 @@
     });
 
     // User view route
-    router.register(/^\/user\/([\w-]+)$/, async (match) => {
+    router.register(/^\/user\/([\w-]+)(?:\?.*)?$/, async (match) => {
       const params = { id: String(match[1]) };
       const viewFactory = lazyView(() => import("./views/UserView.js"));
       return await viewFactory(params);
     });
 
-    // Fallback route: show top list (or a very small not-found view)
-    router.setNotFound(async () => {
-      const module = await import("./views/ListView.js");
-      const ViewCtor = module.default;
-      return new ViewCtor({
-        params: {},
-        stores: {
-          settingsStore,
-          readStoriesStore,
-          updatesStore,
-          createThreadStore,
-          loadThreadState,
-        },
-        services: { hnService },
-        listType: "top",
-      });
-    });
+    router.setNotFound(lazyView(() => import("./views/NotFoundView.js")));
 
     // Basic keyboard helpers.
     document.addEventListener("keydown", (ev) => {

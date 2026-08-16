@@ -57,6 +57,33 @@ test("UpdatesStore stops its feed and invalidates pending fetches", async () => 
   store.dispose();
 });
 
+test("UpdatesStore distinguishes initial loading from a completed empty feed", () => {
+  let deliverUpdates;
+  const service = {
+    onUpdatesValue(callback) {
+      deliverUpdates = callback;
+      return () => {};
+    },
+    fetchItem() {
+      throw new Error("empty feeds should not fetch items");
+    },
+  };
+  const store = new UpdatesStore(service);
+  const statuses = [];
+  store.addListener((_updates, status) => statuses.push(status.ready));
+
+  store.start();
+  assert.equal(store.isReady(), false);
+  deliverUpdates({ items: [] });
+
+  assert.equal(store.isReady(), true);
+  assert.deepEqual(statuses, [false, true]);
+
+  store.stop();
+  assert.equal(store.isReady(), false);
+  store.dispose();
+});
+
 test("permalink rerenders release child subscriptions and elements", () => {
   const view = new PermalinkedCommentView();
   let unsubscribed = 0;

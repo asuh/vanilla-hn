@@ -27,6 +27,91 @@ test("loads stories, preserves document focus, and follows internal links", asyn
   await expect(page.locator('.item-view[data-item-id="33"]')).toBeVisible();
 });
 
+test("renders one main landmark and a dedicated not-found route", async ({ page }) => {
+  await page.goto("/missing-page");
+  await waitForApp(page);
+
+  await expect(page.getByRole("heading", { name: "Not found" })).toBeVisible();
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.locator(".story-list")).toHaveCount(0);
+});
+
+test("matches user queries and renders complete profile parity", async ({ page }) => {
+  await page.addInitScript(() => {
+    globalThis.__VANILLA_HN_MOCK_USER_DELAY_MS__ = 2_000;
+  });
+  await page.goto("/user/tester?from=comments");
+  await waitForApp(page);
+
+  await expect(page.getByRole("heading", { name: "tester" })).toBeVisible();
+  await expect(page.locator(".user-view__loading .spinner > div")).toHaveCount(3);
+  await expect(page.locator(".user-view__loading .spinner > div").first()).toHaveCSS(
+    "width",
+    "20px",
+  );
+
+  await expect(page.locator(".user-view__created")).toContainText(/.+ \(.+\)/);
+  await expect(page.locator(".user-view__karma")).not.toBeEmpty();
+  await expect(page.locator(".user-view__delay")).toHaveText("0");
+  await expect(page.locator(".about")).toContainText("Mock user tester");
+});
+
+test("keeps new comments loading until the first feed completes", async ({ page }) => {
+  await page.addInitScript(() => {
+    globalThis.__VANILLA_HN_MOCK_UPDATES_DELAY_MS__ = 2_000;
+  });
+  await page.goto("/newcomments");
+  await waitForApp(page);
+
+  await expect(page.locator(".comment-feed .loading .spinner > div")).toHaveCount(3);
+  await expect(page.locator(".comment-feed .loading .spinner > div").first()).toHaveCSS(
+    "width",
+    "20px",
+  );
+  await expect(page.getByText("No new comments found.")).toBeVisible();
+});
+
+test("sanitizes profile HTML when the native Sanitizer API is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Element.prototype, "setHTML", {
+      configurable: true,
+      value: undefined,
+    });
+    globalThis.__VANILLA_HN_MOCK_USER_ABOUT__ = `
+      <p style="color:red">Safe <strong>content</strong></p>
+      <a class="unsafe" href="javascript:alert(1)" onclick="alert(1)">unsafe link</a>
+      <a class="safe" href="https://example.com/profile">safe link</a>
+      <img src=x onerror="alert(1)">
+      <script>globalThis.__unsafeProfileScript = true</script>
+    `;
+  });
+  await page.goto("/user/tester");
+  await waitForApp(page);
+
+  const about = page.locator(".about");
+  await expect(about.locator("strong")).toHaveText("content");
+  await expect(about.locator("script, img")).toHaveCount(0);
+  await expect(about.getByText("unsafe link")).not.toHaveAttribute("href");
+  await expect(about.getByText("unsafe link")).not.toHaveAttribute("onclick");
+  await expect(about.getByRole("link", { name: "safe link", exact: true })).toHaveAttribute(
+    "href",
+    "https://example.com/profile",
+  );
+  await expect(about.locator("p")).not.toHaveAttribute("style");
+  expect(await page.evaluate(() => globalThis.__unsafeProfileScript)).toBeUndefined();
+});
+
+test("shows build metadata and the source repository in the footer", async ({ page }) => {
+  await page.goto("/");
+  await waitForApp(page);
+
+  await expect(page.locator(".site-footer")).toContainText("vanilla-hn v0.1.0");
+  await expect(page.locator(".site-footer [data-source-link]")).toHaveAttribute(
+    "href",
+    "https://github.com/asuh/vanilla-hn",
+  );
+});
+
 test("persists dark mode without reverting the first painted colors", async ({ page }) => {
   await page.goto("/");
   await waitForApp(page);

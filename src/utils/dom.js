@@ -100,10 +100,9 @@ export function create(tag, options = {}, ...children) {
  * Set HTML content using the platform HTML Sanitizer API when available.
  *
  * The current HTML Sanitizer API exposes `Element.setHTML()` as the safe,
- * browser-maintained insertion primitive. Older browsers keep the previous
- * inert-template path, which matches the app's existing behavior for HN's
- * pre-sanitized Firebase HTML while avoiding direct `innerHTML` writes into
- * live DOM nodes.
+ * browser-maintained insertion primitive. Older browsers parse into an inert
+ * template and apply a small element, attribute, and URL-scheme allowlist
+ * before inserting the resulting fragment into the live document.
  *
  * @param {Element} el
  * @param {string} html
@@ -125,8 +124,87 @@ export function setSafeHTML(el, html) {
   while (el.firstChild) el.removeChild(el.firstChild);
   const tpl = document.createElement("template");
   tpl.innerHTML = source;
+  sanitizeFragment(tpl.content);
   el.appendChild(tpl.content);
   return el;
+}
+
+const SAFE_HTML_ELEMENTS = new Set([
+  "a",
+  "b",
+  "blockquote",
+  "br",
+  "code",
+  "div",
+  "em",
+  "i",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "span",
+  "strong",
+  "ul",
+]);
+const DROP_WITH_CONTENTS = new Set([
+  "button",
+  "embed",
+  "form",
+  "iframe",
+  "input",
+  "link",
+  "math",
+  "meta",
+  "object",
+  "script",
+  "select",
+  "style",
+  "svg",
+  "template",
+  "textarea",
+]);
+
+function isSafeHTMLURL(value) {
+  const candidate = String(value || "").trim();
+  if (!candidate) return false;
+  if (/^(?:#|\/|\.\/|\.\.\/|\?)/.test(candidate)) return true;
+
+  try {
+    const base = document.baseURI || "https://news.ycombinator.com/";
+    return ["http:", "https:", "mailto:"].includes(new URL(candidate, base).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeFragment(root) {
+  for (const node of [...root.childNodes]) {
+    if (node.nodeType === 8) {
+      node.remove();
+      continue;
+    }
+    if (node.nodeType !== 1) continue;
+
+    const tag = node.localName;
+    if (DROP_WITH_CONTENTS.has(tag)) {
+      node.remove();
+      continue;
+    }
+
+    sanitizeFragment(node);
+    if (!SAFE_HTML_ELEMENTS.has(tag)) {
+      node.replaceWith(...node.childNodes);
+      continue;
+    }
+
+    for (const attribute of [...node.attributes]) {
+      const allowed =
+        tag === "a" &&
+        (attribute.name === "title" ||
+          (attribute.name === "href" && isSafeHTMLURL(attribute.value)));
+      if (!allowed) node.removeAttribute(attribute.name);
+    }
+  }
 }
 
 /**

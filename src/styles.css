@@ -85,10 +85,6 @@
   @supports (color: oklch(65% 0.16 45)) {
     :root {
       --hn-accent: light-dark(oklch(68% 0.19 50), oklch(78% 0.13 60));
-      --hn-new-comment-bg: light-dark(
-        color-mix(in oklch, var(--hn-accent) 18%, white),
-        color-mix(in oklch, var(--hn-accent) 20%, black)
-      );
       --hn-border: light-dark(
         color-mix(in oklch, var(--hn-text) 12%, white),
         color-mix(in oklch, var(--hn-text) 18%, black)
@@ -896,8 +892,10 @@
       opacity: 0.6;
     }
 
-    .entry.skeleton {
-      padding: 10px 0;
+    .entry.loading {
+      min-height: 34px;
+      padding: 1em 1.25em 0;
+      border-bottom: 0;
     }
 
     .entry.empty,
@@ -971,8 +969,11 @@
       padding-top: 1em;
     }
 
-    h4 {
+    .user-view__name {
       margin: 0 0 1em 0;
+    }
+    .user-view__loading {
+      min-height: 34px;
     }
     dl {
       margin-bottom: 1em;

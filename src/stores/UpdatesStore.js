@@ -20,6 +20,7 @@ export default class UpdatesStore {
     this._listeners = new Set();
     this._cache = emptyCache();
     this._updates = { comments: [], stories: [] };
+    this._ready = false;
     this._unsub = null;
     this._fetchGeneration = 0;
     this._debouncedSave = debounce(() => this.saveSession(), 150);
@@ -31,8 +32,12 @@ export default class UpdatesStore {
       throw new TypeError("UpdatesStore.addListener expects a function");
     }
     this._listeners.add(fn);
-    fn(this.getUpdates());
+    fn(this.getUpdates(), { ready: this._ready });
     return () => this._listeners.delete(fn);
+  }
+
+  isReady() {
+    return this._ready;
   }
 
   getUpdates() {
@@ -60,6 +65,7 @@ export default class UpdatesStore {
       return;
     }
 
+    this._ready = false;
     this._unsub = this._hn.onUpdatesValue((updates) => {
       const ids = Array.isArray(updates)
         ? updates
@@ -72,6 +78,7 @@ export default class UpdatesStore {
 
   stop() {
     this._fetchGeneration++;
+    this._ready = false;
     if (typeof this._unsub === "function") {
       try {
         this._unsub();
@@ -107,12 +114,13 @@ export default class UpdatesStore {
   }
 
   async _fetchItems(ids) {
+    const generation = ++this._fetchGeneration;
     if (!ids.length || !this._hn || typeof this._hn.fetchItem !== "function") {
+      this._ready = true;
       this._emit();
       return;
     }
 
-    const generation = ++this._fetchGeneration;
     const items = await Promise.all(ids.map((id) => this._hn.fetchItem(id).catch(() => null)));
     if (generation !== this._fetchGeneration) return;
 
@@ -132,6 +140,7 @@ export default class UpdatesStore {
       this._populateUpdates();
       this._debouncedSave();
     }
+    this._ready = true;
     this._emit();
   }
 
@@ -151,7 +160,7 @@ export default class UpdatesStore {
     const snapshot = this.getUpdates();
     for (const fn of this._listeners) {
       try {
-        fn(snapshot);
+        fn(snapshot, { ready: this._ready });
       } catch (err) {
         console.warn("UpdatesStore listener error:", err);
       }

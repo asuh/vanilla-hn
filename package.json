@@ -2,6 +2,10 @@
   "name": "vanilla-hn",
   "version": "0.1.0",
   "description": "A lightweight, vanilla JavaScript recreation of a Hacker News reader.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asuh/vanilla-hn.git"
+  },
   "type": "module",
   "private": true,
   "scripts": {

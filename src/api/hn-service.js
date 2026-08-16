@@ -253,19 +253,22 @@ class MockBackend {
     const set = this._userListeners.get(id) || new Set();
     set.add(cb);
     this._userListeners.set(id, set);
+    const delayMs = Math.max(0, Number(globalThis.__VANILLA_HN_MOCK_USER_DELAY_MS__) || 0);
     setTimeout(() => {
       if (!set.has(cb)) return;
       try {
+        const mockAbout = globalThis.__VANILLA_HN_MOCK_USER_ABOUT__;
         cb({
           id,
-          about: `<p>Mock user <em>${id}</em></p>`,
+          about: typeof mockAbout === "string" ? mockAbout : `<p>Mock user <em>${id}</em></p>`,
           created: nowSeconds() - 86400 * 365,
+          delay: 0,
           karma: (id.length * 137) % 9999,
         });
       } catch (_e) {
         /* swallow */
       }
-    }, 0);
+    }, delayMs);
     return () => set.delete(cb);
   }
 
@@ -276,12 +279,13 @@ class MockBackend {
    */
   onUpdatesValue(cb) {
     this._updatesListeners.add(cb);
+    const delayMs = Math.max(0, Number(globalThis.__VANILLA_HN_MOCK_UPDATES_DELAY_MS__) || 0);
     setTimeout(() => {
       if (!this._updatesListeners.has(cb)) return;
       try {
         cb({ items: [], profiles: [] });
       } catch (_e) {}
-    }, 0);
+    }, delayMs);
     return () => this._updatesListeners.delete(cb);
   }
 

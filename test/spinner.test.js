@@ -52,7 +52,9 @@ test("loading views use the shared spinner component", async () => {
   const files = [
     "src/components/PollOption.js",
     "src/views/ItemView.js",
+    "src/views/NewCommentsView.js",
     "src/views/PermalinkedCommentView.js",
+    "src/views/UserView.js",
   ];
 
   for (const file of files) {

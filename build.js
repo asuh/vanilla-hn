@@ -14,6 +14,22 @@ const splitting = process.env.BUILD_SPLITTING === "true";
 const compressibleExtensions = new Set([".css", ".html", ".js", ".json", ".mjs", ".svg"]);
 const brotliCompressAsync = promisify(brotliCompress);
 const gzipAsync = promisify(gzip);
+const packageData = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+
+function repositoryURL(repository) {
+  const value = typeof repository === "string" ? repository : repository?.url;
+  return String(value || "")
+    .replace(/^git\+/, "")
+    .replace(/\.git$/, "");
+}
+
+function repositoryLabel(url) {
+  try {
+    return new URL(url).pathname.replace(/^\//, "");
+  } catch {
+    return "source";
+  }
+}
 
 function outputForEntry(metafile, entryPoint, suffix) {
   for (const [file, output] of Object.entries(metafile.outputs)) {
@@ -101,9 +117,19 @@ const appPath = outputForEntry(result.metafile, "src/main.js", ".js");
 const stylesPath = outputForEntry(result.metafile, "src/styles.css", ".css");
 
 const sourceHtml = await readFile(path.join(publicDir, "index.html"), "utf8");
+const sourceURL = process.env.SOURCE_URL || repositoryURL(packageData.repository);
 const html = stripDevImportMap(sourceHtml)
   .replace('href="/src/styles.css"', `href="${stylesPath}"`)
-  .replace('src="/src/main.js"', `src="${appPath}"`);
+  .replace('src="/src/main.js"', `src="${appPath}"`)
+  .replace(
+    /(<span data-app-version>)[^<]*(<\/span>)/,
+    (_match, before, after) => `${before}${packageData.version}${after}`,
+  )
+  .replace(
+    /(<a data-source-link href=")[^"]*("[^>]*>)[^<]*(<\/a>)/,
+    (_match, before, middle, after) =>
+      `${before}${sourceURL}${middle}${repositoryLabel(sourceURL)}${after}`,
+  );
 
 await writeFile(path.join(distDir, "index.html"), html);
 await writeFile(path.join(distDir, "meta.json"), JSON.stringify(result.metafile, null, 2));
