@@ -1,9 +1,9 @@
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { createServer } from "node:http";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { createStaticServer, listen } from "./lib/static-server.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -14,14 +14,19 @@ const port = Number(process.env.BENCHMARK_PORT) || 5010;
 const vanillaURL = process.env.VANILLA_HN_URL || `http://127.0.0.1:${port}/`;
 const reactURL = process.env.REACT_HN_URL || "https://insin.github.io/react-hn/";
 
-const mimeTypes = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-};
+const metricKeys = [
+  "domContentLoadedMs",
+  "loadMs",
+  "firstContentfulPaintMs",
+  "largestContentfulPaintMs",
+  "requests",
+  "firstPartyRequests",
+  "thirdPartyRequests",
+  "transferBytes",
+  "firstPartyTransferBytes",
+  "thirdPartyTransferBytes",
+  "jsHeapBytes",
+];
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -30,42 +35,44 @@ function median(values) {
 }
 
 function summarize(runs) {
-  const keys = Object.keys(runs[0]);
   return Object.fromEntries(
-    keys.map((key) => [key, Math.round(median(runs.map((run) => run[key])))]),
+    metricKeys.map((key) => [key, Math.round(median(runs.map((run) => run[key])))]),
+  );
+}
+
+function responseHeader(headers, name) {
+  const key = Object.keys(headers || {}).find((header) => header.toLowerCase() === name);
+  return key ? headers[key] : "";
+}
+
+function displayURL(value) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return value;
+  }
+}
+
+function webSocketPayloadBytes(frame) {
+  if (frame.opcode !== 2) return Buffer.byteLength(frame.payloadData);
+  const padding = frame.payloadData.endsWith("==") ? 2 : frame.payloadData.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((frame.payloadData.length * 3) / 4) - padding);
+}
+
+function representativeRun(runs, transferBytes) {
+  return runs.reduce((closest, run) =>
+    Math.abs(run.transferBytes - transferBytes) < Math.abs(closest.transferBytes - transferBytes)
+      ? run
+      : closest,
   );
 }
 
 async function startDistServer() {
   if (process.env.VANILLA_HN_URL) return null;
   await execFileAsync(process.execPath, [path.join(root, "build.js")], { cwd: root });
-
-  const server = createServer(async (request, response) => {
-    try {
-      const url = new URL(request.url || "/", vanillaURL);
-      const relative = decodeURIComponent(url.pathname).replace(/^\/+/, "") || "index.html";
-      let file = path.resolve(dist, relative);
-      if (!file.startsWith(`${dist}${path.sep}`)) throw new Error("Invalid path");
-      try {
-        if (!(await stat(file)).isFile()) file = path.join(dist, "index.html");
-      } catch {
-        file = path.join(dist, "index.html");
-      }
-      const body = await readFile(file);
-      response.writeHead(200, {
-        "Cache-Control": "no-store",
-        "Content-Type": mimeTypes[path.extname(file)] || "application/octet-stream",
-      });
-      response.end(body);
-    } catch {
-      response.writeHead(404).end();
-    }
-  });
-
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, "127.0.0.1", resolve);
-  });
+  const server = createStaticServer({ root: dist });
+  await listen(server, { host: "127.0.0.1", port });
   return server;
 }
 
@@ -73,16 +80,63 @@ async function measure(browser, url) {
   const context = await browser.newContext({ serviceWorkers: "block" });
   const page = await context.newPage();
   const session = await context.newCDPSession(page);
-  let transferBytes = 0;
-  let requests = 0;
+  const targetOrigin = new URL(url).origin;
+  const resources = new Map();
 
   await session.send("Network.enable");
   await session.send("Performance.enable");
-  session.on("Network.requestWillBeSent", ({ request }) => {
-    if (!request.url.startsWith("data:")) requests++;
+  session.on("Network.requestWillBeSent", ({ requestId, request, type }) => {
+    if (request.url.startsWith("data:")) return;
+    resources.set(requestId, {
+      url: displayURL(request.url),
+      type: type || "Other",
+      firstParty: new URL(request.url).origin === targetOrigin,
+      status: 0,
+      mimeType: "",
+      contentEncoding: "identity",
+      protocol: "",
+      transferBytes: 0,
+      sentBytes: 0,
+    });
   });
-  session.on("Network.loadingFinished", ({ encodedDataLength }) => {
-    transferBytes += encodedDataLength;
+  session.on("Network.responseReceived", ({ requestId, response }) => {
+    const resource = resources.get(requestId);
+    if (!resource) return;
+    resource.status = response.status;
+    resource.mimeType = response.mimeType;
+    resource.contentEncoding = responseHeader(response.headers, "content-encoding") || "identity";
+    resource.protocol = response.protocol;
+  });
+  session.on("Network.loadingFinished", ({ requestId, encodedDataLength }) => {
+    const resource = resources.get(requestId);
+    if (resource) resource.transferBytes = encodedDataLength;
+  });
+  session.on("Network.webSocketCreated", ({ requestId, url: socketURL }) => {
+    resources.set(requestId, {
+      url: displayURL(socketURL),
+      type: "WebSocket",
+      firstParty: new URL(socketURL).origin === targetOrigin,
+      status: 0,
+      mimeType: "application/websocket",
+      contentEncoding: "identity",
+      protocol: "websocket",
+      transferBytes: 0,
+      sentBytes: 0,
+    });
+  });
+  session.on("Network.webSocketHandshakeResponseReceived", ({ requestId, response }) => {
+    const resource = resources.get(requestId);
+    if (!resource) return;
+    resource.status = response.status;
+    resource.transferBytes += Buffer.byteLength(response.headersText || "");
+  });
+  session.on("Network.webSocketFrameReceived", ({ requestId, response }) => {
+    const resource = resources.get(requestId);
+    if (resource) resource.transferBytes += webSocketPayloadBytes(response);
+  });
+  session.on("Network.webSocketFrameSent", ({ requestId, response }) => {
+    const resource = resources.get(requestId);
+    if (resource) resource.sentBytes += webSocketPayloadBytes(response);
   });
   await page.addInitScript(() => {
     globalThis.__benchmarkLCP = 0;
@@ -113,13 +167,23 @@ async function measure(browser, url) {
   const metricMap = Object.fromEntries(
     performanceMetrics.metrics.map(({ name, value }) => [name, value]),
   );
+  const resourceList = [...resources.values()];
+  const firstParty = resourceList.filter((resource) => resource.firstParty);
+  const thirdParty = resourceList.filter((resource) => !resource.firstParty);
+  const totalBytes = (items) =>
+    items.reduce((total, resource) => total + resource.transferBytes, 0);
 
   await context.close();
   return {
     ...timing,
-    requests,
-    transferBytes,
+    requests: resourceList.length,
+    firstPartyRequests: firstParty.length,
+    thirdPartyRequests: thirdParty.length,
+    transferBytes: totalBytes(resourceList),
+    firstPartyTransferBytes: totalBytes(firstParty),
+    thirdPartyTransferBytes: totalBytes(thirdParty),
     jsHeapBytes: metricMap.JSHeapUsedSize || 0,
+    resources: resourceList.sort((a, b) => b.transferBytes - a.transferBytes),
   };
 }
 
@@ -134,6 +198,16 @@ try {
   const report = {
     generatedAt: new Date().toISOString(),
     samples,
+    methodology: {
+      browser: "Chromium",
+      cache: "Cold browser context per run",
+      observationWindowMs: 1_500,
+      serviceWorkers: "Blocked",
+      transferBytes: "Chrome DevTools Protocol encodedDataLength, including headers",
+      webSocketBytes: "Received frame payload plus available response handshake headers",
+      uploadBytes: "Reported per request but excluded from transfer totals",
+      firstParty: "Requests whose origin matches the measured page",
+    },
     targets: {},
   };
 
@@ -151,14 +225,44 @@ try {
 
   const rows = Object.entries(report.targets).map(([name, { median: result }]) => ({
     app: name,
-    requests: result.requests,
-    "transfer KB": (result.transferBytes / 1024).toFixed(1),
+    "app req": result.firstPartyRequests,
+    "app KB": (result.firstPartyTransferBytes / 1024).toFixed(1),
+    "backend req": result.thirdPartyRequests,
+    "backend KB": (result.thirdPartyTransferBytes / 1024).toFixed(1),
+    "total req": result.requests,
+    "total KB": (result.transferBytes / 1024).toFixed(1),
     "FCP ms": result.firstContentfulPaintMs,
     "LCP ms": result.largestContentfulPaintMs,
     "load ms": result.loadMs,
     "heap MB": (result.jsHeapBytes / 1024 / 1024).toFixed(1),
   }));
   console.table(rows);
+
+  for (const [name, target] of Object.entries(report.targets)) {
+    const run = representativeRun(target.runs, target.median.transferBytes);
+    console.log(`\n${name} request details (representative cold run):`);
+    console.table(
+      run.resources.map((resource) => ({
+        party: resource.firstParty ? "app" : "backend",
+        type: resource.type,
+        status: resource.status,
+        encoding: resource.contentEncoding,
+        "transfer KB": (resource.transferBytes / 1024).toFixed(1),
+        "sent KB": (resource.sentBytes / 1024).toFixed(1),
+        url: resource.url,
+      })),
+    );
+  }
+
+  const localTargets = [vanillaURL, reactURL].map((url) => {
+    const hostname = new URL(url).hostname;
+    return hostname === "127.0.0.1" || hostname === "localhost";
+  });
+  if (localTargets[0] !== localTargets[1]) {
+    console.warn(
+      "\nTiming warning: one target is local and the other is remote. Transfer sizes remain useful, but use two local or two deployed URLs for comparable timings.",
+    );
+  }
   console.log("Detailed results: artifacts/performance-comparison.json");
 } finally {
   await browser.close();
