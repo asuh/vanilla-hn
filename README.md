@@ -44,6 +44,24 @@ npm run preview
 
 The preview is available at `http://127.0.0.1:5002/` by default. Set `BUILD_SPLITTING=true` to produce an experimental route-split build instead of the measured single-bundle default.
 
+### GitHub Pages
+
+Pushes to `main` deploy through [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml). The workflow checks formatting and linting, runs the unit and browser suites, builds the project-site artifact, and deploys it with GitHub's Pages actions. For this repository, the production URL is:
+
+```
+https://asuh.github.io/vanilla-hn/
+```
+
+The Pages build derives `/vanilla-hn/` from `GITHUB_REPOSITORY`, so hashed assets and internal routes stay inside the project path. It also emits `404.html` as an application-shell fallback. GitHub Pages returns that file with a 404 status for a cold nested request such as `/vanilla-hn/story/33`, but the client router renders the requested view without redirecting or switching to hash URLs.
+
+Run the same project-path build and browser check locally with:
+
+```
+npm run test:e2e:pages
+```
+
+Use `BASE_PATH=/another-path/ npm run build` for another static host. Set `BUILD_404=true` to emit the clean-route fallback outside a GitHub Pages build and `BUILD_PRECOMPRESS=false` when the host handles compression itself.
+
 ---
 
 ## Project layout
@@ -115,6 +133,7 @@ Mock mode
 - `npm run format` — Format the repository with Oxfmt.
 - `npm test` — Run dependency-free Node unit tests.
 - `npm run test:e2e` — Run Playwright workflows on desktop and mobile Chromium.
+- `npm run test:e2e:pages` — Build and test the app at its `/vanilla-hn/` project path.
 - `npm run benchmark` — Compare production Vanilla HN with React HN and write raw results to `artifacts/performance-comparison.json`.
 
 The benchmark uses a fresh Chromium context for every sample, blocks service workers, and observes each app for a fixed 1.5 seconds so realtime connections do not prevent completion. It reports first-party application requests separately from backend traffic and records request-level transfer, content encoding, and realtime WebSocket payload details.
