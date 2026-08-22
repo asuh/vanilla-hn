@@ -577,7 +577,7 @@ export default class ListView extends View {
    *     <span class="rank">N.</span>
    *     <div class="col">
    *       <div class="title">
-   *         <a href="[external url or /item/id]" class="title-link" [target="_blank"] [data-id]>Title</a>
+   *         <a href="[external url or /item/id]" class="title-link" [data-id]>Title</a>
    *         [<span class="host">(hostname)</span>]       ← only for external links
    *       </div>
    *       <div class="meta">
@@ -627,16 +627,13 @@ export default class ListView extends View {
     const titleRow = create("div", { attrs: { class: "title" } });
 
     if (url) {
-      // External link — opens in a new tab; the internal "comments" link is in meta
+      // External story link; the internal "comments" link is in meta.
       const extLink = create(
         "a",
         {
           attrs: {
             href: url,
             class: "title-link",
-            target: "_blank",
-            rel: "noopener noreferrer",
-            "aria-label": `${title} (external link, opens in new tab)`,
           },
         },
         title,

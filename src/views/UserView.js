@@ -23,7 +23,7 @@
  *         <dt>about</dt>   <dd>…HTML from HN…</dd>
  *       </dl>
  *       <p class="hn-link">
- *         <a href="https://news.ycombinator.com/user?id=username">profile on HN ↗</a>
+ *         <a href="https://news.ycombinator.com/user?id=username">profile on HN</a>
  *       </p>
  *     </div>
  *   </div>
@@ -190,12 +190,10 @@ export default class UserView extends View {
         {
           attrs: {
             href: hnUrl,
-            target: "_blank",
-            rel: "noopener noreferrer",
             class: "user-view__hn-link-anchor",
           },
         },
-        `View ${id}'s profile on Hacker News ↗`,
+        `View ${id}'s profile on Hacker News`,
       ),
     );
 

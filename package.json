@@ -41,6 +41,7 @@
     "firebase": "^12.15.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "^2.5.3",
     "@playwright/test": "^1.61.1",
     "oxfmt": "^0.57.0"

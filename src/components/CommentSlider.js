@@ -40,7 +40,7 @@ export default class CommentSlider {
         class: "slider-container",
         "aria-label": "Highlight comments by position",
       },
-      style: { opacity: "0", transition: "opacity .33s ease-out" },
+      style: { opacity: "0" },
     });
 
     this._build();

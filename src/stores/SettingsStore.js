@@ -271,7 +271,7 @@ export default class SettingsStore {
         root.style.setProperty("color-scheme", "dark");
         root.style.setProperty("--override-hn-bg", "#0b0b0b");
         root.style.setProperty("--override-hn-text", "#e6e6e6");
-        root.style.setProperty("--override-hn-muted", "#9a9a9a");
+        root.style.setProperty("--override-hn-muted", "#929292");
         root.style.setProperty("--override-hn-accent", "#7ee787");
       } catch (_e) {
         // ignore style errors

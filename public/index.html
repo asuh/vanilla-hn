@@ -38,7 +38,7 @@
             root.style.setProperty("color-scheme", "dark");
             root.style.setProperty("--override-hn-bg", "#0b0b0b");
             root.style.setProperty("--override-hn-text", "#e6e6e6");
-            root.style.setProperty("--override-hn-muted", "#9a9a9a");
+            root.style.setProperty("--override-hn-muted", "#929292");
             root.style.setProperty("--override-hn-accent", "#7ee787");
           } else if (theme === "light") {
             root.style.setProperty("color-scheme", "light");
@@ -100,6 +100,7 @@
         <button
           class="settings"
           aria-expanded="false"
+          aria-controls="settings-panel"
           popovertarget="settings-panel"
           type="button"
           disabled
@@ -108,7 +109,15 @@
         </button>
 
         <!-- Settings panel — shown by the native Popover API -->
-        <div class="settings-panel" id="settings-panel" popover="auto" tabindex="-1">
+        <div
+          class="settings-panel"
+          id="settings-panel"
+          popover="auto"
+          role="dialog"
+          aria-labelledby="settings-heading"
+          tabindex="-1"
+        >
+          <h2 id="settings-heading" class="visually-hidden">Settings</h2>
           <form id="settings-form">
             <div class="setting">
               <label>

@@ -478,8 +478,8 @@ export default class ItemView extends View {
     }
 
     // Comments section — sibling to .content (matches react-hn's Item__kids / Item__content structure)
-    this._kidsEl = create("div", {
-      attrs: { class: "kids", role: "list", "aria-label": "Comments" },
+    this._kidsEl = create("section", {
+      attrs: { class: "kids", "aria-label": "Comments" },
     });
     this.root.appendChild(this._kidsEl);
   }
@@ -487,8 +487,8 @@ export default class ItemView extends View {
   /**
    * Build the title element for the story.
    *
-   * External URLs get an `<a>` pointing at the URL (with `target="_blank"`)
-   * followed by a hostname badge. Internal / dead stories get an `<a>` that
+   * External URLs get an `<a>` pointing at the URL followed by a hostname
+   * badge. Internal / dead stories get an `<a>` that
    * links to `/item/:id`. Dead stories are prefixed with `[dead]`.
    *
    * @param {Object} item - The HN item payload.
@@ -511,8 +511,6 @@ export default class ItemView extends View {
         {
           attrs: {
             href: item.url,
-            target: "_blank",
-            rel: "noopener noreferrer",
           },
         },
         titleText,
