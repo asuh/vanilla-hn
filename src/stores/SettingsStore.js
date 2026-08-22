@@ -272,7 +272,7 @@ export default class SettingsStore {
         root.style.setProperty("--override-hn-bg", "#0b0b0b");
         root.style.setProperty("--override-hn-text", "#e6e6e6");
         root.style.setProperty("--override-hn-muted", "#9a9a9a");
-        root.style.setProperty("--override-hn-accent", "#ffb366");
+        root.style.setProperty("--override-hn-accent", "#7ee787");
       } catch (_e) {
         // ignore style errors
       }
@@ -283,7 +283,7 @@ export default class SettingsStore {
         root.style.setProperty("--override-hn-bg", "#ffffff");
         root.style.setProperty("--override-hn-text", "#111111");
         root.style.setProperty("--override-hn-muted", "#666666");
-        root.style.setProperty("--override-hn-accent", "#ff6600");
+        root.style.setProperty("--override-hn-accent", "#2f9e44");
       } catch (_e) {
         // ignore style errors
       }

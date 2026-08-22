@@ -19,7 +19,7 @@ import { create } from "../utils/dom.js";
  * @param {string}  [options.className]  - Extra CSS class(es) to add (space-separated).
  * @param {string}  [options.size]       - Dot size override, e.g. `'12px'`. Applied to
  *                                         each dot via inline `width`/`height`.
- * @param {string}  [options.color]      - Dot color override, e.g. `'#ff6600'`. Applied
+ * @param {string}  [options.color]      - Dot color override, e.g. `'#7ee787'`. Applied
  *                                         via inline `background-color`.
  * @param {string}  [options.label]      - Accessible label for screen readers
  *                                         (default `'Loading…'`).

@@ -58,9 +58,10 @@
     --hn-bg: light-dark(#f5f5f5, #191919);
     --hn-text: light-dark(#111111, #e6e6e6);
     --hn-muted: light-dark(#666666, #9a9a9a);
-    --hn-accent: light-dark(#ff6600, #ffb366);
+    --hn-accent: light-dark(#2f9e44, #7ee787);
 
     --hn-primary: #00d8ff;
+    --hn-brand: #7ee787;
     --hn-header-bg: #222222;
     --hn-header-text: #ffffff;
     --hn-border: light-dark(#e7e7e7, #333333);
@@ -84,7 +85,7 @@
 
   @supports (color: oklch(65% 0.16 45)) {
     :root {
-      --hn-accent: light-dark(oklch(68% 0.19 50), oklch(78% 0.13 60));
+      --hn-accent: light-dark(oklch(62% 0.18 145), oklch(83% 0.16 145));
       --hn-border: light-dark(
         color-mix(in oklch, var(--hn-text) 12%, white),
         color-mix(in oklch, var(--hn-text) 18%, black)
@@ -101,14 +102,14 @@
       --hn-bg: #ffffff;
       --hn-text: #111111;
       --hn-muted: #666666;
-      --hn-accent: #ff6600;
+      --hn-accent: #2f9e44;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --hn-bg: #0b0b0b;
         --hn-text: #e6e6e6;
         --hn-muted: #9a9a9a;
-        --hn-accent: #ffb366;
+        --hn-accent: #7ee787;
       }
     }
   }
@@ -231,7 +232,7 @@
     img {
       display: inline;
       vertical-align: middle;
-      border: 1px solid var(--hn-primary);
+      border: 1px solid var(--hn-brand);
       margin-right: 0.25em;
     }
 
@@ -257,12 +258,12 @@
 
     .homelink {
       font-weight: bold;
-      color: var(--hn-primary);
+      color: var(--hn-brand);
       text-decoration: none;
       margin-right: 0.75em;
 
       &:visited {
-        color: var(--hn-primary);
+        color: var(--hn-brand);
       }
       &.active {
         color: #fff;
