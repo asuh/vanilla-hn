@@ -10,6 +10,11 @@ test("loads and navigates from a GitHub Pages project path", async ({ page }) =>
   await page.goto("./");
   await expect(page.getByRole("button", { name: "settings" })).toBeEnabled();
   await expect(page.locator(".story-list > .item")).toHaveCount(30);
+  expect(
+    await page
+      .locator('link[rel="icon"][type="image/svg+xml"]')
+      .evaluate((link) => new URL(link.href).pathname),
+  ).toBe("/vanilla-hn/icon.svg");
 
   const newest = page.getByRole("link", { name: "new", exact: true });
   expect(await newest.evaluate((link) => link.pathname)).toBe("/vanilla-hn/newest");

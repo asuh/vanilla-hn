@@ -128,6 +128,11 @@ const result = await esbuild.build({
 await cp(path.join(publicDir, "img"), path.join(distDir, "img"), {
   recursive: true,
 });
+await Promise.all(
+  ["apple-touch-icon.png", "favicon.ico", "icon.svg"].map((file) =>
+    cp(path.join(publicDir, file), path.join(distDir, file)),
+  ),
+);
 
 const appPath = outputForEntry(result.metafile, "src/main.js", ".js");
 const stylesPath = outputForEntry(result.metafile, "src/styles.css", ".css");
