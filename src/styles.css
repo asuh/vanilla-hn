@@ -60,7 +60,6 @@
     --hn-muted: light-dark(#666666, #9a9a9a);
     --hn-accent: light-dark(#2f9e44, #7ee787);
 
-    --hn-primary: #00d8ff;
     --hn-brand: #7ee787;
     --hn-header-bg: #222222;
     --hn-header-text: #ffffff;
@@ -238,7 +237,7 @@
 
     a,
     button {
-      color: var(--hn-primary);
+      color: var(--hn-brand);
       text-decoration: none;
 
       &:visited {
@@ -279,7 +278,7 @@
       border: 0;
       background: none;
       font: inherit;
-      color: var(--hn-primary);
+      color: var(--hn-brand);
       cursor: pointer;
     }
 
@@ -303,11 +302,11 @@
       }
 
       & a {
-        color: var(--hn-primary);
+        color: var(--hn-brand);
         text-decoration: none;
 
         &:visited {
-          color: var(--hn-primary);
+          color: var(--hn-brand);
         }
         &:hover,
         &.active {

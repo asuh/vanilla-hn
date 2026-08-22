@@ -14,6 +14,11 @@ test("loads stories, preserves document focus, and follows internal links", asyn
   await page.goto("/");
   await waitForApp(page);
 
+  const headerColors = await page
+    .locator(".site-header a, .site-header .settings")
+    .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).color));
+  expect(new Set(headerColors)).toEqual(new Set(["rgb(126, 231, 135)"]));
+
   const stories = page.locator(".story-list > .item");
   await expect(stories).toHaveCount(30);
   await expect(page.locator("#app")).not.toBeFocused();
