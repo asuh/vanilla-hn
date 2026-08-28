@@ -162,3 +162,87 @@ test("reorders cached stories when the realtime ranking arrives", async ({ page 
   await expect(rows.first().locator(".rank")).toHaveText("1.");
   await expect(rows.nth(1).locator(".rank")).toHaveText("2.");
 });
+
+test("uses a compact mobile rank gutter", async ({ page }) => {
+  test.skip((page.viewportSize()?.width || 0) > 720, "Mobile layout only");
+
+  await page.goto("/");
+  await waitForApp(page);
+
+  const list = page.locator(".story-list");
+  const firstItem = list.locator(":scope > .item").first();
+  await expect(firstItem).toHaveCSS("display", "grid");
+  await expect(list).toHaveCSS("padding-left", "0px");
+
+  const [listBox, titleBox] = await Promise.all([
+    list.boundingBox(),
+    firstItem.locator(".title").boundingBox(),
+  ]);
+  expect(titleBox.x - listBox.x).toBeLessThanOrEqual(31);
+  await expect(firstItem.locator(".rank")).toHaveCSS("white-space", "nowrap");
+});
+
+test("collapses comments in one style pass and prefetches ahead of scrolling", async ({ page }) => {
+  await page.addInitScript(() => {
+    const NativeIntersectionObserver = globalThis.IntersectionObserver;
+    globalThis.__commentObserverMargins = [];
+    globalThis.IntersectionObserver = class {
+      constructor(callback, options = {}) {
+        globalThis.__commentObserverMargins.push(options.rootMargin || "0px");
+        this.inner = new NativeIntersectionObserver(callback, options);
+      }
+
+      observe(target) {
+        this.inner.observe(target);
+      }
+
+      unobserve(target) {
+        this.inner.unobserve(target);
+      }
+
+      disconnect() {
+        this.inner.disconnect();
+      }
+    };
+  });
+
+  await page.goto("/item/3");
+  await waitForApp(page);
+
+  const comments = page.locator(".item-view > .kids > .comment");
+  await expect(comments).toHaveCount(3);
+  const comment = comments.nth(1);
+  const toggle = comment.locator(":scope > .content > .meta .toggle");
+
+  const collapsed = await toggle.evaluate((button) => {
+    const root = button.closest(".comment");
+    const text = root.querySelector(":scope > .content > .text");
+    const kids = root.querySelector(":scope > .kids");
+    button.click();
+    return {
+      root: root.classList.contains("collapsed"),
+      text: getComputedStyle(text).display,
+      kids: getComputedStyle(kids).display,
+    };
+  });
+  expect(collapsed).toEqual({ root: true, text: "none", kids: "none" });
+
+  const expanded = await toggle.evaluate((button) => {
+    const root = button.closest(".comment");
+    const text = root.querySelector(":scope > .content > .text");
+    const kids = root.querySelector(":scope > .kids");
+    button.click();
+    return {
+      root: root.classList.contains("collapsed"),
+      text: getComputedStyle(text).display,
+      kids: getComputedStyle(kids).display,
+    };
+  });
+  expect(expanded.root).toBe(false);
+  expect(expanded.text).not.toBe("none");
+  expect(expanded.kids).not.toBe("none");
+
+  const margins = await page.evaluate(() => globalThis.__commentObserverMargins);
+  const prefetchDistance = Math.max(...margins.map((margin) => Number.parseInt(margin, 10)));
+  expect(prefetchDistance).toBeGreaterThanOrEqual(Math.ceil(page.viewportSize().height * 1.5));
+});

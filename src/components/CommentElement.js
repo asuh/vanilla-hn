@@ -21,6 +21,21 @@ import { create, setSafeHTML, timeAgoFromUnix } from "../utils/dom.js";
 import { createSpinner } from "./Spinner.js";
 import { itemPath } from "../utils/item-ancestors.js";
 
+const MIN_COMMENT_PREFETCH_DISTANCE = 800;
+const COMMENT_PREFETCH_VIEWPORTS = 1.5;
+
+function getCommentPrefetchRootMargin() {
+  const viewportHeight = Math.max(
+    document.documentElement?.clientHeight || 0,
+    window.innerHeight || 0,
+  );
+  const distance = Math.max(
+    MIN_COMMENT_PREFETCH_DISTANCE,
+    Math.ceil(viewportHeight * COMMENT_PREFETCH_VIEWPORTS),
+  );
+  return `${distance}px 0px`;
+}
+
 export class CommentElement {
   /**
    * Create a new CommentElement.
@@ -113,7 +128,7 @@ export class CommentElement {
             }
           }
         },
-        { rootMargin: "200px" },
+        { rootMargin: getCommentPrefetchRootMargin(), threshold: 0 },
       );
 
       for (const kidId of this.comment.kids) {
@@ -313,27 +328,15 @@ export class CommentElement {
    */
   toggleCollapse(explicitState, notifyStore = true) {
     const newState = explicitState === undefined ? !this._collapsed : Boolean(explicitState);
+    if (newState === this._collapsed) return this._collapsed;
     this._collapsed = newState;
 
     if (this.root) {
-      const applyCollapse = () => {
-        if (this._collapsed) {
-          this.root.classList.add("collapsed");
-        } else {
-          this.root.classList.remove("collapsed");
-        }
-        // update aria-expanded and label on toggle button if present
-        if (this._toggleBtn) {
-          this._toggleBtn.setAttribute("aria-expanded", String(!this._collapsed));
-          this._toggleBtn.textContent = this._collapsed ? "[+]" : "[\u2013]";
-        }
-        if (!this._collapsed) {
-          // when expanding, attempt to load visible (placeholder) children
-          this._loadVisiblePlaceholders();
-        }
-      };
-
-      applyCollapse();
+      this.root.classList.toggle("collapsed", this._collapsed);
+      if (this._toggleBtn) {
+        this._toggleBtn.setAttribute("aria-expanded", String(!this._collapsed));
+        this._toggleBtn.textContent = this._collapsed ? "[+]" : "[\u2013]";
+      }
 
       // Update child-count display in the meta bar (only visible when collapsed)
       if (this._collapsed) {
@@ -358,15 +361,6 @@ export class CommentElement {
       }
     }
     return this._collapsed;
-  }
-
-  _loadVisiblePlaceholders() {
-    for (const [kidId, placeholder] of this._loadingPlaceholders.entries()) {
-      // Replace each placeholder with a loading child (or kick off fetch)
-      this._loadChildAndReplacePlaceholder(kidId, placeholder).catch(() => {
-        /* swallow individual errors */
-      });
-    }
   }
 
   async _loadChildAndReplacePlaceholder(childId, placeholderEl) {
@@ -596,6 +590,8 @@ export class CommentElement {
         }
       }
     }
+
+    if (this._collapsed) this._updateCollapsedCounts();
   }
 
   /**

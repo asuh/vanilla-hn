@@ -812,10 +812,6 @@
       font-weight: bold;
     }
 
-    :scope.collapsed > .content > .text {
-      display: none;
-    }
-
     :scope.dead > .content > .text {
       color: var(--hn-dead);
     }
@@ -906,8 +902,9 @@
     }
   }
 
-  /* .kids is the @scope lower boundary so it cannot be targeted from inside
-       the scope — this rule must live outside @scope (.comment) to (.kids) */
+  /* Keep collapse selectors direct and outside @scope so parent text and its
+     child tree update in the same style pass. */
+  .comment.collapsed > .content > .text,
   .comment.collapsed > .kids {
     display: none;
   }
@@ -1114,13 +1111,30 @@
   }
 
   @container app (max-width: 720px) {
-    .story-list {
-      padding-left: 2.25em;
-      padding-right: 0.75em;
+    @scope (.story-list) {
+      :scope {
+        padding-left: 0;
+        padding-right: 0.75em;
+      }
     }
 
-    .item .rank {
-      left: -2.1em;
+    @scope (.item) {
+      :scope {
+        display: grid;
+        grid-template-columns: 2em minmax(0, 1fr);
+        column-gap: 0.25em;
+      }
+
+      .rank {
+        position: static;
+        width: auto;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .col {
+        min-width: 0;
+      }
     }
 
     .site-header .settings-panel {
