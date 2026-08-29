@@ -473,8 +473,6 @@
 
   @scope (.story-list) {
     :scope {
-      list-style: none;
-      padding: 0;
       padding-left: 3em;
       padding-right: 1.25em;
       margin-top: 1em;
@@ -492,6 +490,11 @@
     :scope {
       margin-bottom: 16px;
       position: relative;
+    }
+
+    :scope::marker {
+      color: var(--hn-muted);
+      font-variant-numeric: tabular-nums;
     }
 
     :scope.loading {
@@ -526,14 +529,6 @@
       background: #e0e0e0;
       border-radius: 3px;
       animation: shimmer 1.4s infinite ease-in-out both;
-    }
-
-    .rank {
-      position: absolute;
-      left: -2.5em;
-      width: 2em;
-      text-align: right;
-      color: var(--hn-muted);
     }
 
     .title {
@@ -1113,25 +1108,12 @@
   @container app (max-width: 720px) {
     @scope (.story-list) {
       :scope {
-        padding-left: 0;
+        padding-left: 2.25em;
         padding-right: 0.75em;
       }
     }
 
     @scope (.item) {
-      :scope {
-        display: grid;
-        grid-template-columns: 2em minmax(0, 1fr);
-        column-gap: 0.25em;
-      }
-
-      .rank {
-        position: static;
-        width: auto;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-
       .col {
         min-width: 0;
       }

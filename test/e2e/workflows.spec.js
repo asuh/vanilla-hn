@@ -159,11 +159,18 @@ test("reorders cached stories when the realtime ranking arrives", async ({ page 
   const rows = page.locator(".story-list > .item");
   await expect(rows.first()).toHaveAttribute("data-id", "1");
   await expect(rows.nth(1)).toHaveAttribute("data-id", "2");
-  await expect(rows.first().locator(".rank")).toHaveText("1.");
-  await expect(rows.nth(1).locator(".rank")).toHaveText("2.");
+  await expect(page.locator("ol.story-list")).toHaveAttribute("start", "1");
+  await expect(page.locator(".story-list .rank")).toHaveCount(0);
 });
 
-test("uses a compact mobile rank gutter", async ({ page }) => {
+test("continues native story numbering across pages", async ({ page }) => {
+  await page.goto("/?page=2");
+  await waitForApp(page);
+
+  await expect(page.locator("ol.story-list")).toHaveJSProperty("start", 31);
+});
+
+test("uses native ordered markers with a compact mobile gutter", async ({ page }) => {
   test.skip((page.viewportSize()?.width || 0) > 720, "Mobile layout only");
 
   await page.goto("/");
@@ -171,15 +178,24 @@ test("uses a compact mobile rank gutter", async ({ page }) => {
 
   const list = page.locator(".story-list");
   const firstItem = list.locator(":scope > .item").first();
-  await expect(firstItem).toHaveCSS("display", "grid");
-  await expect(list).toHaveCSS("padding-left", "0px");
+  await expect(list).toHaveJSProperty("start", 1);
+  await expect(firstItem).toHaveCSS("display", "list-item");
+
+  const gutter = await list.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    const padding = Number.parseFloat(styles.paddingLeft);
+    const fontSize = Number.parseFloat(styles.fontSize);
+    return { padding, em: padding / fontSize };
+  });
+  expect(gutter.padding).toBeLessThanOrEqual(31);
+  expect(gutter.em).toBeCloseTo(2.25, 2);
 
   const [listBox, titleBox] = await Promise.all([
     list.boundingBox(),
     firstItem.locator(".title").boundingBox(),
   ]);
   expect(titleBox.x - listBox.x).toBeLessThanOrEqual(31);
-  await expect(firstItem.locator(".rank")).toHaveCSS("white-space", "nowrap");
+  await expect(firstItem.locator(".rank")).toHaveCount(0);
 });
 
 test("collapses comments in one style pass and prefetches ahead of scrolling", async ({ page }) => {

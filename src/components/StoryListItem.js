@@ -39,7 +39,7 @@ export function createStoryListItem(story = {}, opts = {}) {
   const url = story.url || null;
 
   const li = create("li", {
-    attrs: { class: "item", role: "listitem", "data-id": String(id) },
+    attrs: { class: "item", "data-id": String(id) },
   });
 
   const titleDiv = create("div", { attrs: { class: "col" } });

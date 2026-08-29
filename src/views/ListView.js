@@ -63,20 +63,16 @@ function paginationHref(listType, page) {
  * Create a single animated skeleton placeholder `<li>` element shown while
  * the real story data is being fetched.
  *
- * @param {number} rank  1-based rank number to show in the rank column
+ * @param {number} rank  1-based list position used to vary the skeleton width
  * @returns {HTMLLIElement}
  */
 function createSkeletonItem(rank) {
   const li = create("li", {
     attrs: {
       class: "item skeleton",
-      role: "listitem",
       "aria-hidden": "true",
     },
   });
-
-  // Rank
-  const rankEl = create("span", { attrs: { class: "rank" } }, String(rank));
 
   // Content column
   const col = create("div", { attrs: { class: "col" } });
@@ -103,16 +99,15 @@ function createSkeletonItem(rank) {
   });
   col.appendChild(metaShimmer);
 
-  li.appendChild(rankEl);
   li.appendChild(col);
   return li;
 }
 
 /**
- * Render 30 skeleton placeholder list items into the given `<ul>` element,
+ * Render 30 skeleton placeholder list items into the given `<ol>` element,
  * replacing whatever was there before.
  *
- * @param {HTMLUListElement} listEl
+ * @param {HTMLOListElement} listEl
  * @param {number}           startRank  rank of the first visible item on this page
  */
 function renderSkeletons(listEl, startRank = 1) {
@@ -215,10 +210,11 @@ export default class ListView extends View {
     });
 
     // Story list (populated once data arrives or on update)
-    this._listEl = create("ul", {
+    const startRank = (this.page - 1) * PAGE_SIZE + 1;
+    this._listEl = create("ol", {
       attrs: {
         class: "story-list",
-        role: "list",
+        start: String(startRank),
         "aria-label": `${titleText} stories`,
         "aria-live": "polite",
         "aria-busy": "true",
@@ -226,7 +222,6 @@ export default class ListView extends View {
     });
 
     // Render loading skeletons immediately so the page isn't blank
-    const startRank = (this.page - 1) * PAGE_SIZE + 1;
     renderSkeletons(this._listEl, startRank);
 
     content.appendChild(this._listEl);
@@ -401,7 +396,7 @@ export default class ListView extends View {
             if (item && typeof item === "object") {
               this._allItems[allIdx] = item;
               rememberItem(item);
-              this._patchItem(item, start + pageIdx + 1);
+              this._patchItem(item);
             }
           });
           this._itemUnsubs.push(unsub);
@@ -428,7 +423,6 @@ export default class ListView extends View {
         this._allItems = store.ids.map((id) => store.getItem(id) || { id });
 
         const pageItems = store.getPageItems(this.page);
-        const start = (this.page - 1) * PAGE_SIZE;
         const pageIds = this._getPageIds(pageItems);
 
         if (!this._loaded) {
@@ -451,9 +445,9 @@ export default class ListView extends View {
           }
         } else {
           // Subsequent notifications — patch individual items that changed
-          pageItems.forEach((item, pageIdx) => {
+          pageItems.forEach((item) => {
             if (item?.title) {
-              this._patchItem(item, start + pageIdx + 1);
+              this._patchItem(item);
             }
           });
 
@@ -493,7 +487,7 @@ export default class ListView extends View {
       this._pageIds = this._getPageIds(pageItems);
       this._itemNodes.clear();
       pageItems.forEach((item, idx) => {
-        const li = this._createItemEl(item, start + idx + 1);
+        const li = this._createItemEl(item);
         const key = item.id != null ? String(item.id) : String(start + idx);
         this._itemNodes.set(key, li);
         frag.appendChild(li);
@@ -528,10 +522,9 @@ export default class ListView extends View {
    * Keyed update — replace a single item's <li> in place without touching the
    * rest of the list. Falls back to a full _renderPage if the node is missing.
    *
-   * @param {Object} item  Full HN item payload
-   * @param {number} rank  1-based display rank
+   * @param {Object} item Full HN item payload
    */
-  _patchItem(item, rank) {
+  _patchItem(item) {
     const key = item.id != null ? String(item.id) : null;
     if (!key) return;
 
@@ -542,7 +535,7 @@ export default class ListView extends View {
       return;
     }
 
-    const newNode = this._createItemEl(item, rank);
+    const newNode = this._createItemEl(item);
     oldNode.parentNode.replaceChild(newNode, oldNode);
     this._itemNodes.set(key, newNode);
   }
@@ -552,7 +545,7 @@ export default class ListView extends View {
    */
   _renderEmpty() {
     this._listEl.replaceChildren(
-      create("li", { attrs: { class: "item empty", role: "listitem" } }, "No stories found."),
+      create("li", { attrs: { class: "item empty" } }, "No stories found."),
     );
   }
 
@@ -563,9 +556,7 @@ export default class ListView extends View {
    */
   _renderError(msg) {
     if (!this._listEl) return;
-    this._listEl.replaceChildren(
-      create("li", { attrs: { class: "item error", role: "listitem" } }, msg),
-    );
+    this._listEl.replaceChildren(create("li", { attrs: { class: "item error" } }, msg));
     this._listEl.setAttribute("aria-busy", "false");
   }
 
@@ -574,7 +565,6 @@ export default class ListView extends View {
    *
    * Structure:
    *   <li class="item [read]">
-   *     <span class="rank">N.</span>
    *     <div class="col">
    *       <div class="title">
    *         <a href="[external url or /item/id]" class="title-link" [data-id]>Title</a>
@@ -590,10 +580,9 @@ export default class ListView extends View {
    *   </li>
    *
    * @param {Object} item   HN item object
-   * @param {number} rank   1-based rank for this page
    * @returns {HTMLLIElement}
    */
-  _createItemEl(item, rank) {
+  _createItemEl(item) {
     const id = item.id != null ? String(item.id) : "";
     rememberItem(item);
     const title = item.title || `Story ${id}`;
@@ -610,15 +599,9 @@ export default class ListView extends View {
     const li = create("li", {
       attrs: {
         class: `item${isRead ? " read" : ""}`,
-        role: "listitem",
         "data-id": id,
       },
     });
-
-    // ── Rank ───────────────────────────────────────────────────────────────
-    li.appendChild(
-      create("span", { attrs: { class: "rank", "aria-label": `Rank ${rank}` } }, `${rank}.`),
-    );
 
     // ── Content column ─────────────────────────────────────────────────────
     const col = create("div", { attrs: { class: "col" } });
