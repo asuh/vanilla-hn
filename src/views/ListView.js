@@ -79,12 +79,9 @@ function createSkeletonItem(rank) {
 
   // Skeleton title bar
   const titleShimmer = create("div", { attrs: { class: "title" } });
-  const titleLink = create("a", {
+  const titleLink = create("span", {
     attrs: {
       class: "title-link shimmer",
-      href: "#",
-      tabindex: "-1",
-      "aria-label": "Loading…",
     },
   });
   // Varying widths make the skeleton look more natural
@@ -345,8 +342,7 @@ export default class ListView extends View {
    * while the MockBackend returns full item objects. This method handles both cases:
    *
    *  - Full objects  → store directly in _allItems and render.
-   *  - ID strings    → store lightweight placeholders, render immediately so the
-   *                    skeleton layout is replaced, then open a per-item subscription
+   *  - ID strings    → keep skeleton placeholders, then open a per-item subscription
    *                    via onItemValue() for each item on the current page so the
    *                    full item data fills in as Firebase responds.
    *
@@ -416,7 +412,7 @@ export default class ListView extends View {
       pageSize: PAGE_SIZE,
     });
 
-    this._storyStore.addListener((store) => {
+    this._storyStore.addListener((store, changedItem) => {
       try {
         // Rebuild _allItems from the store's full ID list, using full item
         // objects where available and { id } placeholders elsewhere.
@@ -445,8 +441,8 @@ export default class ListView extends View {
           }
         } else {
           // Subsequent notifications — patch individual items that changed
-          pageItems.forEach((item) => {
-            if (item?.title) {
+          (changedItem ? [changedItem] : pageItems).forEach((item) => {
+            if (item?.title || item?.type) {
               this._patchItem(item);
             }
           });
@@ -487,7 +483,7 @@ export default class ListView extends View {
       this._pageIds = this._getPageIds(pageItems);
       this._itemNodes.clear();
       pageItems.forEach((item, idx) => {
-        const li = this._createItemEl(item);
+        const li = this._createItemEl(item, start + idx + 1);
         const key = item.id != null ? String(item.id) : String(start + idx);
         this._itemNodes.set(key, li);
         frag.appendChild(li);
@@ -582,10 +578,15 @@ export default class ListView extends View {
    * @param {Object} item   HN item object
    * @returns {HTMLLIElement}
    */
-  _createItemEl(item) {
+  _createItemEl(item, rank = 1) {
     const id = item.id != null ? String(item.id) : "";
+    if (!item.title && !item.type) {
+      const skeleton = createSkeletonItem(rank);
+      skeleton.dataset.id = id;
+      return skeleton;
+    }
     rememberItem(item);
-    const title = item.title || `Story ${id}`;
+    const title = item.title || (item.deleted ? "[deleted]" : "[unavailable]");
     const by = item.by || "unknown";
     const score = item.score != null ? item.score : 0;
     const descendants =

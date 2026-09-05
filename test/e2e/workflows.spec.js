@@ -198,67 +198,46 @@ test("uses native ordered markers with a compact mobile gutter", async ({ page }
   await expect(firstItem.locator(".rank")).toHaveCount(0);
 });
 
-test("collapses comments in one style pass and prefetches ahead of scrolling", async ({ page }) => {
-  await page.addInitScript(() => {
-    const NativeIntersectionObserver = globalThis.IntersectionObserver;
-    globalThis.__commentObserverMargins = [];
-    globalThis.IntersectionObserver = class {
-      constructor(callback, options = {}) {
-        globalThis.__commentObserverMargins.push(options.rootMargin || "0px");
-        this.inner = new NativeIntersectionObserver(callback, options);
-      }
-
-      observe(target) {
-        this.inner.observe(target);
-      }
-
-      unobserve(target) {
-        this.inner.unobserve(target);
-      }
-
-      disconnect() {
-        this.inner.disconnect();
-      }
-    };
-  });
-
+test("uses native comment disclosures", async ({ page }) => {
   await page.goto("/item/3");
   await waitForApp(page);
 
   const comments = page.locator(".item-view > .kids > .comment");
   await expect(comments).toHaveCount(3);
   const comment = comments.nth(1);
-  const toggle = comment.locator(":scope > .content > .meta .toggle");
+  const disclosure = comment.locator(":scope > .comment-disclosure");
+  const summary = disclosure.locator(":scope > summary");
+  const toggle = summary;
+  await expect(summary.locator("a")).toHaveCount(0);
+  await expect(comment.locator(":scope > .meta > a")).toHaveCount(2);
 
-  const collapsed = await toggle.evaluate((button) => {
-    const root = button.closest(".comment");
-    const text = root.querySelector(":scope > .content > .text");
-    const kids = root.querySelector(":scope > .kids");
-    button.click();
+  const collapsed = await toggle.evaluate((control) => {
+    const details = control.closest("details");
+    const text = details.querySelector(":scope > .content > .text");
+    const kids = details.querySelector(":scope > .kids");
+    control.click();
     return {
-      root: root.classList.contains("collapsed"),
-      text: getComputedStyle(text).display,
-      kids: getComputedStyle(kids).display,
+      open: details.open,
+      text: text.checkVisibility(),
+      kids: kids.checkVisibility(),
     };
   });
-  expect(collapsed).toEqual({ root: true, text: "none", kids: "none" });
+  expect(collapsed).toEqual({ open: false, text: false, kids: false });
+  await expect(disclosure).not.toHaveAttribute("open", "");
+  await expect(summary).toHaveAccessibleName(/Comment by /);
+  await expect(summary).not.toHaveAttribute("aria-expanded", /.+/);
 
-  const expanded = await toggle.evaluate((button) => {
-    const root = button.closest(".comment");
-    const text = root.querySelector(":scope > .content > .text");
-    const kids = root.querySelector(":scope > .kids");
-    button.click();
+  const expanded = await toggle.evaluate((control) => {
+    const details = control.closest("details");
+    const text = details.querySelector(":scope > .content > .text");
+    const kids = details.querySelector(":scope > .kids");
+    control.click();
     return {
-      root: root.classList.contains("collapsed"),
-      text: getComputedStyle(text).display,
-      kids: getComputedStyle(kids).display,
+      open: details.open,
+      text: text.checkVisibility(),
+      kids: kids.checkVisibility(),
     };
   });
-  expect(expanded.root).toBe(false);
-  expect(expanded.text).not.toBe("none");
-  expect(expanded.kids).not.toBe("none");
-
-  const margins = await page.evaluate(() => globalThis.__commentObserverMargins);
-  const prefetchDistance = Math.max(...margins.map((margin) => Number.parseInt(margin, 10)));
-  expect(prefetchDistance).toBeGreaterThanOrEqual(Math.ceil(page.viewportSize().height * 1.5));
+  expect(expanded).toEqual({ open: true, text: true, kids: true });
+  await expect(disclosure).toHaveAttribute("open", "");
 });

@@ -100,7 +100,7 @@ Main folders
   - `onUserValue(userId, callback)` -> unsubscribe
   - `onUpdatesValue(callback)` -> unsubscribe
     The included implementation uses the public HN Firebase database by default. Tests opt into a deterministic in-memory backend.
-- Components: `CommentElement` renders threaded comments, supports collapse/expand and lazy-loading child comments. `createStoryListItem` returns a keyable `<li>` for story lists.
+- Components: `CommentElement` renders threaded comments, supports collapse/expand and immediately subscribes to child comments regardless of viewport or collapse state. `createStoryListItem` returns a keyable `<li>` for story lists.
 - Stores: `SettingsStore` persists preferences in `localStorage`. `ReadStoriesStore` tracks read stories. `StoryCommentThreadStore` contains per-thread metadata (collapsed flags, lastVisit, maxCommentId heuristics) and is designed to be light and stored in `sessionStorage` by default.
 
 ---

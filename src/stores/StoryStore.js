@@ -117,7 +117,7 @@ export default class StoryStore {
         if (item) {
           this._items.set(String(item.id), item);
           this._debouncedSave();
-          this._notify();
+          this._notify(item);
         }
       });
       if (typeof unsub === "function") this._itemUnsubs.push(unsub);
@@ -162,10 +162,10 @@ export default class StoryStore {
     this._itemUnsubs = [];
   }
 
-  _notify() {
+  _notify(item) {
     for (const fn of this._listeners) {
       try {
-        fn(this);
+        fn(this, item);
       } catch (e) {
         console.warn("[StoryStore] listener error:", e);
       }

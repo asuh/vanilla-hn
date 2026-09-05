@@ -389,7 +389,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
 
     // Track the high-water mark for comment ids and debounce-persist so that
     // a reload always sees the latest maxCommentId without depending solely on
-    // beforeunload (which may fire before lazy-loaded comments arrive).
+    // beforeunload (which may fire while comments are still arriving).
     if (comment.id > this.maxCommentId) {
       this.maxCommentId = comment.id;
       this._debouncedSave();

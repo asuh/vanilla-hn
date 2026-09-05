@@ -26,9 +26,9 @@ import ItemControls from "../components/ItemControls.js";
 import PollOption from "../components/PollOption.js";
 import { createSpinner } from "../components/Spinner.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
-import { create, timeAgoFromUnix } from "../utils/dom.js";
+import { create, setSafeHTML, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
-import { itemPath, rememberItem } from "../utils/item-ancestors.js";
+import { getCachedItem, itemPath, rememberItem } from "../utils/item-ancestors.js";
 import View from "./View.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -138,10 +138,12 @@ export default class ItemView extends View {
     });
     root.appendChild(this._contentEl);
 
-    // Kick off subscription
+    this.root = root;
+    // Reuse the listing payload while the realtime subscription refreshes it.
+    const cachedItem = getCachedItem(this.itemId);
+    if (cachedItem?.title) this._onItemLoaded(cachedItem);
     this._subscribeToItem();
 
-    this.root = root;
     return root;
   }
 
@@ -296,7 +298,8 @@ export default class ItemView extends View {
       return;
     }
 
-    const isFirstLoad = !this._item;
+    const previousItem = this._item;
+    const isFirstLoad = !previousItem;
     this._item = item;
     rememberItem(item);
 
@@ -322,8 +325,13 @@ export default class ItemView extends View {
       // Begin watching for thread load completion (for auto-collapse).
       this._startLoadPoll();
     } else {
+      if (this._threadStore.loading) {
+        const kidsDelta = (item.kids?.length || 0) - (previousItem.kids?.length || 0);
+        if (kidsDelta) this._threadStore.adjustExpectedComments(kidsDelta);
+      }
+      this._threadStore.itemUpdated(item);
       // Subsequent updates: patch title, score, descendants.
-      this._patchItemMeta(item);
+      this._patchItemMeta(item, previousItem);
 
       // Subscribe to any new top-level kids that appeared since the page loaded.
       // This handles real-time stories where new top-level comments arrive while
@@ -598,14 +606,38 @@ export default class ItemView extends View {
    * Patch mutable fields on the meta bar after a subsequent item update.
    * @param {Object} item
    */
-  _patchItemMeta(item) {
+  _patchItemMeta(item, previousItem) {
     if (!this._metaEl) return;
+
+    if (["title", "url", "dead", "type"].some((key) => item[key] !== previousItem[key])) {
+      const title = this._buildTitle(item);
+      this._titleEl.replaceWith(title);
+      this._titleEl = title;
+    }
+    if (item.title) document.title = `${item.title} | ${SITE_TITLE}`;
+
+    if (item.text && item.text !== previousItem.text) {
+      if (!this._itemTextEl) {
+        this._itemTextEl = create("div", { attrs: { class: "body-text" } });
+        this._contentEl.insertBefore(this._itemTextEl, this._pollEl || null);
+      }
+      setSafeHTML(this._itemTextEl, item.text);
+    } else if (!item.text) {
+      this._itemTextEl?.remove();
+      this._itemTextEl = null;
+    }
 
     const scoreEl = this._metaEl.querySelector(".score");
     if (scoreEl) scoreEl.textContent = `${item.score || 0} ${pluralise(item.score || 0, "point")}`;
 
     const timeEl = this._metaEl.querySelector(".time");
     if (timeEl) timeEl.textContent = timeAgoFromUnix(item.time);
+
+    const byEl = this._metaEl.querySelector(".by");
+    if (byEl && item.by !== previousItem.by) {
+      byEl.textContent = item.by || "unknown";
+      byEl.setAttribute("href", `/user/${item.by}`);
+    }
 
     const commentsEl = this._metaEl.querySelector(".comments-link");
     if (commentsEl) {

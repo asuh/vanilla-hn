@@ -799,27 +799,85 @@
   /* -- Comment tree ------------------------------------------------------ */
 
   @scope (.comment) to (.kids) {
-    :scope.new > .content {
+    :scope {
+      position: relative;
+      --comment-inline-start: calc(1.25em + var(--comment-level, 0) * 2.5em);
+    }
+
+    :scope.new > .meta,
+    :scope.new > .comment-disclosure > .content {
       background-color: var(--hn-new-comment-bg);
     }
 
-    :scope.has-new > .content > .meta .counts {
+    :scope.has-new > .meta .counts {
       font-weight: bold;
     }
 
-    :scope.dead > .content > .text {
+    :scope.dead > .comment-disclosure > .content > .text {
       color: var(--hn-dead);
     }
 
-    :scope.error > .content > .meta {
+    :scope.error > .meta {
       color: var(--hn-error);
     }
 
+    .comment-disclosure {
+      margin: 0;
+    }
+
     .content {
+      padding-top: 0;
       padding-right: 1.25em;
-      padding-top: 0.65em;
       padding-bottom: 0.65em;
-      padding-left: calc(1.25em + var(--comment-level, 0) * 2.5em);
+      padding-left: var(--comment-inline-start);
+    }
+
+    .comment-disclosure > .toggle {
+      position: absolute;
+      inset-block-start: 0.65em;
+      inset-inline-start: var(--comment-inline-start);
+      z-index: 1;
+      display: block;
+      padding: 0;
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+      color: var(--hn-muted);
+
+      &::marker,
+      &::-webkit-details-marker {
+        display: none;
+        content: "";
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--hn-focus);
+        outline-offset: 2px;
+      }
+
+      &::before {
+        content: "[+]";
+      }
+    }
+
+    .comment-disclosure[open] > .toggle::before {
+      content: "[\2013]";
+    }
+
+    :scope > .meta {
+      padding-top: 0.65em;
+      padding-right: 1.25em;
+      padding-bottom: 0.65em;
+      padding-left: calc(var(--comment-inline-start) + 1.875em);
+      margin-bottom: 0;
+    }
+
+    :scope:has(> .comment-disclosure[open]) > .meta {
+      padding-bottom: 0.5em;
+    }
+
+    :scope:has(> .comment-disclosure[open]) > .meta .counts {
+      display: none;
     }
 
     .meta {
@@ -850,16 +908,6 @@
       &:visited {
         color: var(--hn-muted);
       }
-    }
-
-    .meta .toggle {
-      cursor: pointer;
-      user-select: none;
-      background: none;
-      border: none;
-      padding: 0;
-      font: inherit;
-      color: inherit;
     }
 
     .meta .time {
@@ -895,13 +943,6 @@
     .placeholder--delayed {
       color: var(--hn-error);
     }
-  }
-
-  /* Keep collapse selectors direct and outside @scope so parent text and its
-     child tree update in the same style pass. */
-  .comment.collapsed > .content > .text,
-  .comment.collapsed > .kids {
-    display: none;
   }
 
   .comment--loading,
@@ -1123,8 +1164,17 @@
       inline-size: min(28rem, calc(100cqi - 1rem));
     }
 
-    .comment .content {
-      padding-left: calc(0.75em + var(--comment-level, 0) * 1.35em);
+    .comment {
+      --comment-inline-start: calc(0.75em + var(--comment-level, 0) * 1.35em);
+    }
+
+    .comment > .meta {
+      padding-left: calc(var(--comment-inline-start) + 1.875em);
+      padding-right: 0.75em;
+    }
+
+    .comment .comment-disclosure > .content {
+      padding-left: var(--comment-inline-start);
       padding-right: 0.75em;
     }
   }

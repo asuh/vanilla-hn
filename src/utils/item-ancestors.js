@@ -21,6 +21,10 @@ export function rememberItem(item) {
   cacheItem(item);
 }
 
+export function getCachedItem(id) {
+  return itemCache.get(String(id));
+}
+
 export async function fetchCachedItem(hnService, id, opts = {}) {
   const key = String(id);
   if (itemCache.has(key)) return itemCache.get(key);
