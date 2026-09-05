@@ -65,17 +65,19 @@ test("external links use normal same-tab navigation", async ({ page }) => {
   );
 });
 
-test("the skip link becomes visible for keyboard users", async ({ page }) => {
+test("the skip link becomes visible for keyboard users", async ({ page, browserName }) => {
   await page.goto("/");
   await waitForApp(page);
 
-  await page.keyboard.press("Tab");
+  // macOS WebKit includes links in keyboard navigation with Option-Tab.
+  const nextLink = browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+  await page.keyboard.press(nextLink);
   const skipLink = page.getByRole("link", { name: "Skip to content" });
   await expect(skipLink).toBeFocused();
   await expect(skipLink).toBeVisible();
   await expect(skipLink).toHaveCSS("position", "fixed");
 
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(nextLink);
   const homeLink = page.getByRole("link", { name: "vanilla-hn home" });
   await expect(homeLink).toBeFocused();
   await expect(homeLink).toHaveCSS("outline-style", "solid");
