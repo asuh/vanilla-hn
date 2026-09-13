@@ -116,7 +116,7 @@ export class CommentElement {
       }
     }
 
-    this._updateCollapsedCounts();
+    this.updateCounts();
     return wrapper;
   }
 
@@ -165,10 +165,12 @@ export class CommentElement {
   /**
    * Populate `_countsEl` with child/new-comment counts, matching react-hn's
    * collapsed comment display: " | (N children[, M new])"
-   * The populated count remains hidden by CSS while the disclosure is open.
+   * Keep visibility in sync with the native disclosure without scoped :has()
+   * invalidation, which can leave Safari waiting for a scroll to repaint.
    */
-  _updateCollapsedCounts() {
+  updateCounts() {
     if (!this._countsEl) return;
+    this._countsEl.hidden = this._detailsEl?.open ?? !this._collapsed;
 
     let children = 0;
     let newComments = 0;
@@ -189,8 +191,6 @@ export class CommentElement {
 
     while (this._countsEl.firstChild) this._countsEl.removeChild(this._countsEl.firstChild);
     this.root?.classList.toggle("has-new", newComments > 0);
-    if (children === 0) return;
-
     const childWord = `${children} child${children !== 1 ? "ren" : ""}`;
     this._countsEl.appendChild(document.createTextNode(` | (${childWord}`));
     if (newComments > 0) {
@@ -290,7 +290,7 @@ export class CommentElement {
     this._collapsed = newState;
 
     if (this._detailsEl) this._detailsEl.open = !this._collapsed;
-    this._updateCollapsedCounts();
+    this.updateCounts();
 
     // persist collapse state in a store if available
     // (skip when the caller is already syncing state FROM the store to avoid
@@ -315,7 +315,7 @@ export class CommentElement {
     if (collapsed === this._collapsed) return;
 
     this._collapsed = collapsed;
-    this._updateCollapsedCounts();
+    this.updateCounts();
 
     if (this.stores?.threadStore && typeof this.stores.threadStore.toggleCollapse === "function") {
       try {
@@ -507,7 +507,7 @@ export class CommentElement {
       }
     }
 
-    this._updateCollapsedCounts();
+    this.updateCounts();
   }
 
   /**

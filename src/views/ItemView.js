@@ -26,6 +26,7 @@ import ItemControls from "../components/ItemControls.js";
 import PollOption from "../components/PollOption.js";
 import { createSpinner } from "../components/Spinner.js";
 import StoryCommentThreadStore from "../stores/StoryCommentThreadStore.js";
+import StoryStore from "../stores/StoryStore.js";
 import { create, setSafeHTML, timeAgoFromUnix } from "../utils/dom.js";
 import { parseHost, pluralise } from "../utils/helpers.js";
 import { getCachedItem, itemPath, rememberItem } from "../utils/item-ancestors.js";
@@ -139,8 +140,11 @@ export default class ItemView extends View {
     root.appendChild(this._contentEl);
 
     this.root = root;
-    // Reuse the listing payload while the realtime subscription refreshes it.
-    const cachedItem = getCachedItem(this.itemId);
+    // Restore saved headers on reload as well as during list-to-thread navigation.
+    const cachedItem =
+      getCachedItem(this.itemId) ||
+      StoryStore.getStoredItem(this.itemId) ||
+      this.stores?.updatesStore?.getStory(this.itemId);
     if (cachedItem?.title) this._onItemLoaded(cachedItem);
     this._subscribeToItem();
 
@@ -959,6 +963,7 @@ export default class ItemView extends View {
     if (!ce?.root) return;
     const commentId = ce.comment?.id;
     if (commentId) this._applyNewState(ce, commentId);
+    if (ce._collapsed) ce.updateCounts();
     if (ce._loadedKids) {
       for (const child of ce._loadedKids.values()) {
         this._applyNewStateRecursive(child);
@@ -1072,7 +1077,7 @@ export default class ItemView extends View {
     // Update controls and slider for any count-change notification.
     if (this._controls) this._controls.update();
     if (this._slider) this._slider.show();
-    if (type === "collapse" || type === "first_load_complete") {
+    if (type === "number" || type === "first_load_complete") {
       this._reapplyAllCommentStates();
     }
   }

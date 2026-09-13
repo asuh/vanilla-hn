@@ -872,14 +872,6 @@
       margin-bottom: 0;
     }
 
-    :scope:has(> .comment-disclosure[open]) > .meta {
-      padding-bottom: 0.5em;
-    }
-
-    :scope:has(> .comment-disclosure[open]) > .meta .counts {
-      display: none;
-    }
-
     .meta {
       color: var(--hn-muted);
       margin-bottom: 0.5em;
@@ -943,6 +935,10 @@
     .placeholder--delayed {
       color: var(--hn-error);
     }
+  }
+
+  .comment:has(> .comment-disclosure[open]) > .meta {
+    padding-bottom: 0.5em;
   }
 
   .comment--loading,

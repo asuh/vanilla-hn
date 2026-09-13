@@ -10,6 +10,21 @@ import { debounce } from "../utils/helpers.js";
  * @class StoryStore
  */
 export default class StoryStore {
+  /** Read a saved story without starting a list or subscribing to its items. */
+  static getStoredItem(id) {
+    const key = String(id);
+    for (const listType of ["top", "newest", "ask", "show", "jobs"]) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(`vanilla-hn:stories:${listType}`));
+        const item = saved?.items?.[key];
+        if (item?.title && String(item.id) === key) return item;
+      } catch (_) {
+        // A corrupt list cache or unavailable storage must not prevent loading.
+      }
+    }
+    return null;
+  }
+
   /**
    * @param {string} listType - The story list type (top, newest, ask, show, jobs).
    * @param {Object} hnService - The HNService instance.
