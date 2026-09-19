@@ -45,8 +45,7 @@ import {
  *
  * Supports regex and string route patterns matched against pathname+search,
  * async view factories, stale-request cancellation, Navigation API integration,
- * popstate + delegated-click fallback, View Transitions API integration,
- * and accessibility focus management after mount.
+ * popstate + delegated-click fallback, and scroll resets for new fallback navigations.
  *
  * @class Router
  */
@@ -134,10 +133,7 @@ export class Router {
     if (window.navigation) {
       window.navigation.navigate(url.href);
     } else {
-      if (location.pathname + location.search !== url.pathname + url.search) {
-        history.pushState({}, "", url.pathname + url.search);
-      }
-      this._handleUrl(url);
+      this._navigateFallback(url);
     }
   }
 
@@ -273,11 +269,33 @@ export class Router {
 
     evt.preventDefault();
 
-    if (location.pathname + location.search !== url.pathname + url.search) {
-      history.pushState({}, "", url.pathname + url.search);
+    this._navigateFallback(url);
+  }
+
+  /** New fallback navigations reset scroll; initial loads and traversals stay browser-managed. */
+  async _navigateFallback(url) {
+    if (location.href !== url.href) {
+      history.pushState({}, "", url.pathname + url.search + url.hash);
     }
 
-    this._handleUrl(url);
+    const pendingView = this._handleUrl(url);
+    const requestId = this._routeRequestId;
+    await pendingView;
+    if (requestId !== this._routeRequestId || !this._running) return;
+
+    // Scroll after mounting, before paint, without focusing the app or waiting for comments.
+    let fragment = url.hash.slice(1);
+    try {
+      fragment = decodeURIComponent(fragment);
+    } catch {
+      // Malformed escapes can still match a literal element ID.
+    }
+    const target = fragment && document.getElementById(fragment);
+    if (target) {
+      target.scrollIntoView({ behavior: "instant" });
+    } else {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }
   }
 
   // ---------------------------------------------------------------------------
