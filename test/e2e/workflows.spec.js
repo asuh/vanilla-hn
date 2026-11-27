@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.js";
 
 async function waitForApp(page) {
   await expect(page.getByRole("button", { name: "settings" })).toBeEnabled();

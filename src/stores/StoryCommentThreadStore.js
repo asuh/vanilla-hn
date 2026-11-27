@@ -336,9 +336,14 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
         this.adjustExpectedComments(nextKids - prevKids);
       }
       if (!previous.deleted && comment.deleted) {
-        this.commentDeleted(previous);
+        // Replies loaded or still loading stay on screen under the stub.
+        if (this.children[comment.id]?.length || comment.kids?.length) {
+          this._deletedWithReplies(previous);
+        } else this.commentDeleted(previous);
       } else if (!previous.dead && comment.dead) {
         this.commentDied(comment);
+      } else if (previous.dead && !comment.dead && !comment.deleted) {
+        this._commentRevived(comment);
       }
       return;
     }
@@ -438,9 +443,42 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     this._debouncedCountChanged();
   }
 
+  /**
+   * A deleted comment whose replies stay on screen under its stub.
+   * Uncount it but keep it in the graph, so its replies keep their
+   * ancestors for collapsed counts and auto-collapse.
+   *
+   * @param {Object} previous  The comment's payload before the deletion.
+   */
+  _deletedWithReplies(previous) {
+    this.invalidateCounts();
+    if (!previous.dead || this._settings.showDead) this.commentCount--;
+    if (this.isNew[previous.id]) {
+      this.newCommentCount--;
+      delete this.isNew[previous.id];
+    }
+    this._debouncedCountChanged();
+  }
+
+  /**
+   * A dead comment restored (vouched) while the story is open: undo
+   * {@link commentDied} so counts and the slider see it again.
+   *
+   * @param {Object} comment
+   */
+  _commentRevived(comment) {
+    delete this.deadComments[comment.id];
+    this.invalidateCounts();
+    if (!this._settings.showDead) {
+      this.commentCount++;
+      this._debouncedCountChanged();
+    }
+  }
+
   commentDied(comment) {
     if (!comment) return;
     this.deadComments[comment.id] = true;
+    this.invalidateCounts();
     if (!this._settings.showDead) {
       this.commentCount--;
       if (this.isNew[comment.id]) {
@@ -530,6 +568,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     // them as new. Only comments that arrive *after* the previous dispose()
     // (i.e. posted between sessions) will appear highlighted on the next visit.
     this._persistState();
+    this.notify({ type: "loaded" });
   }
 
   /**
@@ -625,24 +664,27 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
    * Return the comment at a given 1-based chronological position.
    *
    * All stored comment ids are sorted in ascending order (ascending id ≈
-   * chronological order on HN). Dead comments are excluded from the sorted
-   * list when `showDead` is off.
+   * chronological order on HN). Dead comments (when `showDead` is off) and
+   * deleted stubs are excluded from the sorted list.
    *
    * @param {number} timeIndex  1-based index into the sorted comment list.
    * @returns {Object|undefined} The comment object at that position, or
    *   `undefined` if the index is out of range.
    */
   getCommentByTimeIndex(timeIndex) {
-    let sortedIds = Object.keys(this.comments).map(Number);
-
-    if (!this._settings.showDead) {
-      sortedIds = sortedIds.filter((id) => !this.deadComments[id]);
-    }
-
-    sortedIds.sort((a, b) => a - b);
+    const sortedIds = Object.keys(this.comments)
+      .map(Number)
+      .filter((id) => this._isHighlightable(id))
+      .sort((a, b) => a - b);
 
     const commentId = sortedIds[timeIndex - 1];
     return this.comments[commentId];
+  }
+
+  /** Dead comments (with showDead off) and deleted stubs are not highlightable. */
+  _isHighlightable(id) {
+    if (this.deadComments[id] && !this._settings.showDead) return false;
+    return !this.comments[id]?.deleted;
   }
 
   /**
@@ -671,7 +713,8 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
       for (let i = 0; i < commentIds.length; i++) {
         const commentId = commentIds[i];
 
-        if (commentId > referenceComment.id) {
+        // Stubs are walked through to reach their replies but never highlighted.
+        if (commentId > referenceComment.id && this._isHighlightable(commentId)) {
           isNew[commentId] = true;
         }
 
@@ -685,6 +728,7 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     }
 
     this.isNew = isNew;
+    this.invalidateCounts();
     this.collapseThreadsWithoutNewComments();
   }
 
@@ -708,7 +752,9 @@ export default class StoryCommentThreadStore extends CommentThreadStore {
     this.newCommentCount = 0;
     this.prevMaxCommentId = this.maxCommentId;
     this.isNew = {};
+    this.invalidateCounts();
     this._persistState();
+    this.notify({ type: "markAsRead" });
   }
 
   // -------------------------------------------------------------------------

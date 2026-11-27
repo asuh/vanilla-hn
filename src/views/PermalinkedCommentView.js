@@ -1,4 +1,4 @@
-import { CommentElement } from "../components/CommentElement.js";
+import CommentTree from "../components/CommentTree.js";
 import { createSpinner } from "../components/Spinner.js";
 import CommentThreadStore from "../stores/CommentThreadStore.js";
 import { create, timeAgoFromUnix } from "../utils/dom.js";
@@ -13,8 +13,7 @@ export default class PermalinkedCommentView extends View {
     this.commentId = this.params?.id ? String(this.params.id) : null;
     this._comment = null;
     this._threadStore = null;
-    this._commentElements = new Map();
-    this._kidUnsubs = [];
+    this._tree = null;
     this._itemUnsub = null;
     this._ancestorAbort = null;
   }
@@ -48,17 +47,8 @@ export default class PermalinkedCommentView extends View {
   }
 
   _resetRenderedThread() {
-    for (const unsub of this._kidUnsubs.splice(0)) {
-      try {
-        unsub();
-      } catch (_) {}
-    }
-    for (const ce of this._commentElements.values()) {
-      try {
-        ce.cleanup();
-      } catch (_) {}
-    }
-    this._commentElements.clear();
+    this._tree?.dispose();
+    this._tree = null;
     this._threadStore = null;
   }
 
@@ -190,35 +180,16 @@ export default class PermalinkedCommentView extends View {
 
   _renderKids(comment, kidsEl) {
     if (!Array.isArray(comment.kids) || !comment.kids.length) return;
-    const hn = this.services.hnService;
-    if (!hn || typeof hn.onItemValue !== "function") return;
-
-    for (const kidId of comment.kids) {
-      const placeholder = create("div", {
-        attrs: { class: "placeholder", "data-comment-id": String(kidId) },
-      });
-      placeholder.append(
-        createSpinner({
-          inline: true,
-          size: "20px",
-          label: `Loading comment ${kidId}`,
-        }),
-      );
-      kidsEl.appendChild(placeholder);
-      const unsub = hn.onItemValue(kidId, (child) => {
-        if (!child?.id) return;
-        this._threadStore.commentAdded(child);
-        const ce = new CommentElement({
-          comment: child,
-          services: this.services,
-          stores: { ...this.stores, threadStore: this._threadStore },
-          depth: 0,
-        });
-        this._commentElements.set(String(child.id), ce);
-        placeholder.replaceWith(ce.render());
-      });
-      if (typeof unsub === "function") this._kidUnsubs.push(unsub);
-    }
+    this._tree = new CommentTree({
+      rootId: comment.id,
+      container: kidsEl,
+      hnService: this.services.hnService,
+      threadStore: this._threadStore,
+      settingsStore: this.stores.settingsStore,
+      // Like HEAD, show dead/deleted direct replies as stubs with their replies.
+      showHiddenRoots: true,
+    });
+    this._tree.setKids(comment.kids);
   }
 
   _renderError(message) {

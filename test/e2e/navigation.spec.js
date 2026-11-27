@@ -63,23 +63,104 @@ for (const fallback of [false, true]) {
       await expect(page.getByRole("heading", { name: "Newest" })).toHaveCount(1);
     });
 
-    test("honors fragment targets on a new route", async ({ page }) => {
+    for (const [id, hash] of [
+      ["section-two", "section-two"],
+      ["café-notes", "caf%C3%A9-notes"],
+    ]) {
+      test(`honors the #${hash} fragment target on a new route`, async ({ page }) => {
+        await page.evaluate((targetId) => {
+          const router = window.vanillaHN.router;
+          router.register("/scroll-fixture", () => {
+            const view = document.createElement("div");
+            view.style.paddingTop = "1500px";
+            const target = document.createElement("p");
+            target.id = targetId;
+            target.textContent = "Fragment target";
+            view.append(target);
+            return view;
+          });
+        }, id);
+        await page.evaluate((fragment) => {
+          window.vanillaHN.router.navigate(`/scroll-fixture#${fragment}`);
+        }, hash);
+        await expect(page).toHaveURL(new RegExp(`/scroll-fixture#${hash}$`));
+        await expect(page.getByText("Fragment target")).toBeInViewport();
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+      });
+    }
+
+    for (const [id, hash] of [
+      ["hidden-note", "hidden-note"],
+      ["café-hidden", "caf%C3%A9-hidden"],
+    ]) {
+      test(`reveals the #${hash} target inside a closed disclosure`, async ({ page }) => {
+        await page.evaluate((targetId) => {
+          window.vanillaHN.router.register("/disclosure-fixture", () => {
+            const view = document.createElement("div");
+            view.style.paddingTop = "1500px";
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Collapsed thread";
+            const target = document.createElement("p");
+            target.id = targetId;
+            target.textContent = "Hidden target";
+            details.append(summary, target);
+            view.append(details);
+            return view;
+          });
+        }, id);
+        await page.evaluate((fragment) => {
+          window.vanillaHN.router.navigate(`/disclosure-fixture#${fragment}`);
+        }, hash);
+        await expect(page.locator("details")).toHaveAttribute("open");
+        await expect(page.getByText("Hidden target")).toBeInViewport();
+      });
+    }
+
+    test("prefers a literal ID over the decoded fragment", async ({ page }) => {
       await page.evaluate(() => {
-        const router = window.vanillaHN.router;
-        router.register("/scroll-fixture", () => {
+        window.vanillaHN.router.register("/twin-fixture", () => {
           const view = document.createElement("div");
-          view.style.paddingTop = "1500px";
-          const target = document.createElement("p");
-          target.id = "section-two";
-          target.textContent = "Fragment target";
-          view.append(target);
+          const literal = document.createElement("p");
+          literal.id = "caf%C3%A9-twin";
+          literal.textContent = "Literal target";
+          literal.style.marginTop = "1500px";
+          const decoded = document.createElement("p");
+          decoded.id = "café-twin";
+          decoded.textContent = "Decoded target";
+          decoded.style.marginTop = "3000px";
+          view.append(literal, decoded);
           return view;
         });
-        router.navigate("/scroll-fixture#section-two");
+        window.vanillaHN.router.navigate("/twin-fixture#caf%C3%A9-twin");
       });
-      await expect(page).toHaveURL(/\/scroll-fixture#section-two$/);
-      await expect(page.getByText("Fragment target")).toBeInViewport();
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+      await expect(page.getByText("Literal target")).toBeInViewport();
+      await expect(page.getByText("Decoded target")).not.toBeInViewport();
+    });
+
+    test("keeps the native focus starting point for encoded fragments", async ({
+      page,
+      browserName,
+      isMobile,
+    }) => {
+      test.skip(fallback, "The History API path scrolls fragments manually");
+      test.skip(
+        browserName !== "chromium" || isMobile,
+        "Sequential Tab focus needs desktop Chromium",
+      );
+      await page.evaluate(() => {
+        window.vanillaHN.router.register("/focus-fixture", () => {
+          const view = document.createElement("div");
+          view.style.paddingTop = "1500px";
+          view.innerHTML =
+            '<a id="caf\u00e9-link" href="#one">First link</a> <a href="#two">Next link</a>';
+          return view;
+        });
+        window.vanillaHN.router.navigate("/focus-fixture#caf%C3%A9-link");
+      });
+      await expect(page.getByText("First link")).toBeInViewport();
+      await page.keyboard.press("Tab");
+      await expect(page.getByText("Next link")).toBeFocused();
     });
 
     test("does not reset scroll when a superseded route finishes", async ({ page }) => {

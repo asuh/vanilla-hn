@@ -497,11 +497,9 @@ export function formatRelativeTime(when, opts = {}) {
     if (absSeconds >= u.secs || u.name === "second") {
       const val = Math.round(diffSeconds / u.secs);
       // Use Intl.RelativeTimeFormat when available
-      if (typeof Intl !== "undefined" && typeof Intl.RelativeTimeFormat === "function") {
+      const rtf = getRelativeTimeFormat();
+      if (rtf) {
         try {
-          const rtf = new Intl.RelativeTimeFormat(undefined, {
-            numeric: "auto",
-          });
           return rtf.format(val, u.name);
         } catch (_e) {
           // fall through
@@ -514,6 +512,23 @@ export function formatRelativeTime(when, opts = {}) {
       return val > 0 ? `in ${absVal} ${unitLabel}` : `${absVal} ${unitLabel} ago`;
     }
   }
+}
+
+let relativeTimeFormat;
+
+/** Shared formatter: constructing one per timestamp dominated long-thread renders. */
+function getRelativeTimeFormat() {
+  if (relativeTimeFormat === undefined) {
+    try {
+      relativeTimeFormat =
+        typeof Intl !== "undefined" && typeof Intl.RelativeTimeFormat === "function"
+          ? new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
+          : null;
+    } catch (_e) {
+      relativeTimeFormat = null;
+    }
+  }
+  return relativeTimeFormat;
 }
 
 function currentEpochMilliseconds() {

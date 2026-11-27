@@ -128,13 +128,7 @@ export default class ItemControls {
 
     if (!this.threadStore) return;
 
-    const storyId = this.item?.id;
-    const state =
-      storyId && typeof this.threadStore.getState === "function"
-        ? this.threadStore.getState(storyId)
-        : null;
-
-    const lastVisit = state ? state.lastVisit : this.threadStore.lastVisit || null;
+    const lastVisit = this.threadStore.lastVisit || null;
     const newCommentCount = this.getNewCommentCount();
 
     // Only show the controls bar when we've been here before and have new comments.
