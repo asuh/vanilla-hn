@@ -937,8 +937,19 @@
     }
   }
 
-  .comment:has(> .comment-disclosure[open]) > .meta {
+  article.comment:not(.collapsed) > .meta {
     padding-bottom: 0.5em;
+  }
+
+  /* Let the browser skip style, layout, and paint for offscreen top-level
+     threads. Content stays searchable and in the accessibility tree, and
+     "auto" remembers each thread's rendered height once it has been seen. */
+  .kids > .comment:not(.child) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+    /* Containment clips overflow, so let a deeply indented thread scroll
+       sideways on its own instead of cutting off its deepest replies. */
+    overflow-x: auto;
   }
 
   .comment--loading,

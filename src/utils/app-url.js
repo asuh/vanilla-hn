@@ -7,17 +7,26 @@ export function normalizeBasePath(value = "/") {
   return segments.length ? `/${segments.join("/")}/` : "/";
 }
 
+let cachedBase = { key: null, value: "/" };
+
 /** Read the app's deployment path from the document's base URL. */
 export function getAppBasePath() {
   const baseElement = globalThis.document?.querySelector?.("base[href]");
   const configuredBase = baseElement?.getAttribute("href") || "/";
   const origin = globalThis.location?.origin || DEFAULT_ORIGIN;
+  // Every rendered link resolves its href through here; skip URL parsing
+  // unless the base element or origin changed.
+  const key = `${origin} ${configuredBase}`;
+  if (cachedBase.key === key) return cachedBase.value;
 
+  let value = "/";
   try {
-    return normalizeBasePath(new URL(configuredBase, origin).pathname);
+    value = normalizeBasePath(new URL(configuredBase, origin).pathname);
   } catch {
-    return "/";
+    value = "/";
   }
+  cachedBase = { key, value };
+  return value;
 }
 
 /** Prefix an app-owned root-relative URL with the deployment path. */

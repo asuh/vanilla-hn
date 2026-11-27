@@ -82,7 +82,7 @@ Main folders
   - `src/router/Router.js` — Pathname router using the Navigation API with a History API fallback.
   - `src/views/` — `View` base class and view implementations (`ListView.js`, `ItemView`, `UserView`).
   - `src/api/hn-service.js` — `HNService` abstraction. Uses the public HN Firebase API by default, with mock fallback.
-  - `src/components/` — Reusable UI components (`CommentElement.js`, `StoryListItem.js`).
+  - `src/components/` — Reusable UI components (`CommentTree.js`, `CommentElement.js`, `StoryHeader.js`, `StoryListItem.js`).
   - `src/stores/` — Lightweight stores (`SettingsStore.js`, `ReadStoriesStore.js`, `StoryCommentThreadStore.js`).
   - `src/utils/` — Utility helpers for DOM, time formatting, etc.
   - `src/styles.css` — Core styles and variables.
@@ -100,8 +100,9 @@ Main folders
   - `onUserValue(userId, callback)` -> unsubscribe
   - `onUpdatesValue(callback)` -> unsubscribe
     The included implementation uses the public HN Firebase database by default. Tests opt into a deterministic in-memory backend.
-- Components: `CommentElement` renders threaded comments, supports collapse/expand and immediately subscribes to child comments regardless of viewport or collapse state. `createStoryListItem` returns a keyable `<li>` for story lists.
-- Stores: `SettingsStore` persists preferences in `localStorage`. `ReadStoriesStore` tracks read stories. `StoryCommentThreadStore` contains per-thread metadata (collapsed flags, lastVisit, maxCommentId heuristics) and is designed to be light and stored in `sessionStorage` by default.
+- Components: `CommentTree` subscribes to every comment in a thread regardless of viewport or collapse state, feeds payloads to the thread store, and renders them in order. `CommentElement` renders one comment from the state the tree passes in; user toggles write to the store. `createStoryListItem` returns a keyable `<li>` for story lists.
+- Stores: `SettingsStore` persists preferences in `localStorage`. `ReadStoriesStore` tracks read stories. `StoryCommentThreadStore` is the single source of truth for a thread's collapse, new-comment and descendant-count state, and persists `lastVisit` and `maxCommentId` per story in `localStorage`. Comment DOM updates are batched to one sync per animation frame.
+- Browser tests: Playwright runs desktop Chromium, mobile Chromium, iPhone WebKit, and iPhone WebKit with the Navigation API hidden (`mobile-webkit-history`) so the router's History API path gets full-suite coverage.
 
 ---
 

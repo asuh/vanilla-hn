@@ -57,6 +57,13 @@ export default class CommentThreadStore {
     this.deadComments = {};
 
     /**
+     * Memoized descendant counts keyed by comment id; null when stale.
+     * @type {Map<number|string, {children: number, newComments: number}>|null}
+     * @private
+     */
+    this._countsCache = null;
+
+    /**
      * Registered listener callbacks.
      * @type {Function[]}
      * @private
@@ -129,6 +136,8 @@ export default class CommentThreadStore {
    *   `{ id: number, parent: number, dead?: boolean }`.
    */
   commentAdded(comment) {
+    this.invalidateCounts();
+
     // Store the full payload.
     this.comments[comment.id] = comment;
 
@@ -168,6 +177,7 @@ export default class CommentThreadStore {
    */
   commentDeleted(comment) {
     if (!comment) return;
+    this.invalidateCounts();
 
     // Remove the payload.
     delete this.comments[comment.id];
@@ -214,11 +224,20 @@ export default class CommentThreadStore {
   // -------------------------------------------------------------------------
 
   /**
+   * Drop memoized counts. Call after any change to `children` or `isNew`.
+   */
+  invalidateCounts() {
+    this._countsCache = null;
+  }
+
+  /**
    * Count the total descendants and new-comment descendants of a comment.
    *
-   * Uses an iterative BFS over the in-memory `children` map so that deeply
-   * nested threads do not risk a stack overflow. The comment itself is not
-   * included in either count — only its descendants.
+   * Counts are memoized for every node in the visited subtree until the next
+   * {@link invalidateCounts}, so rendering every collapsed comment costs one
+   * pass over the tree instead of one traversal per comment. Uses an explicit
+   * stack so deeply nested threads cannot overflow the call stack. The comment
+   * itself is not included in either count — only its descendants.
    *
    * @param {Object} comment  A comment object with a numeric `.id` property.
    * @returns {{ children: number, newComments: number }} An object with:
@@ -226,31 +245,34 @@ export default class CommentThreadStore {
    *   - `newComments` — how many of those descendants are flagged as new.
    */
   getChildCounts(comment) {
-    let childCount = 0;
-    let newCommentCount = 0;
+    if (!this._countsCache) this._countsCache = new Map();
+    const cache = this._countsCache;
+    const rootId = comment.id;
+    if (cache.has(rootId)) return cache.get(rootId);
 
-    // Each iteration of the while-loop processes one "generation".
-    let nodes = [comment.id];
-
-    while (nodes.length) {
-      const nextNodes = [];
-
-      for (let i = 0; i < nodes.length; i++) {
-        const nodeChildren = this.children[nodes[i]];
-        if (nodeChildren?.length) {
-          nextNodes.push(...nodeChildren);
-        }
+    // Post-order traversal: a node is summed once all of its children are.
+    const stack = [[rootId, false]];
+    const visiting = new Set();
+    while (stack.length) {
+      const [id, expanded] = stack.pop();
+      if (cache.has(id)) continue;
+      const kids = this.children[id] || [];
+      if (!expanded) {
+        if (visiting.has(id)) continue; // malformed cycle guard
+        visiting.add(id);
+        stack.push([id, true]);
+        for (const kid of kids) if (!cache.has(kid)) stack.push([kid, false]);
+        continue;
       }
-
-      // Count new comments in the next generation.
-      for (let i = 0; i < nextNodes.length; i++) {
-        if (this.isNew[nextNodes[i]]) newCommentCount++;
+      let children = 0;
+      let newComments = 0;
+      for (const kid of kids) {
+        const sub = cache.get(kid) || { children: 0, newComments: 0 };
+        children += 1 + sub.children;
+        newComments += (this.isNew[kid] ? 1 : 0) + sub.newComments;
       }
-
-      childCount += nextNodes.length;
-      nodes = nextNodes;
+      cache.set(id, { children, newComments });
     }
-
-    return { children: childCount, newComments: newCommentCount };
+    return cache.get(rootId);
   }
 }

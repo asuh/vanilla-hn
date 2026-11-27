@@ -26,6 +26,13 @@ export default defineConfig({
       name: "mobile-webkit",
       use: { ...devices["iPhone 13"] },
     },
+    {
+      // iPhone WebKit without the Navigation API, like Safari before 26.
+      // navigation.spec.js already runs both router paths in every project.
+      name: "mobile-webkit-history",
+      use: { ...devices["iPhone 13"], historyFallback: true },
+      testIgnore: /navigation\.spec\.js/,
+    },
   ],
   webServer: {
     command: "PORT=5011 npm run dev",

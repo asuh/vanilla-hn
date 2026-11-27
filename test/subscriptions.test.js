@@ -84,20 +84,14 @@ test("UpdatesStore distinguishes initial loading from a completed empty feed", (
   store.dispose();
 });
 
-test("permalink rerenders release child subscriptions and elements", () => {
+test("permalink rerenders release the rendered reply tree", () => {
   const view = new PermalinkedCommentView();
-  let unsubscribed = 0;
-  let cleaned = 0;
-  view._kidUnsubs.push(
-    () => unsubscribed++,
-    () => unsubscribed++,
-  );
-  view._commentElements.set("1", { cleanup: () => cleaned++ });
+  let disposed = 0;
+  view._tree = { dispose: () => disposed++ };
 
   view._resetRenderedThread();
 
-  assert.equal(unsubscribed, 2);
-  assert.equal(cleaned, 1);
-  assert.equal(view._kidUnsubs.length, 0);
-  assert.equal(view._commentElements.size, 0);
+  assert.equal(disposed, 1);
+  assert.equal(view._tree, null);
+  assert.equal(view._threadStore, null);
 });

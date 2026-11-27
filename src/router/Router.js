@@ -54,6 +54,13 @@ function isRegex(val) {
   return Object.prototype.toString.call(val) === "[object RegExp]";
 }
 
+/** Whether an element is rendered (not inside a closed disclosure) and in the viewport. */
+function isRevealed(el) {
+  if (typeof el.checkVisibility === "function" && !el.checkVisibility()) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+}
+
 export class Router {
   /**
    * @param {Object} [options]
@@ -219,10 +226,25 @@ export class Router {
     if (url.origin !== location.origin || !isAppURL(url, this.basePath)) return;
 
     const signal = evt.signal;
+    // WebKit does not decode percent-encoded fragments when it scrolls after an
+    // intercepted navigation, so check those on new routes ourselves. Plain
+    // fragments, reloads, and traversals keep native scrolling, which also
+    // reveals closed disclosures and moves the focus starting point.
+    const manualFragment =
+      url.hash.includes("%") &&
+      (evt.navigationType === "push" || evt.navigationType === "replace") &&
+      typeof evt.scroll === "function";
 
     evt.intercept({
+      ...(manualFragment && { scroll: "manual" }),
       handler: async () => {
         await this._handleUrl(url, signal);
+        if (!manualFragment || signal.aborted) return;
+        // Native fragment handling first: it also moves the focus starting
+        // point. Fall back only when it left the target unrevealed.
+        evt.scroll();
+        const target = this._fragmentTarget(url);
+        if (target && !isRevealed(target)) this._scrollToFragment(url);
       },
     });
   }
@@ -284,18 +306,46 @@ export class Router {
     if (requestId !== this._routeRequestId || !this._running) return;
 
     // Scroll after mounting, before paint, without focusing the app or waiting for comments.
-    let fragment = url.hash.slice(1);
-    try {
-      fragment = decodeURIComponent(fragment);
-    } catch {
-      // Malformed escapes can still match a literal element ID.
-    }
-    const target = fragment && document.getElementById(fragment);
-    if (target) {
-      target.scrollIntoView({ behavior: "instant" });
-    } else {
+    if (!this._scrollToFragment(url)) {
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
+  }
+
+  /**
+   * Find the element a URL fragment names: the literal ID, else the decoded one.
+   *
+   * @param {URL} url
+   * @returns {Element|null}
+   */
+  _fragmentTarget(url) {
+    const raw = url.hash.slice(1);
+    if (!raw) return null;
+    // As in the HTML spec, an exact ID match wins over the decoded fragment.
+    const exact = document.getElementById(raw);
+    if (exact) return exact;
+    try {
+      return document.getElementById(decodeURIComponent(raw));
+    } catch {
+      return null; // Malformed escapes only match literally.
+    }
+  }
+
+  /**
+   * Scroll to the element a URL fragment names, decoding percent-escapes.
+   *
+   * @param {URL} url
+   * @returns {boolean} Whether a target was found.
+   */
+  _scrollToFragment(url) {
+    const target = this._fragmentTarget(url);
+    if (!target) return false;
+    // Native fragment navigation reveals targets inside closed disclosures.
+    for (let details = target.closest("details:not([open])"); details; ) {
+      details.open = true;
+      details = details.parentElement?.closest("details:not([open])");
+    }
+    target.scrollIntoView({ behavior: "instant" });
+    return true;
   }
 
   // ---------------------------------------------------------------------------
